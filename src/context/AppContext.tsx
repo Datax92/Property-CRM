@@ -58,10 +58,14 @@ interface AppContextType {
   showTip: (html: string, x: number, y: number) => void;
   hideTip: () => void;
   toast: (msg: string) => void;
+  activeCostSheetId: string | null;
+  setActiveCostSheetId: (id: string | null) => void;
+  openCostSheet: (id: string) => void;
   exportCsv: () => void;
   exportXls: () => void;
   print: () => void;
 }
+
 
 const AppContext = createContext<AppContextType | null>(null);
 
@@ -312,6 +316,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     visible: false,
   });
   const [toastMsg, setToastMsg] = useState<{ text: string; visible: boolean }>({ text: '', visible: false });
+  const [activeCostSheetId, setActiveCostSheetId] = useState<string | null>(null);
 
   const role = user.role;
 
@@ -385,6 +390,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [sectionOf, visibleTabs]
   );
+
+  const openCostSheet = useCallback((id: string) => {
+    setActiveCostSheetId(id);
+    setPage('trading');
+    setTab('calculator');
+    setQuery('');
+    setSortState(null);
+    setShowAll(false);
+    setMenu(null);
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'trading/calculator';
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  }, []);
+
 
   // Sync hash on mount and popstate
   useEffect(() => {
@@ -732,10 +752,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         showTip,
         hideTip,
         toast,
+        activeCostSheetId,
+        setActiveCostSheetId,
+        openCostSheet,
         exportCsv,
         exportXls,
         print,
       }}
+
     >
       {children}
     </AppContext.Provider>

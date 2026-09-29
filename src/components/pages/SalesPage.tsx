@@ -9,7 +9,7 @@ import { PAGE_META, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function SalesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, numbers } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
 
@@ -45,6 +45,21 @@ export function SalesPage() {
         ),
       },
       { key: 'payStatus', label: 'Status', render: (s: any) => <Tag text={s.payStatus} /> },
+      {
+        key: 'sheet',
+        label: 'Cost Sheet',
+        render: (s: any) => (
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+            onClick={() => openCostSheet(s.propertyId)}
+            title="Open deal cost sheet"
+          >
+            <Icon name="calculator" size={12} /> Cost Sheet
+          </button>
+        ),
+      },
     ];
 
     return (
@@ -114,6 +129,21 @@ export function SalesPage() {
     { key: 'netRevenue', label: 'Net revenue', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.netRevenue, numbers) },
     { key: 'payStatus', label: 'Payment', render: (s: any) => <Tag text={s.payStatus} /> },
     { key: 'saleStatus', label: 'Sale', render: (s: any) => <Tag text={s.saleStatus} /> },
+    {
+      key: 'sheet',
+      label: 'Cost Sheet',
+      render: (s: any) => (
+        <button
+          type="button"
+          className="btn"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => openCostSheet(s.propertyId)}
+          title="Open deal cost sheet"
+        >
+          <Icon name="calculator" size={12} /> Cost Sheet
+        </button>
+      ),
+    },
   ];
 
   return (

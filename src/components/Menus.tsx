@@ -20,6 +20,7 @@ export function Menus() {
     clearFilters,
     denied,
     openModal,
+    openCostSheet,
     goto,
     page,
     tab,
@@ -112,6 +113,15 @@ export function Menus() {
           }}
         >
           <Icon name="tag" /> Property sale
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            openCostSheet('new');
+            closeMenu();
+          }}
+        >
+          <Icon name="calculator" /> Trade cost calculator
         </button>
         <button
           type="button"
@@ -311,6 +321,21 @@ export function Menus() {
             </button>
           </>
         )}
+        {sec.id === 'trading' && (
+          <>
+            <div className="sep" />
+            <button
+              type="button"
+              onClick={() => {
+                openCostSheet('new');
+                closeMenu();
+              }}
+            >
+              <Icon name="calculator" /> New Cost Calculator
+            </button>
+          </>
+        )}
+
         {sec.id === 'sales' && (
           <>
             <div className="sep" />

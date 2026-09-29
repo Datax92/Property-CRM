@@ -21,6 +21,27 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M6.4 13.4a1.8 1.8 0 0 0 3.2 0" />
         </svg>
       );
+    case 'calculator':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2.5" y="1.5" width="11" height="13" rx="1.8" />
+          <line x1="4.5" y1="4.5" x2="11.5" y2="4.5" />
+          <circle cx="5" cy="7.5" r=".7" fill="currentColor" />
+          <circle cx="8" cy="7.5" r=".7" fill="currentColor" />
+          <circle cx="11" cy="7.5" r=".7" fill="currentColor" />
+          <circle cx="5" cy="10.5" r=".7" fill="currentColor" />
+          <circle cx="8" cy="10.5" r=".7" fill="currentColor" />
+          <circle cx="11" cy="10.5" r=".7" fill="currentColor" />
+        </svg>
+      );
+    case 'trend':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="2.5 11.5 6.5 7.5 9.5 10.5 13.5 4.5" />
+          <polyline points="9.5 4.5 13.5 4.5 13.5 8.5" />
+        </svg>
+      );
+
     case 'plus':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

@@ -7,6 +7,7 @@ import { Icon } from './Icons';
 import { NAV, PAGE_META } from '../lib/constants';
 import { DashboardPage } from './pages/DashboardPage';
 import { PropertiesPage } from './pages/PropertiesPage';
+import { TradingPage } from './pages/TradingPage';
 import { SalesPage } from './pages/SalesPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { FinancePage } from './pages/FinancePage';
@@ -46,6 +47,8 @@ export function MainRouter() {
       return <DashboardPage />;
     case 'properties':
       return <PropertiesPage />;
+    case 'trading':
+      return <TradingPage />;
     case 'sales':
       return <SalesPage />;
     case 'agents':

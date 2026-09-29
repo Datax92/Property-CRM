@@ -319,8 +319,139 @@ function buildData() {
     };
   }).sort((a, b) => b.date - a.date);
 
-  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit };
+  // ---- Trading Cost Sheets ----
+  const costSheets = properties.map((p, i) => {
+    const sale = sales.find((s) => s.propertyId === p.id);
+    const isSold = !!sale;
+    const saleDate = isSold ? sale.date : null;
+    const heldDays = isSold
+      ? Math.max(1, Math.round((sale.date - p.purchaseDate) / day))
+      : Math.max(1, Math.round((TODAY - p.purchaseDate) / day));
+    
+    // Purchase side
+    const purchasePrice = p.price;
+    const purchaseBrokeragePct = 1.0;
+    const purchaseBrokerage = round(purchasePrice * 0.01);
+    const stampDuty = round(purchasePrice * 0.01);
+    const cvt = round(purchasePrice * 0.01);
+    const buyerFilerStatus = 'Filer';
+    const tax236K = round(purchasePrice * 0.03); // Filer 3%
+    const societyTransferFee = p.extras.registration || round(purchasePrice * 0.015);
+    const ndcFee = 25000;
+    const legalCharges = p.extras.legal || 35000;
+    const developmentCharges = p.extras.development || 0;
+    const otherAcquisition = p.extras.other || 20000;
+    const totalAcquisitionExtras = stampDuty + cvt + tax236K + societyTransferFee + ndcFee + legalCharges + developmentCharges + otherAcquisition;
+
+    // Carrying / improvements
+    const renovationRepairs = isSold ? round(p.price * 0.015) : round(p.price * 0.01);
+    const maintenanceHolding = round(p.price * 0.005);
+    const marketingExpenses = isSold ? 35000 : 20000;
+    const totalCarryingCosts = renovationRepairs + maintenanceHolding + marketingExpenses;
+
+    const totalLandedCost = purchasePrice + purchaseBrokerage + totalAcquisitionExtras + totalCarryingCosts;
+
+    // Sale side
+    const sellingPrice = isSold ? sale.sellingPrice : p.currentValue;
+    const saleBrokeragePct = isSold ? sale.commissionPct : 2.0;
+    const saleBrokerage = isSold ? sale.commission : round(sellingPrice * 0.02);
+    const sellerFilerStatus = 'Filer';
+    const tax236C = round(sellingPrice * 0.03); // Filer 3%
+    
+    // CGT rate based on holding days (years)
+    const years = heldDays / 365;
+    let cgtRatePct = 15;
+    if (years >= 6) cgtRatePct = 0;
+    else if (years >= 5) cgtRatePct = 2.5;
+    else if (years >= 4) cgtRatePct = 5.0;
+    else if (years >= 3) cgtRatePct = 7.5;
+    else if (years >= 2) cgtRatePct = 10.0;
+    else if (years >= 1) cgtRatePct = 12.5;
+    else cgtRatePct = 15.0;
+
+    const capitalGain = Math.max(0, sellingPrice - totalLandedCost);
+    const cgtAmount = round(capitalGain * (cgtRatePct / 100));
+    const municipalTax = round(sellingPrice * 0.005);
+    const otherSellingExpenses = isSold ? sale.otherExpenses : 30000;
+    const totalSellingExpenses = otherSellingExpenses + municipalTax;
+
+    const totalTaxesToPay = tax236K + tax236C + cgtAmount + stampDuty + cvt + municipalTax;
+    const totalCommissions = purchaseBrokerage + saleBrokerage;
+
+    const grossProfit = sellingPrice - totalLandedCost;
+    const grossMarginPct = sellingPrice > 0 ? (grossProfit / sellingPrice) * 100 : 0;
+    const netProfit = sellingPrice - totalLandedCost - saleBrokerage - tax236C - cgtAmount - municipalTax - otherSellingExpenses;
+    const netMarginPct = sellingPrice > 0 ? (netProfit / sellingPrice) * 100 : 0;
+    const roiPct = totalLandedCost > 0 ? (netProfit / totalLandedCost) * 100 : 0;
+    const annualizedRoiPct = heldDays > 0 ? (roiPct / heldDays) * 365 : roiPct;
+
+    // Break-even selling price
+    const variableSellRate = (saleBrokeragePct + 3.0 + 0.5) / 100;
+    const breakEvenPrice = round((totalLandedCost + otherSellingExpenses) / Math.max(0.01, 1 - variableSellRate));
+
+    return {
+      id: 'CS-' + String(i + 1).padStart(4, '0'),
+      propertyId: p.id,
+      name: p.name,
+      project: p.project,
+      city: p.location,
+      type: p.type,
+      size: p.size,
+      block: p.block,
+      unit: p.unit,
+      status: isSold ? 'Sold' : 'Active Deal',
+      office: p.office,
+      purchaseDate: p.purchaseDate,
+      saleDate,
+      heldDays,
+      purchasePrice,
+      purchaseBrokeragePct,
+      purchaseBrokerage,
+      purchaseAgentName: 'Ahmed Khan',
+      stampDuty,
+      cvt,
+      tax236K,
+      buyerFilerStatus,
+      societyTransferFee,
+      ndcFee,
+      legalCharges,
+      developmentCharges,
+      otherAcquisition,
+      totalAcquisitionExtras,
+      renovationRepairs,
+      maintenanceHolding,
+      marketingExpenses,
+      totalCarryingCosts,
+      totalLandedCost,
+      sellingPrice,
+      saleBrokeragePct,
+      saleBrokerage,
+      saleAgentName: isSold ? sale.agent : 'Sana Malik',
+      tax236C,
+      sellerFilerStatus,
+      cgtRatePct,
+      cgtAmount,
+      municipalTax,
+      otherSellingExpenses,
+      totalSellingExpenses,
+      totalTaxesToPay,
+      totalCommissions,
+      grossProfit,
+      grossMarginPct,
+      netProfit,
+      netMarginPct,
+      roiPct,
+      annualizedRoiPct,
+      breakEvenPrice,
+      seller: p.seller,
+      buyer: isSold ? sale.buyer : 'Prospective Buyer',
+      notes: `Trading cost sheet for ${p.name} · ${p.size} in ${p.project}`,
+    };
+  });
+
+  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets };
 }
+
 
 export const DATA = buildData();
 
@@ -785,6 +916,9 @@ export function sourceCount(view, r, f) {
     transactions: () => DATA.payments.filter((p) => inR(p.date, r) && overheadMatch(p, f)).length,
     cashflow: () => cashLedger(r, f).count,
     audit: () => DATA.audit.length,
+    sheets: () => DATA.costSheets.length,
+    calculator: () => DATA.costSheets.length,
+    analytics: () => DATA.costSheets.length,
   }[view];
   return n ? n() : 0;
 }
@@ -923,3 +1057,265 @@ export function voidPayment(id, user) {
   });
   return t;
 }
+
+/* ====================================================================
+   TRADING COST SHEET & DEAL CALCULATOR ENGINE
+   ==================================================================== */
+
+export function calculateCostSheet(v) {
+  const purchasePrice = Math.max(0, +v.purchasePrice || 0);
+  const purchaseBrokeragePct = v.purchaseBrokeragePct !== undefined && v.purchaseBrokeragePct !== '' ? +v.purchaseBrokeragePct : 1.0;
+  const purchaseBrokerage = v.purchaseBrokerage !== undefined && v.purchaseBrokerage !== '' ? +v.purchaseBrokerage : Math.round(purchasePrice * (purchaseBrokeragePct / 100));
+
+  const stampDuty = v.stampDuty !== undefined && v.stampDuty !== '' ? +v.stampDuty : Math.round(purchasePrice * 0.01);
+  const cvt = v.cvt !== undefined && v.cvt !== '' ? +v.cvt : Math.round(purchasePrice * 0.01);
+
+  const buyerFilerStatus = v.buyerFilerStatus || 'Filer';
+  const kRate = buyerFilerStatus === 'Non-Filer' ? 0.12 : buyerFilerStatus === 'Late Filer' ? 0.06 : 0.03;
+  const tax236K = v.tax236K !== undefined && v.tax236K !== '' ? +v.tax236K : Math.round(purchasePrice * kRate);
+
+  const societyTransferFee = Math.max(0, +v.societyTransferFee || 0);
+  const ndcFee = Math.max(0, +v.ndcFee || 0);
+  const legalCharges = Math.max(0, +v.legalCharges || 0);
+  const developmentCharges = Math.max(0, +v.developmentCharges || 0);
+  const otherAcquisition = Math.max(0, +v.otherAcquisition || 0);
+
+  const totalAcquisitionExtras = stampDuty + cvt + tax236K + societyTransferFee + ndcFee + legalCharges + developmentCharges + otherAcquisition;
+
+  const renovationRepairs = Math.max(0, +v.renovationRepairs || 0);
+  const maintenanceHolding = Math.max(0, +v.maintenanceHolding || 0);
+  const marketingExpenses = Math.max(0, +v.marketingExpenses || 0);
+  const totalCarryingCosts = renovationRepairs + maintenanceHolding + marketingExpenses;
+
+  const totalLandedCost = purchasePrice + purchaseBrokerage + totalAcquisitionExtras + totalCarryingCosts;
+
+  // Sale side
+  const sellingPrice = Math.max(0, +v.sellingPrice || 0);
+  const saleBrokeragePct = v.saleBrokeragePct !== undefined && v.saleBrokeragePct !== '' ? +v.saleBrokeragePct : 2.0;
+  const saleBrokerage = v.saleBrokerage !== undefined && v.saleBrokerage !== '' ? +v.saleBrokerage : Math.round(sellingPrice * (saleBrokeragePct / 100));
+
+  const sellerFilerStatus = v.sellerFilerStatus || 'Filer';
+  const cRate = sellerFilerStatus === 'Non-Filer' ? 0.10 : sellerFilerStatus === 'Late Filer' ? 0.06 : 0.03;
+  const tax236C = v.tax236C !== undefined && v.tax236C !== '' ? +v.tax236C : Math.round(sellingPrice * cRate);
+
+  const pDate = parseDate(v.purchaseDate || TODAY);
+  const sDate = v.saleDate ? parseDate(v.saleDate) : null;
+  const heldDays = sDate ? Math.max(1, Math.round((sDate - pDate) / day)) : (v.heldDays || Math.max(1, Math.round((TODAY - pDate) / day)));
+  const years = heldDays / 365;
+
+  let cgtRatePct = 15;
+  if (v.cgtRatePct !== undefined && v.cgtRatePct !== '') {
+    cgtRatePct = +v.cgtRatePct;
+  } else if (sellerFilerStatus === 'Non-Filer') {
+    cgtRatePct = 15.0;
+  } else {
+    if (years >= 6) cgtRatePct = 0;
+    else if (years >= 5) cgtRatePct = 2.5;
+    else if (years >= 4) cgtRatePct = 5.0;
+    else if (years >= 3) cgtRatePct = 7.5;
+    else if (years >= 2) cgtRatePct = 10.0;
+    else if (years >= 1) cgtRatePct = 12.5;
+    else cgtRatePct = 15.0;
+  }
+
+  const capitalGain = Math.max(0, sellingPrice - totalLandedCost);
+  const cgtAmount = v.cgtAmount !== undefined && v.cgtAmount !== '' ? +v.cgtAmount : Math.round(capitalGain * (cgtRatePct / 100));
+
+  const municipalTax = v.municipalTax !== undefined && v.municipalTax !== '' ? +v.municipalTax : Math.round(sellingPrice * 0.005);
+  const otherSellingExpenses = Math.max(0, +v.otherSellingExpenses || 0);
+  const totalSellingExpenses = otherSellingExpenses + municipalTax;
+
+  const totalTaxesToPay = tax236K + tax236C + cgtAmount + stampDuty + cvt + municipalTax;
+  const totalCommissions = purchaseBrokerage + saleBrokerage;
+
+  const grossProfit = sellingPrice - totalLandedCost;
+  const grossMarginPct = sellingPrice > 0 ? (grossProfit / sellingPrice) * 100 : 0;
+  const netProfit = sellingPrice - totalLandedCost - saleBrokerage - tax236C - cgtAmount - municipalTax - otherSellingExpenses;
+  const netMarginPct = sellingPrice > 0 ? (netProfit / sellingPrice) * 100 : 0;
+  const roiPct = totalLandedCost > 0 ? (netProfit / totalLandedCost) * 100 : 0;
+  const annualizedRoiPct = heldDays > 0 ? (roiPct / heldDays) * 365 : roiPct;
+
+  const variableSellRate = (saleBrokeragePct + (cRate * 100) + 0.5) / 100;
+  const breakEvenPrice = Math.round((totalLandedCost + otherSellingExpenses) / Math.max(0.01, 1 - variableSellRate));
+
+  return {
+    ...v,
+    purchasePrice,
+    purchaseBrokeragePct,
+    purchaseBrokerage,
+    stampDuty,
+    cvt,
+    buyerFilerStatus,
+    tax236K,
+    societyTransferFee,
+    ndcFee,
+    legalCharges,
+    developmentCharges,
+    otherAcquisition,
+    totalAcquisitionExtras,
+    renovationRepairs,
+    maintenanceHolding,
+    marketingExpenses,
+    totalCarryingCosts,
+    totalLandedCost,
+    sellingPrice,
+    saleBrokeragePct,
+    saleBrokerage,
+    sellerFilerStatus,
+    tax236C,
+    purchaseDate: pDate,
+    saleDate: sDate,
+    heldDays,
+    cgtRatePct,
+    cgtAmount,
+    municipalTax,
+    otherSellingExpenses,
+    totalSellingExpenses,
+    totalTaxesToPay,
+    totalCommissions,
+    grossProfit,
+    grossMarginPct,
+    netProfit,
+    netMarginPct,
+    roiPct,
+    annualizedRoiPct,
+    breakEvenPrice,
+  };
+}
+
+export function computeSensitivityMatrix(cs) {
+  const basePrice = cs.sellingPrice;
+  const multipliers = [
+    { label: '-10% Bear Drop', factor: 0.90 },
+    { label: '-5% Buyer Negotiation', factor: 0.95 },
+    { label: 'Current Target (Base)', factor: 1.00 },
+    { label: '+5% Market Uptick', factor: 1.05 },
+    { label: '+10% Bull Peak', factor: 1.10 },
+  ];
+  return multipliers.map((m) => {
+    const sPrice = Math.round(basePrice * m.factor);
+    const updated = calculateCostSheet({ ...cs, sellingPrice: sPrice });
+    return {
+      label: m.label,
+      factor: m.factor,
+      sellingPrice: sPrice,
+      grossProfit: updated.grossProfit,
+      grossMarginPct: updated.grossMarginPct,
+      totalTaxesToPay: updated.totalTaxesToPay,
+      totalCommissions: updated.totalCommissions,
+      netProfit: updated.netProfit,
+      netMarginPct: updated.netMarginPct,
+      roiPct: updated.roiPct,
+    };
+  });
+}
+
+export function solveSellingPriceForTargetMargin(cs, targetMarginPct) {
+  const targetM = targetMarginPct / 100;
+  const cRate = cs.sellerFilerStatus === 'Non-Filer' ? 0.10 : cs.sellerFilerStatus === 'Late Filer' ? 0.06 : 0.03;
+  const v = (cs.saleBrokeragePct + (cRate * 100) + 0.5) / 100;
+  const cgtRate = (cs.cgtRatePct || 0) / 100;
+  const denom = 1 - v - cgtRate - targetM;
+  if (denom <= 0.05) {
+    return Math.round(cs.totalLandedCost * (1 + targetM * 1.5));
+  }
+  const price = (cs.otherSellingExpenses + cs.totalLandedCost * (1 - cgtRate)) / denom;
+  return Math.round(price);
+}
+
+export function computeTradingKPIs(sheets) {
+  const total = sheets.length;
+  const closed = sheets.filter((s) => s.status === 'Sold');
+  const active = sheets.filter((s) => s.status === 'Active Deal');
+
+  const totalCapitalInvested = sheets.reduce((a, s) => a + s.totalLandedCost, 0);
+  const totalRevenue = closed.reduce((a, s) => a + s.sellingPrice, 0);
+  const realizedGrossProfit = closed.reduce((a, s) => a + s.grossProfit, 0);
+  const realizedNetProfit = closed.reduce((a, s) => a + s.netProfit, 0);
+  const projectedRevenue = active.reduce((a, s) => a + s.sellingPrice, 0);
+  const projectedNetProfit = active.reduce((a, s) => a + s.netProfit, 0);
+
+  const totalTaxesPaid = sheets.reduce((a, s) => a + s.totalTaxesToPay, 0);
+  const totalCommissionsPaid = sheets.reduce((a, s) => a + s.totalCommissions, 0);
+
+  const blendedGrossMargin = totalRevenue > 0 ? (realizedGrossProfit / totalRevenue) * 100 : 0;
+  const blendedNetMargin = totalRevenue > 0 ? (realizedNetProfit / totalRevenue) * 100 : 0;
+  const blendedRoi = closed.reduce((a, s) => a + s.totalLandedCost, 0) > 0
+    ? (realizedNetProfit / closed.reduce((a, s) => a + s.totalLandedCost, 0)) * 100
+    : 0;
+
+  const avgHoldingDays = closed.length > 0
+    ? Math.round(closed.reduce((a, s) => a + s.heldDays, 0) / closed.length)
+    : 0;
+
+  return {
+    totalDeals: total,
+    closedDeals: closed.length,
+    activeDeals: active.length,
+    totalCapitalInvested,
+    totalRevenue,
+    realizedGrossProfit,
+    realizedNetProfit,
+    projectedRevenue,
+    projectedNetProfit,
+    totalTaxesPaid,
+    totalCommissionsPaid,
+    blendedGrossMargin,
+    blendedNetMargin,
+    blendedRoi,
+    avgHoldingDays,
+  };
+}
+
+export function saveCostSheet(raw, user) {
+  const cs = calculateCostSheet(raw);
+  if (!cs.id) {
+    cs.id = nextId(DATA.costSheets, 'CS-', 4);
+  }
+  const idx = DATA.costSheets.findIndex((x) => x.id === cs.id);
+  if (idx >= 0) {
+    DATA.costSheets[idx] = cs;
+  } else {
+    DATA.costSheets.unshift(cs);
+  }
+
+  // Synchronize with property if matched
+  const p = DATA.properties.find((x) => x.id === cs.propertyId);
+  if (p) {
+    p.price = cs.purchasePrice;
+    p.extras = {
+      registration: cs.societyTransferFee,
+      legal: cs.legalCharges,
+      development: cs.developmentCharges,
+      other: cs.otherAcquisition,
+    };
+    p.totalCost = cs.totalLandedCost;
+    p.currentValue = cs.sellingPrice;
+    if (cs.status === 'Sold') {
+      const sale = DATA.sales.find((s) => s.propertyId === p.id);
+      if (sale) {
+        sale.sellingPrice = cs.sellingPrice;
+        sale.commission = cs.saleBrokerage;
+        sale.grossProfit = cs.grossProfit;
+        sale.netProfit = cs.netProfit;
+        sale.tax = cs.tax236C;
+      }
+    }
+  }
+
+  DATA.audit.unshift({
+    id: nextId(DATA.audit, 'AU-', 4),
+    date: TODAY,
+    txnId: cs.id,
+    action: idx >= 0 ? 'Edited' : 'Created',
+    user: user || 'Manual entry',
+    entity: 'Trading Cost Sheet',
+    prevAmount: null,
+    newAmount: cs.netProfit,
+    note: `Cost Sheet ${cs.id} (${cs.name}) ${idx >= 0 ? 'updated' : 'created'} with net margin ${cs.netMarginPct.toFixed(1)}%`,
+    manual: true,
+  });
+
+  return cs;
+}
+

@@ -8,7 +8,7 @@ import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function PropertiesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, numbers } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
 
   const meta = PAGE_META[`properties/${tab}`] || { t: 'Properties' };
 
@@ -39,6 +39,21 @@ export function PropertiesPage() {
       { key: 'remaining', label: 'Remaining', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.remaining, numbers) },
       { key: 'payStatus', label: 'Payment', render: (p: any) => <Tag text={p.payStatus} /> },
       { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },
+      {
+        key: 'sheet',
+        label: 'Cost Sheet',
+        render: (p: any) => (
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+            onClick={() => openCostSheet(p.id)}
+            title="Open trade cost sheet"
+          >
+            <Icon name="calculator" size={12} /> Cost Sheet
+          </button>
+        ),
+      },
     ];
 
     return (
@@ -97,6 +112,21 @@ export function PropertiesPage() {
         render: (p: any) => <span className={p.netProfit > 0 ? 'pos' : p.netProfit < 0 ? 'neg' : ''}>{M.fmt(p.netProfit, numbers)}</span>,
       },
       { key: 'margin', label: 'Margin', a: 'r' as const, cls: 'mono', render: (p: any) => isFinite(p.margin) ? `${p.margin.toFixed(1)}%` : '—' },
+      {
+        key: 'sheet',
+        label: 'Cost Sheet',
+        render: (p: any) => (
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+            onClick={() => openCostSheet(p.id)}
+            title="Open trade cost sheet"
+          >
+            <Icon name="calculator" size={12} /> Cost Sheet
+          </button>
+        ),
+      },
     ];
 
     return (
@@ -144,6 +174,21 @@ export function PropertiesPage() {
     { key: 'upPct', label: 'Upside %', a: 'r' as const, cls: 'mono', render: (p: any) => isFinite(p.upPct) ? `${p.upPct.toFixed(1)}%` : '—' },
     { key: 'heldDays', label: 'Days held', a: 'r' as const, cls: 'mono', render: (p: any) => M.fmtNum(p.heldDays) },
     { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },
+    {
+      key: 'sheet',
+      label: 'Cost Sheet',
+      render: (p: any) => (
+        <button
+          type="button"
+          className="btn"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => openCostSheet(p.id)}
+          title="Open trade cost sheet"
+        >
+          <Icon name="calculator" size={12} /> Cost Sheet
+        </button>
+      ),
+    },
   ];
 
   return (

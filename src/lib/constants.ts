@@ -25,6 +25,18 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    id: 'trading',
+    label: 'Cost Sheets',
+    u: 'لاگت شیٹ و ٹریڈنگ',
+    icon: 'calculator',
+    group: 'Operations',
+    tabs: [
+      { id: 'sheets', label: 'Cost sheet register' },
+      { id: 'calculator', label: 'Deal calculator' },
+      { id: 'analytics', label: 'Trading analytics' },
+    ],
+  },
+  {
     id: 'sales',
     label: 'Sales',
     u: 'فروخت',
@@ -93,6 +105,9 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost, what it is worth today, and the difference.' },
   'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought, with acquisition costs and what is still owed to the seller.' },
   'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, after acquisition costs, commission, tax and selling costs.' },
+  'trading/sheets': { t: 'Cost sheet register', u: 'لاگت رجسٹر', p: 'Complete trading ledger: acquisition cost basis, sale realization, brokerage, statutory taxes, and net margins.' },
+  'trading/calculator': { t: 'Deal cost calculator', u: 'لاگت کیلکولیٹر', p: 'Interactive trade modeller: link buy-sell pricing, holding carrying costs, commission splits, FBR taxes, break-even exit, and sensitivity.' },
+  'trading/analytics': { t: 'Trading analytics', u: 'تجزیہ منافع', p: 'Portfolio-level trading velocity, capital turnover, tax-to-profit ratios, and realized margin breakdown.' },
   'sales/register': { t: 'Sales register', u: 'فروخت رجسٹر', p: 'Every sale with buyer, agent, amount received and amount outstanding.' },
   'sales/receivables': { t: 'Accounts receivable', u: 'واجب الوصول', p: 'What customers still owe, and how far past due each balance is.' },
   'agents/directory': { t: 'Agent directory', u: 'ایجنٹ', p: 'Sales, profit generated and commission for every agent in the period.' },
