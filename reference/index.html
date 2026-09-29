@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Real Estate Management System - reporting module and CEO dashboard for Meridian Estates." />
+<meta name="color-scheme" content="light" />
+<title>Meridian Estates - Real Estate Management System</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./app.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%230B5C46'/%3E%3Ctext x='20' y='27' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-weight='700' fill='%23FAF6EC'%3EM%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+<div class="shell">
+  <aside class="side" id="side" data-noprint="1" aria-label="Main navigation"></aside>
+  <div class="content">
+    <header class="topbar" id="topbar" data-noprint="1"></header>
+    <nav class="tabbar" id="tabs" data-noprint="1" aria-label="Section tabs"></nav>
+    <main id="main">
+      <div class="page"><p class="muted">Loading&hellip;</p></div>
+    </main>
+  </div>
+</div>
+
+<div id="layer"></div>
+<div class="tip" id="tip" role="tooltip" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div style="padding:40px;font-family:system-ui">
+    <h1>JavaScript is required</h1>
+    <p>Every figure is calculated in the browser from the underlying transactions, so this system needs JavaScript enabled.</p>
+  </div>
+</noscript>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
