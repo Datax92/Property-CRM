@@ -1,5 +1,5 @@
 # Meridian Estates — Real Estate Management System (RMS)
-
+ 
 A production-ready React / Next.js implementation of the **Meridian Estates Real Estate Management System**, featuring an accounting-ledger editorial design, multi-role executive portals, dynamic financial calculations, and live transaction management.
 
 ## 🚀 Features
