@@ -65,388 +65,34 @@ function propertyName(type, project, i) {
 }
 
 function buildData() {
-  const agents = AGENT_NAMES.map((n, i) => ({
-    id: 'AG-' + String(i + 1).padStart(3, '0'), name: n,
-    office: OFFICES[i % OFFICES.length], joined: dstr(new Date(2022 + (i % 3), i % 12, 5)),
-    rate: [1.5, 2, 2.5][i % 3],
+  const agents = AGENT_NAMES.slice(0, 2).map((n, i) => ({
+    id: 'AG-' + String(i + 1).padStart(3, '0'),
+    name: n,
+    office: OFFICES[i % OFFICES.length],
+    joined: dstr(TODAY),
+    rate: 2.0,
   }));
 
-  const employees = EMP.map((e, i) => ({
-    id: 'EMP-' + String(i + 1).padStart(3, '0'), name: e[0], dept: e[1], basic: e[2],
+  const employees = EMP.slice(0, 2).map((e, i) => ({
+    id: 'EMP-' + String(i + 1).padStart(3, '0'),
+    name: e[0],
+    dept: e[1],
+    basic: 0,
     office: OFFICES[i % OFFICES.length],
   }));
 
-  const statusPlan = [].concat(
-    Array(34).fill('Sold'), Array(14).fill('Available'),
-    Array(6).fill('Reserved'), Array(5).fill('Under Process')
-  );
-
-  const properties = [], sales = [], commissions = [], payments = [], taxes = [];
-  let txn = 41000;
-  const tx = (date, dir, category, amount, o = {}) => {
-    payments.push({
-      id: 'TXN-' + ++txn, date: cap(date), dir, category, amount: round(amount),
-      method: o.method || pick(METHODS), account: o.account || pick(ACCOUNTS),
-      party: o.party || '—', propertyId: o.propertyId || null, agentId: o.agentId || null,
-      ref: o.ref || 'REF-' + int(100000, 999999), note: o.note || category,
-      office: o.office || pick(OFFICES), createdBy: o.createdBy || pick(['Faisal Nadeem','Ayesha Siddiqui','Omar Farooq']),
-      approvedBy: o.approvedBy || pick(['Faisal Nadeem','CEO — M. Salman']),
-      status: 'Posted',
-    });
-    return payments[payments.length - 1];
-  };
-
-  statusPlan.forEach((status, i) => {
-    const project = PROJECTS[i % PROJECTS.length];
-    const type = TYPES[int(0, TYPES.length - 1)];
-    const size = pick([3, 5, 5, 7, 10, 10, 20]);
-    const base = { 'Residential Plot': 1.5e6, 'Commercial Plot': 3.2e6, House: 2.4e6, Apartment: 1.9e6, Farmhouse: 1.2e6, Shop: 4.1e6 }[type];
-    const price = round((base * size * (0.85 + rnd() * 0.5)) / 1e5) * 1e5;
-    // Sold stock is mostly acquired in the prior year; current holdings are acquired this year,
-    // so period purchase cost stays below period sales revenue (as in the requirement examples).
-    const purchaseDate = status === 'Sold'
-      ? (rnd() < 0.78 ? addDays(new Date(2025, 0, 10), int(0, 330)) : addDays(new Date(2026, 0, 5), int(0, 105)))
-      : (rnd() < 0.25 ? addDays(new Date(2025, 3, 1), int(0, 260)) : addDays(new Date(2026, 0, 5), int(0, 215)));
-    const extras = {
-      registration: round(price * 0.02 / 1000) * 1000,
-      legal: round((30000 + rnd() * 90000) / 1000) * 1000,
-      development: round(price * (rnd() < 0.4 ? 0.015 : 0) / 1000) * 1000,
-      other: round((10000 + rnd() * 60000) / 1000) * 1000,
-    };
-    const totalCost = price + extras.registration + extras.legal + extras.development + extras.other;
-    const paidRatio = pick([1, 1, 1, 0.85, 0.7, 0.55]);
-    const paid = round(totalCost * paidRatio);
-    const p = {
-      id: 'P-' + String(i + 1).padStart(4, '0'),
-      name: propertyName(type, project, i), type, projectId: project.id, project: project.name,
-      location: project.city, block: 'Block ' + pick(['A','B','C','D','E','J','K']),
-      unit: String(int(1, 480)), size: size + ' Marla',
-      seller: pick(SELLERS), purchaseDate, price, extras, totalCost,
-      paid, remaining: Math.max(0, totalCost - paid),
-      payStatus: paidRatio === 1 ? 'Paid' : 'Partially Paid',
-      status, office: OFFICES[i % OFFICES.length],
-      currentValue: round(totalCost * (1.08 + rnd() * 0.3) / 1e5) * 1e5,
-      heldDays: Math.round((TODAY - purchaseDate) / day),
-    };
-    properties.push(p);
-
-    tx(purchaseDate, 'out', 'Property Purchase', paid, { party: p.seller, propertyId: p.id, office: p.office, note: 'Purchase payment — ' + p.name });
-    if (extras.registration + extras.legal + extras.development + extras.other > 0)
-      tx(addDays(purchaseDate, int(1, 20)), 'out', 'Property Expenses', extras.registration + extras.legal + extras.development + extras.other,
-        { party: 'Registrar / Legal', propertyId: p.id, office: p.office, note: 'Acquisition costs — ' + p.id });
-
-    if (status === 'Sold') {
-      let lo = addDays(purchaseDate, int(45, 120));
-      if (lo < new Date(2026, 0, 8)) lo = addDays(new Date(2026, 0, 8), int(0, 60));
-      const span = Math.max(0, Math.floor((TODAY - lo) / day));
-      let saleDate = span > 0 ? addDays(lo, int(0, span)) : addDays(TODAY, -int(0, 25));
-      if (saleDate < purchaseDate) saleDate = addDays(purchaseDate, 30);
-      const sellingPrice = round(p.totalCost * (1.28 + rnd() * 0.32) / 1e5) * 1e5;
-      const agent = agents[int(0, agents.length - 1)];
-      const recvRatio = pick([1, 1, 1, 0.9, 0.75, 0.6, 0.45]);
-      const received = round(sellingPrice * recvRatio);
-      const cPct = agent.rate;
-      const cAmt = round(sellingPrice * cPct / 100);
-      const cDate = addDays(saleDate, int(5, 45));
-      const cPaidRatio = cDate > TODAY ? 0 : pick([1, 1, 0.8, 0.5, 0]);
-      const cPaid = round(cAmt * cPaidRatio);
-      const saleTax = round(sellingPrice * 0.01);
-      const otherSell = round((25000 + rnd() * 120000) / 1000) * 1000;
-      const s = {
-        id: 'S-' + String(sales.length + 1).padStart(4, '0'), propertyId: p.id, property: p.name,
-        buyer: pick(BUYERS), agentId: agent.id, agent: agent.name, date: saleDate,
-        sellingPrice, received, outstanding: Math.max(0, sellingPrice - received),
-        dueDate: addDays(saleDate, 60), method: pick(METHODS),
-        commissionPct: cPct, commission: cAmt, tax: saleTax, otherExpenses: otherSell,
-        netRevenue: sellingPrice - cAmt - saleTax - otherSell,
-        propertyCost: p.totalCost, grossProfit: sellingPrice - p.totalCost,
-        netProfit: sellingPrice - p.totalCost - cAmt - saleTax - otherSell,
-        payStatus: recvRatio === 1 ? 'Paid' : (addDays(saleDate, 60) < TODAY ? 'Overdue' : 'Partially Paid'),
-        saleStatus: recvRatio === 1 ? 'Completed' : 'In Payment',
-        office: p.office,
-      };
-      sales.push(s);
-      commissions.push({
-        id: 'CM-' + String(commissions.length + 1).padStart(4, '0'), agentId: agent.id, agent: agent.name,
-        propertyId: p.id, property: p.name, counterparty: s.buyer, txnType: 'Sale', date: saleDate,
-        pct: cPct, amount: cAmt, paid: cPaid, outstanding: Math.max(0, cAmt - cPaid),
-        paidDate: cPaid > 0 ? dstr(cDate) : '—',
-        status: cPaid === cAmt ? 'Paid' : cPaid === 0 ? (addDays(saleDate, 30) < TODAY ? 'Overdue' : 'Unpaid') : 'Partially Paid',
-        office: p.office,
-      });
-      tx(saleDate, 'in', 'Property Sale', received, { party: s.buyer, propertyId: p.id, agentId: agent.id, office: p.office, note: 'Sale receipt — ' + p.name });
-      if (cPaid > 0) tx(cDate, 'out', 'Agent Commission', cPaid, { party: agent.name, agentId: agent.id, propertyId: p.id, office: p.office, note: 'Commission — ' + s.id });
-      taxes.push({
-        id: 'TX-' + String(taxes.length + 1).padStart(4, '0'), type: 'Withholding Tax (Sale)',
-        ref: s.id, property: p.name, taxpayer: COMPANY, authority: 'FBR',
-        amount: saleTax, dueDate: addDays(saleDate, 30),
-        paidDate: rnd() < 0.82 ? cap(addDays(saleDate, int(3, 28))) : null, date: saleDate, office: p.office,
-      });
-      if (rnd() < 0.4) tx(addDays(saleDate, int(2, 25)), 'out', 'Property Expenses', otherSell, { party: 'Sale processing', propertyId: p.id, office: p.office, note: 'Selling expenses — ' + s.id });
-    }
-  });
-
-  // ---- Operating expenses (Jan 2026 → current month) ----
+  const properties = [];
+  const sales = [];
+  const commissions = [];
+  const payments = [];
+  const taxes = [];
   const expenses = [];
-  const monthsElapsed = TODAY.getMonth();
-  for (let m = 0; m <= monthsElapsed; m++) {
-    Object.keys(EXPENSE_TREE).forEach((group) => {
-      EXPENSE_TREE[group].forEach((cat, ci) => {
-        if (rnd() < 0.12) return;
-        const scale = { 'Office Expenses': 1, 'Employee Expenses': 0.7, 'Marketing Expenses': 1.4, 'Property Expenses': 1.1, 'Other Expenses': 0.4 }[group];
-        const amt = round(((40000 + rnd() * 520000) * scale) / 1000) * 1000;
-        const date = new Date(2026, m, Math.min(int(2, 27), 27));
-        if (date > TODAY) return;
-        const paidFull = rnd() < 0.86;
-        expenses.push({
-          id: 'EX-' + String(expenses.length + 1).padStart(4, '0'), group, category: cat, date,
-          amount: amt, paid: paidFull ? amt : round(amt * pick([0, 0.5, 0.7])),
-          vendor: pick(['City Traders','Mega Supplies','Al-Noor Services','Prime Media','Zenith Solutions','Rapid Logistics']),
-          office: OFFICES[(m + ci) % OFFICES.length],
-          method: pick(METHODS), note: cat + ' — ' + MONTHS[m] + ' 2026',
-        });
-        const e = expenses[expenses.length - 1];
-        e.outstanding = Math.max(0, e.amount - e.paid);
-        e.status = e.paid === e.amount ? 'Paid' : e.paid === 0 ? 'Unpaid' : 'Partially Paid';
-        if (e.paid > 0) tx(date, 'out', group, e.paid, { party: e.vendor, office: e.office, note: e.note, method: e.method });
-      });
-    });
-  }
-
-  // ---- Salaries ----
   const salaries = [];
-  for (let m = 0; m <= monthsElapsed; m++) {
-    employees.forEach((e) => {
-      const bonus = rnd() < 0.3 ? round(e.basic * 0.1 / 1000) * 1000 : 0;
-      const allowance = round(e.basic * 0.06 / 1000) * 1000;
-      const deduction = rnd() < 0.2 ? round(e.basic * 0.03 / 1000) * 1000 : 0;
-      const net = e.basic + bonus + allowance - deduction;
-      const payDate = new Date(2026, m, 28);
-      const paid = payDate <= TODAY;
-      salaries.push({
-        id: 'SL-' + String(salaries.length + 1).padStart(4, '0'), employeeId: e.id, employee: e.name,
-        dept: e.dept, month: m, monthLabel: MONTHS[m] + ' 2026', basic: e.basic, bonus, allowance,
-        deduction, net, date: payDate, status: paid ? 'Paid' : 'Pending', office: e.office,
-      });
-      if (paid) tx(payDate, 'out', 'Employee Salaries', net, { party: e.name, office: e.office, note: 'Salary ' + MONTHS[m] + ' 2026', method: 'Bank Transfer' });
-    });
-  }
-
-  // ---- Bills ----
   const bills = [];
-  for (let m = 0; m <= monthsElapsed; m++) {
-    BILL_TYPES.forEach((b, bi) => {
-      const amount = round((b[2] * (0.8 + rnd() * 0.5)) / 1000) * 1000;
-      const dueDate = new Date(2026, m, 15);
-      let paidAmt = amount, status = 'Paid', paidDate = new Date(2026, m, int(8, 14));
-      const roll = rnd();
-      if (dueDate > TODAY) { paidAmt = 0; status = 'Pending'; paidDate = null; }
-      else if (roll < 0.08) { paidAmt = 0; status = 'Overdue'; paidDate = null; }
-      else if (roll < 0.14) { paidAmt = round(amount * 0.5); status = 'Partially Paid'; paidDate = new Date(2026, m, 16); }
-      bills.push({
-        id: 'BL-' + String(bills.length + 1).padStart(4, '0'), type: b[0], vendor: b[1],
-        number: 'INV-' + (2026000 + m * 50 + bi), period: MONTHS[m] + ' 2026', dueDate, date: new Date(2026, m, 3),
-        amount, paid: paidAmt, outstanding: Math.max(0, amount - paidAmt), paidDate, status,
-        office: OFFICES[bi % OFFICES.length], attachment: 'invoice-' + (2026000 + m * 50 + bi) + '.pdf',
-      });
-      if (paidAmt > 0) tx(paidDate, 'out', 'Bills', paidAmt, { party: b[1], office: bills[bills.length - 1].office, note: b[0] + ' — ' + MONTHS[m] + ' 2026' });
-    });
-  }
-
-  // ---- Corporate tax (quarterly) + Zakat ----
-  [0, 3, 6].forEach((m, qi) => {
-    const amount = round((800000 + rnd() * 900000) / 1000) * 1000;
-    const dueDate = new Date(2026, m + 2, 20);
-    const paidDate = dueDate < TODAY ? (rnd() < 0.85 ? addDays(dueDate, -int(1, 12)) : null) : null;
-    taxes.push({
-      id: 'TX-' + String(taxes.length + 1).padStart(4, '0'), type: 'Advance Income Tax — Q' + (qi + 1),
-      ref: 'Q' + (qi + 1) + '-2026', property: '—', taxpayer: COMPANY, authority: 'FBR',
-      amount, dueDate, paidDate, date: new Date(2026, m, 5), office: OFFICES[0],
-    });
-  });
-  taxes.forEach((t) => {
-    t.paid = t.paidDate ? t.amount : 0;
-    t.outstanding = t.amount - t.paid;
-    t.status = t.paid ? 'Paid' : t.dueDate < TODAY ? 'Overdue' : 'Pending';
-    t.attachment = 'tax-' + t.id.toLowerCase() + '.pdf';
-    if (t.paid) tx(t.paidDate, 'out', 'Taxes', t.paid, { party: 'FBR', office: t.office, note: t.type, method: 'Bank Transfer' });
-  });
-
-  const zakatAssets = 2.6e8;
   const zakat = [];
-  const zakatable = round(zakatAssets * 0.19);
-  const zakatDue = round(zakatable * 0.025);
-  let zPaidTotal = 0;
-  [1, 4, 7].forEach((m, i) => {
-    const amt = round(zakatDue / 4 / 1000) * 1000;
-    const d = new Date(2026, m, 12);
-    if (d > TODAY) return;
-    zPaidTotal += amt;
-    zakat.push({
-      id: 'ZK-' + String(i + 1).padStart(3, '0'), period: 'FY 2026 · Installment ' + (i + 1),
-      eligibleAssets: zakatAssets, zakatable, rate: '2.5%', calculated: zakatDue,
-      amount: amt, date: d, ref: 'ZK-REF-' + int(10000, 99999), office: OFFICES[0], status: 'Paid',
-    });
-    tx(d, 'out', 'Zakat', amt, { party: 'Zakat Disbursement Fund', office: OFFICES[0], note: 'Zakat installment ' + (i + 1), method: 'Bank Transfer' });
-  });
-  const zakatSummary = { calculated: zakatDue, paid: zPaidTotal, remaining: Math.max(0, zakatDue - zPaidTotal), zakatable, eligibleAssets: zakatAssets, rate: 2.5 };
-
-  // Other income
-  [1, 3, 5, 7].forEach((m) => {
-    const d = new Date(2026, m, int(5, 24));
-    if (d > TODAY) return;
-    tx(d, 'in', 'Other Income', round((900000 + rnd() * 2.4e6) / 1000) * 1000, { party: 'Consultancy / Rental income', office: OFFICES[0], note: 'Other operating income' });
-  });
-  [2, 6].forEach((m) => {
-    const d = new Date(2026, m, 10);
-    if (d > TODAY) return;
-    tx(d, 'in', 'Investment', round((15e6 + rnd() * 20e6) / 1e5) * 1e5, { party: 'Director capital injection', office: OFFICES[0], note: 'Investment received' });
-  });
-
-  payments.sort((a, b) => b.date - a.date);
-
-  // ---- Audit trail ----
-  const AUDIT_ACTIONS = ['Created','Edited','Approved','Voided','Reversed','Adjustment'];
-  const audit = payments.slice(0, 60).map((p, i) => {
-    const action = i % 7 === 6 ? pick(['Voided','Reversed','Adjustment']) : AUDIT_ACTIONS[i % 3];
-    const changed = action === 'Edited' || action === 'Adjustment';
-    return {
-      id: 'AU-' + String(i + 1).padStart(4, '0'), date: cap(addDays(p.date, int(0, 3))),
-      txnId: p.id, action, user: action === 'Approved' ? 'CEO — M. Salman' : p.createdBy,
-      entity: p.category, prevAmount: changed ? round(p.amount * 0.94) : null,
-      newAmount: changed ? p.amount : p.amount,
-      note: changed ? 'Amount corrected after vendor reconciliation' : action + ' ' + p.category.toLowerCase() + ' entry',
-    };
-  }).sort((a, b) => b.date - a.date);
-
-  // ---- Trading Cost Sheets (ERP Format matching Client's Excel) ----
-  const excelDefaultSheet = calculateCostSheet({
-    id: '10002',
-    propertyId: 'PROP-FH-940',
-    name: 'Plot # 940 A Block',
-    project: 'Faisal Hills',
-    city: 'Islamabad',
-    type: 'Residential Plot',
-    size: '30x60 (5 Marla)',
-    block: 'Block A',
-    unit: '940',
-    status: 'Active Deal',
-    office: 'Islamabad Branch — Blue Area',
-    purchaseDate: '2024-02-15',
-    saleDate: '2024-05-20',
-    heldDays: 95,
-    netBuyCost: 5000000,
-    ndcFee: 10000,
-    stampDuty: 0,
-    stampDutyPct: 1.0,
-    cvt: 0,
-    cvtPct: 1.0,
-    cdaRdaTransferFee: 0,
-    cdaRdaTransferFeePct: 0.5,
-    societyTransferFee: 0,
-    tax236K: 150000,
-    tax236KPct: 3.0,
-    buyerFilerStatus: 'Filer',
-    handlingExpenses: 10000,
-    renovationRepairs: 0,
-    maintenanceBills: 0,
-    marketingExpenses: 1000,
-    fuelTravelling: 1000,
-    salaryExpenses: 5000,
-    buySideAgentFee: 10000,
-    grossSalePrice: 5600000,
-    tax236C: 150000,
-    sellerFilerStatus: 'Filer',
-    sellSideAgentFee: 10000,
-    cgtRatePct: 15.0,
-    cgtAmount: 61950,
-    zakat: 10000,
-    charity: 5000,
-    officeExpenseDeduction: 5000,
-    seller: 'Ch. Tariq Mehmood',
-    buyer: 'Brig. (R) Zahid Iqbal',
-    notes: 'Imported directly from Client Excel ERP (Faisal Hills Plot 940 A Block)',
-  });
-
-  const propertySheets = properties.map((p, i) => {
-    const sale = sales.find((s) => s.propertyId === p.id);
-    const isSold = !!sale;
-    const saleDate = isSold ? sale.date : null;
-    const heldDays = isSold
-      ? Math.max(1, Math.round((sale.date - p.purchaseDate) / day))
-      : Math.max(1, Math.round((TODAY - p.purchaseDate) / day));
-    
-    const netBuyCost = p.price;
-    const ndcFee = 15000;
-    const stampDuty = round(netBuyCost * 0.01);
-    const cvt = round(netBuyCost * 0.01);
-    const cdaRdaTransferFee = round(netBuyCost * 0.005);
-    const societyTransferFee = p.extras?.registration || round(netBuyCost * 0.01);
-    const tax236K = round(netBuyCost * 0.03); // Filer 3%
-    const handlingExpenses = 15000;
-    const renovationRepairs = isSold ? round(p.price * 0.015) : round(p.price * 0.01);
-    const maintenanceBills = round(p.price * 0.005);
-    const marketingExpenses = isSold ? 25000 : 15000;
-    const fuelTravelling = 8000;
-    const salaryExpenses = 12000;
-    const buySideAgentFee = round(netBuyCost * 0.01);
-
-    const grossSalePrice = isSold ? sale.sellingPrice : p.currentValue;
-    const tax236C = round(grossSalePrice * 0.03);
-    const sellSideAgentFee = isSold ? sale.commission : round(grossSalePrice * 0.01);
-
-    const sheetRaw = {
-      id: 'CS-' + String(i + 1).padStart(4, '0'),
-      propertyId: p.id,
-      name: p.name,
-      project: p.project,
-      city: p.location,
-      type: p.type,
-      size: p.size,
-      block: p.block,
-      unit: p.unit,
-      status: isSold ? 'Sold' : 'Active Deal',
-      office: p.office,
-      purchaseDate: p.purchaseDate,
-      saleDate,
-      heldDays,
-      netBuyCost,
-      ndcFee,
-      stampDuty,
-      stampDutyPct: 1.0,
-      cvt,
-      cvtPct: 1.0,
-      cdaRdaTransferFee,
-      cdaRdaTransferFeePct: 0.5,
-      societyTransferFee,
-      tax236K,
-      tax236KPct: 3.0,
-      buyerFilerStatus: 'Filer',
-      handlingExpenses,
-      renovationRepairs,
-      maintenanceBills,
-      marketingExpenses,
-      fuelTravelling,
-      salaryExpenses,
-      buySideAgentFee,
-      grossSalePrice,
-      tax236C,
-      tax236CPct: 3.0,
-      sellerFilerStatus: 'Filer',
-      sellSideAgentFee,
-      cgtRatePct: 15.0,
-      zakat: isSold ? 25000 : 0,
-      charity: isSold ? 10000 : 0,
-      officeExpenseDeduction: salaryExpenses,
-      seller: p.seller || 'Private Seller',
-      buyer: isSold ? sale.buyer : 'Prospect',
-      notes: `Standard trade ledger for ${p.name} in ${p.project}`,
-    };
-
-    return calculateCostSheet(sheetRaw);
-  });
-
-  const costSheets = [excelDefaultSheet, ...propertySheets];
+  const zakatSummary = { calculated: 0, paid: 0, remaining: 0, zakatable: 0, eligibleAssets: 0, rate: 2.5 };
+  const audit = [];
+  const costSheets = [];
 
   return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets };
 }
@@ -823,11 +469,8 @@ export function aging(f) {
 /* E3 - Cash balance. The document's cash-flow section reports inflow and outflow
    but never a balance, so the CEO cannot answer "how much money do we actually
    have?". OPENING_BALANCE is the cash position before the dataset starts. */
-const FY_START = new Date(2026, 0, 1);
-const PRE_FY_NET = DATA.payments.filter((p) => p.date < FY_START)
-  .reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), 0);
-// Cash held on 1 Jan 2026, back-solved so the ledger opens the financial year at PKR 6.5 Cr.
-export const OPENING_BALANCE = Math.round(65e6 - PRE_FY_NET);
+// Cash balance: starts at 0 for a clean database
+export const OPENING_BALANCE = 0;
 export function cashLedger(r, f) {
   const before = DATA.payments.filter((p) => p.date < r.start && overheadMatch(p, f));
   const opening = before.reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), OPENING_BALANCE);

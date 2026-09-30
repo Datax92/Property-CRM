@@ -158,11 +158,11 @@ export function TradingPage() {
             type="button"
             className="btn pri"
             onClick={() => {
-              setActiveCostSheetId('10002');
-              openCostSheet('10002');
+              setActiveCostSheetId('new');
+              openCostSheet('new');
             }}
           >
-            <Icon name="calculator" /> Open Cost Sheet (Plot # 940)
+            <Icon name="calculator" /> + New Cost Sheet
           </button>
         }
       >
@@ -312,7 +312,7 @@ function PrintableCostSheetDoc({
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
             <span>OFFICIAL COST SHEET</span>
             <span>·</span>
-            <span>#{sheet.id}</span>
+            <span>#{sheet.id || 'NEW'}</span>
           </div>
           <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', fontWeight: 500 }}>
             Issued: <b>{M.fmtDate(M.TODAY)}</b> · Islamabad, PK
@@ -336,7 +336,7 @@ function PrintableCostSheetDoc({
       >
         <div>
           <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Property</span>
-          <span style={{ fontWeight: 800, color: '#0f172a' }}>{sheet.name}</span>
+          <span style={{ fontWeight: 800, color: '#0f172a' }}>{sheet.name || 'Untitled Deal'}</span>
         </div>
         <div>
           <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Project / Society</span>
@@ -650,7 +650,7 @@ function PrintableCostSheetDoc({
         }}
       >
         <span>Meridian Estates (Pvt) Ltd · RMS Real Estate Trading Division</span>
-        <span>Certified Deal Record · Deal #{sheet.id}</span>
+        <span>Certified Deal Record · Deal #{sheet.id || 'DRAFT'}</span>
         <span>Page 1 of 1 · Confidential</span>
       </div>
     </div>
@@ -664,36 +664,45 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   const { numbers, toast, goto } = useApp();
   const allSheets: CostSheet[] = (M.DATA as any).costSheets || [];
 
-  // Default to Plot 940 from Excel
+  const blankDeal = () =>
+    M.calculateCostSheet({
+      id: '',
+      name: '',
+      project: 'DHA Phase 6',
+      city: 'Lahore',
+      type: 'Residential Plot',
+      size: '1 Kanal',
+      netBuyCost: 0,
+      ndcFee: 0,
+      stampDuty: 0,
+      cvt: 0,
+      cdaRdaTransferFee: 0,
+      societyTransferFee: 0,
+      legalCharges: 0,
+      developmentCharges: 0,
+      otherAcquisition: 0,
+      buyerFilerStatus: 'Filer',
+      tax236K: 0,
+      renovationRepairs: 0,
+      maintenanceBills: 0,
+      marketingExpenses: 0,
+      fuelTravelling: 0,
+      salaryExpenses: 0,
+      buySideAgentFee: 0,
+      sellerFilerStatus: 'Filer',
+      tax236C: 0,
+      sellSideAgentFee: 0,
+      grossSalePrice: 0,
+      cgtAmount: 0,
+      zakat: 0,
+      charity: 0,
+      officeExpenseDeduction: 0,
+    });
+
+  // Default to active sheet or clean blank deal
   const defaultSheet = useMemo(() => {
     if (activeCostSheetId === 'new') {
-      return M.calculateCostSheet({
-        id: '10003',
-        name: 'New Plot / Unit Deal',
-        project: 'Faisal Hills',
-        city: 'Islamabad',
-        type: 'Residential Plot',
-        size: '30x60',
-        netBuyCost: 5000000,
-        ndcFee: 10000,
-        stampDuty: 0,
-        cvt: 0,
-        cdaRdaTransferFee: 0,
-        tax236K: 150000,
-        renovationRepairs: 0,
-        maintenanceBills: 0,
-        marketingExpenses: 1000,
-        fuelTravelling: 1000,
-        salaryExpenses: 5000,
-        buySideAgentFee: 10000,
-        tax236C: 150000,
-        sellSideAgentFee: 10000,
-        grossSalePrice: 5600000,
-        cgtAmount: 61950,
-        zakat: 10000,
-        charity: 5000,
-        officeExpenseDeduction: 5000,
-      });
+      return blankDeal();
     }
 
     if (activeCostSheetId) {
@@ -701,7 +710,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
       if (found) return found;
     }
 
-    return allSheets[0] || ({} as CostSheet);
+    return allSheets[0] || blankDeal();
   }, [activeCostSheetId, allSheets]);
 
   const [form, setForm] = useState<any>(defaultSheet);
@@ -735,35 +744,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   const handleSelectProperty = (id: string) => {
     if (id === 'new') {
       goto('trading/calculator');
-      setForm(
-        M.calculateCostSheet({
-          id: '10003',
-          name: 'New Plot Deal',
-          project: 'Faisal Hills',
-          city: 'Islamabad',
-          type: 'Residential Plot',
-          size: '30x60',
-          netBuyCost: 5000000,
-          ndcFee: 10000,
-          stampDuty: 0,
-          cvt: 0,
-          cdaRdaTransferFee: 0,
-          tax236K: 150000,
-          renovationRepairs: 0,
-          maintenanceBills: 0,
-          marketingExpenses: 1000,
-          fuelTravelling: 1000,
-          salaryExpenses: 5000,
-          buySideAgentFee: 10000,
-          tax236C: 150000,
-          sellSideAgentFee: 10000,
-          grossSalePrice: 5600000,
-          cgtAmount: 61950,
-          zakat: 10000,
-          charity: 5000,
-          officeExpenseDeduction: 5000,
-        })
-      );
+      setForm(blankDeal());
       return;
     }
     const found = allSheets.find((s) => s.id === id || s.propertyId === id);
@@ -771,11 +752,43 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   };
 
   const handleResetToExcelTemplate = () => {
-    const s = allSheets.find((x) => x.id === '10002') || allSheets[0];
-    if (s) {
-      setForm(s);
-      toast('Reset to Excel template: Plot # 940 A Block (Faisal Hills)');
-    }
+    const s =
+      allSheets.find((x) => x.id === '10002') ||
+      M.calculateCostSheet({
+        id: '10002',
+        name: 'Plot # 940 A Block (Faisal Hills)',
+        project: 'Faisal Hills',
+        city: 'Islamabad',
+        type: 'Residential Plot',
+        size: '30x60',
+        netBuyCost: 5000000,
+        ndcFee: 10000,
+        stampDuty: 0,
+        cvt: 0,
+        cdaRdaTransferFee: 0,
+        societyTransferFee: 0,
+        legalCharges: 0,
+        developmentCharges: 0,
+        otherAcquisition: 0,
+        buyerFilerStatus: 'Filer',
+        tax236K: 150000,
+        renovationRepairs: 0,
+        maintenanceBills: 0,
+        marketingExpenses: 1000,
+        fuelTravelling: 1000,
+        salaryExpenses: 5000,
+        buySideAgentFee: 10000,
+        sellerFilerStatus: 'Filer',
+        tax236C: 150000,
+        sellSideAgentFee: 10000,
+        grossSalePrice: 5600000,
+        cgtAmount: 61950,
+        zakat: 10000,
+        charity: 5000,
+        officeExpenseDeduction: 5000,
+      });
+    setForm(s);
+    toast('Loaded Excel template: Plot # 940 A Block (Faisal Hills)');
   };
 
   const handleSave = () => {
