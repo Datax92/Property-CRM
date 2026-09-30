@@ -374,29 +374,13 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
     <PageShell
       title="Property Business Cost Sheet"
       u="پراپرٹی بزنس لاگت شیٹ"
-      p="Simple real estate trading cost calculation directly mirroring your Excel sheet."
-      toolProps={{ search: false, period: false, filters: false }}
+      tools={false}
       acts={
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button type="button" className="btn" onClick={handleResetToExcelTemplate} title="Load Plot 940 from Excel">
-            <Icon name="history" /> Load Excel Template
-          </button>
-          <button type="button" className="btn" onClick={handlePrint}>
-            <Icon name="print" /> Print
-          </button>
-          <button type="button" className="btn pri" onClick={handleSave}>
-            <Icon name="ok" /> Save
-          </button>
-        </div>
-      }
-    >
-      {/* DEAL SELECTOR BAR */}
-      <div className="panel" style={{ marginBottom: '16px', padding: '10px 14px' }} data-noprint="1">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 600, fontSize: '13px' }}>Select Deal:</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--ink)' }}>Select Deal:</span>
           <select
             className="fldsel"
-            style={{ minWidth: '280px', fontWeight: 600 }}
+            style={{ minWidth: '240px', fontWeight: 600, height: '30px', padding: '2px 8px' }}
             value={liveCostSheet.id || ''}
             onChange={(e) => handleSelectProperty(e.target.value)}
           >
@@ -407,48 +391,57 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
               </option>
             ))}
           </select>
+          <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handleResetToExcelTemplate} title="Load Plot 940 from Excel">
+            <Icon name="history" /> Excel Template
+          </button>
+          <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handlePrint}>
+            <Icon name="print" /> Print
+          </button>
+          <button type="button" className="btn pri" style={{ height: '30px', padding: '0 10px', fontSize: '12px' }} onClick={handleSave}>
+            <Icon name="ok" /> Save
+          </button>
         </div>
-      </div>
-
+      }
+    >
       {/* SUMMARY TABLE (EXACT ROWS 2–4 OF EXCEL) */}
-      <div className="panel" style={{ marginBottom: '16px', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px', textAlign: 'left' }}>
+      <div className="panel" style={{ marginBottom: '8px', overflowX: 'auto', padding: 0 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px', textAlign: 'left' }}>
           <thead>
-            <tr style={{ background: 'var(--paper-2)', borderBottom: '2px solid var(--rule-2)' }}>
-              <th style={{ padding: '8px 10px' }}>ID</th>
-              <th style={{ padding: '8px 10px' }}>Property</th>
-              <th style={{ padding: '8px 10px' }}>Type</th>
-              <th style={{ padding: '8px 10px' }}>Project</th>
-              <th style={{ padding: '8px 10px' }}>City</th>
-              <th style={{ padding: '8px 10px' }}>Size</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right' }}>Net Buy Cost</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right' }}>Agent Commission</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right' }}>Current value</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right' }}>GROSS PROFIT</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right' }}>NET MARGIN</th>
+            <tr style={{ background: 'var(--paper-2)', borderBottom: '1px solid var(--rule-2)' }}>
+              <th style={{ padding: '4px 8px' }}>ID</th>
+              <th style={{ padding: '4px 8px' }}>Property</th>
+              <th style={{ padding: '4px 8px' }}>Type</th>
+              <th style={{ padding: '4px 8px' }}>Project</th>
+              <th style={{ padding: '4px 8px' }}>City</th>
+              <th style={{ padding: '4px 8px' }}>Size</th>
+              <th style={{ padding: '4px 8px', textAlign: 'right' }}>Net Buy Cost</th>
+              <th style={{ padding: '4px 8px', textAlign: 'right' }}>Agent Commission</th>
+              <th style={{ padding: '4px 8px', textAlign: 'right' }}>Current value</th>
+              <th style={{ padding: '4px 8px', textAlign: 'right' }}>GROSS PROFIT</th>
+              <th style={{ padding: '4px 8px', textAlign: 'right' }}>NET MARGIN</th>
             </tr>
           </thead>
           <tbody>
             <tr style={{ fontWeight: 600 }}>
-              <td style={{ padding: '8px 10px', fontFamily: 'var(--mono)' }}>{liveCostSheet.id}</td>
-              <td style={{ padding: '8px 10px' }}>{liveCostSheet.name}</td>
-              <td style={{ padding: '8px 10px' }}>{liveCostSheet.type}</td>
-              <td style={{ padding: '8px 10px' }}>{liveCostSheet.project}</td>
-              <td style={{ padding: '8px 10px' }}>{liveCostSheet.city}</td>
-              <td style={{ padding: '8px 10px', fontFamily: 'var(--mono)' }}>{liveCostSheet.size}</td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
+              <td style={{ padding: '4px 8px', fontFamily: 'var(--mono)' }}>{liveCostSheet.id}</td>
+              <td style={{ padding: '4px 8px' }}>{liveCostSheet.name}</td>
+              <td style={{ padding: '4px 8px' }}>{liveCostSheet.type}</td>
+              <td style={{ padding: '4px 8px' }}>{liveCostSheet.project}</td>
+              <td style={{ padding: '4px 8px' }}>{liveCostSheet.city}</td>
+              <td style={{ padding: '4px 8px', fontFamily: 'var(--mono)' }}>{liveCostSheet.size}</td>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
                 {M.fmt(liveCostSheet.netBuyCost || liveCostSheet.purchasePrice, numbers)}
               </td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
                 {M.fmt(liveCostSheet.totalCommissions, numbers)}
               </td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700 }}>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700 }}>
                 {M.fmt(liveCostSheet.grossSalePrice || liveCostSheet.sellingPrice, numbers)}
               </td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 700 }}>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 700 }}>
                 {M.fmt(liveCostSheet.grossProfit, numbers)}
               </td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 800 }}>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 800 }}>
                 {M.fmt(liveCostSheet.netMargin ?? liveCostSheet.netProfit, numbers)}
               </td>
             </tr>
@@ -468,7 +461,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
       >
         <div
           style={{
-            padding: '12px 16px',
+            padding: '6px 12px',
             borderBottom: '2px solid var(--brand)',
             background: 'var(--paper-2)',
             display: 'flex',
@@ -477,42 +470,42 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
           }}
         >
           <div>
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: 'var(--brand)' }}>
+            <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: 'var(--brand)' }}>
               Cost Sheet Ledger
             </span>
-            <h2 style={{ fontSize: '17px', margin: '2px 0 0', color: 'var(--ink)' }}>
+            <h2 style={{ fontSize: '15px', margin: '1px 0 0', color: 'var(--ink)' }}>
               {liveCostSheet.name} · {liveCostSheet.project}
             </h2>
           </div>
-          <span className="tag ok" style={{ fontSize: '12px', fontWeight: 700 }}>
+          <span className="tag ok" style={{ fontSize: '11px', fontWeight: 700 }}>
             ID: {liveCostSheet.id}
           </span>
         </div>
 
-        <div style={{ padding: '16px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <div style={{ padding: '6px 12px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--rule-2)', color: 'var(--ink-2)', fontSize: '11.5px' }}>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '50px' }}>#</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Item Description</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '180px' }}>Rate / Detail</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right', width: '180px' }}>Amount (PKR)</th>
+              <tr style={{ borderBottom: '1px solid var(--rule-2)', color: 'var(--ink-2)', fontSize: '11px' }}>
+                <th style={{ padding: '3px 6px', textAlign: 'left', width: '45px' }}>#</th>
+                <th style={{ padding: '3px 6px', textAlign: 'left' }}>Item Description</th>
+                <th style={{ padding: '3px 6px', textAlign: 'left', width: '190px' }}>Rate / Detail</th>
+                <th style={{ padding: '3px 6px', textAlign: 'right', width: '150px' }}>Amount (PKR)</th>
               </tr>
             </thead>
             <tbody>
 
               {/* NET BUY COST (ROW 6) */}
               <tr style={{ background: 'var(--paper-2)', borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '8px', fontWeight: 700 }}></td>
-                <td style={{ padding: '8px', fontWeight: 700, color: 'var(--brand)' }}>
+                <td style={{ padding: '4px 6px', fontWeight: 700 }}></td>
+                <td style={{ padding: '4px 6px', fontWeight: 700, color: 'var(--brand)' }}>
                   NET BUY COST
                 </td>
-                <td style={{ padding: '8px', color: 'var(--ink-2)' }}>Base property price</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>
+                <td style={{ padding: '4px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Base property price</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="50000"
-                    style={{ width: '150px', padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '13px' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '12px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.netBuyCost ?? form.purchasePrice ?? 5000000}
                     onChange={(e) => updateField('netBuyCost', +e.target.value)}
                   />
@@ -521,62 +514,62 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
 
               {/* SECTION 1: SOCIETY / GOVT TRANSFER COST */}
               <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>1</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }}>1</td>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }} colSpan={3}>
                   SOCIETY / GOVT TRANSFER COST
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.0</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>NDC &amp; Verification Fee</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Verification fee</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>1.0</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>NDC &amp; Verification Fee</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Verification fee</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.ndcFee ?? 10000}
                     onChange={(e) => updateField('ndcFee', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Provincial Stamp Duty</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>1% Stamp</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>1.1</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Provincial Stamp Duty</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>1% Stamp</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.stampDuty ?? 0}
                     onChange={(e) => updateField('stampDuty', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Capital Value Tax (CVT)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>1% CVT</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Capital Value Tax (CVT)</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>1% CVT</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.cvt ?? 0}
                     onChange={(e) => updateField('cvt', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.2</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Govt Authority CDA/RDA Transfer Fee</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>0.5% of sale value</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>1.2</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Govt Authority CDA/RDA Transfer Fee</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>0.5% of sale value</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.cdaRdaTransferFee ?? 0}
                     onChange={(e) => updateField('cdaRdaTransferFee', +e.target.value)}
                   />
@@ -585,20 +578,20 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
 
               {/* SECTION 2: GOVT TAXES (BUY SIDE) */}
               <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>2</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }}>2</td>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }} colSpan={3}>
                   GOVT TAXES
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>2.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>FBR Section 236K (Advance Tax on Purchase)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Filer (sec236k : 3%)</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>2.1</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>FBR Section 236K (Advance Tax on Purchase)</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Filer (sec236k : 3%)</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="5000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.tax236K ?? 150000}
                     onChange={(e) => updateField('tax236K', +e.target.value)}
                   />
@@ -607,76 +600,76 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
 
               {/* SECTION 3: HANDLING \ EXPENSES */}
               <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>3</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }}>3</td>
+                <td style={{ padding: '3px 6px', fontSize: '11px' }} colSpan={3}>
                   HANDLING \ EXPENSES
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Renovation &amp; Repairs</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Property repairs</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>3.1</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Renovation &amp; Repairs</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Property repairs</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.renovationRepairs ?? 0}
                     onChange={(e) => updateField('renovationRepairs', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.2</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Maintenance &amp; Bills</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Holding upkeep</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>3.2</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Maintenance &amp; Bills</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Holding upkeep</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.maintenanceBills ?? 0}
                     onChange={(e) => updateField('maintenanceBills', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.3</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Marketing</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Ad &amp; portal</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>3.3</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Marketing</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Ad &amp; portal</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.marketingExpenses ?? 1000}
                     onChange={(e) => updateField('marketingExpenses', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.4</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Fuel &amp; Travelling</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Visits</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>3.4</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Fuel &amp; Travelling</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Visits</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.fuelTravelling ?? 1000}
                     onChange={(e) => updateField('fuelTravelling', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.5</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Salary &amp; other Expenses</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Staff &amp; office</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>3.5</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>Salary &amp; other Expenses</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Staff &amp; office</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.salaryExpenses ?? 5000}
                     onChange={(e) => updateField('salaryExpenses', +e.target.value)}
                   />
@@ -685,14 +678,14 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
 
               {/* SECTION 4: REAL ESTATE AGENT FEE (BUY SIDE) */}
               <tr style={{ borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '6px 8px', fontWeight: 700 }}>4</td>
-                <td style={{ padding: '6px 8px', fontWeight: 700 }}>REAL ESTATE AGENT FEE</td>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>BUY SIDE</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '3px 6px', fontWeight: 700, fontSize: '11px' }}>4</td>
+                <td style={{ padding: '3px 6px', fontWeight: 700, fontSize: '11.5px' }}>REAL ESTATE AGENT FEE</td>
+                <td style={{ padding: '3px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>BUY SIDE</td>
+                <td style={{ padding: '3px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.buySideAgentFee ?? 10000}
                     onChange={(e) => updateField('buySideAgentFee', +e.target.value)}
                   />
@@ -700,55 +693,55 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
               </tr>
 
               {/* ROW 21: PURCHASE PRICE (All-in Landed Basis = SUM(F6:F20)) */}
-              <tr style={{ background: 'var(--brand)', color: '#fff', fontWeight: 800, fontSize: '14px' }}>
-                <td style={{ padding: '10px 8px' }}></td>
-                <td style={{ padding: '10px 8px' }}>PURCHASE PRICE</td>
-                <td style={{ padding: '10px 8px', fontSize: '11.5px', opacity: 0.9 }}>= SUM(F6:F20)</td>
-                <td style={{ padding: '10px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '16px' }}>
+              <tr style={{ background: 'var(--brand)', color: '#fff', fontWeight: 800 }}>
+                <td style={{ padding: '4px 6px' }}></td>
+                <td style={{ padding: '4px 6px', fontSize: '12px' }}>PURCHASE PRICE</td>
+                <td style={{ padding: '4px 6px', fontSize: '10.5px', opacity: 0.9 }}>= Landed Basis</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '13.5px' }}>
                   {M.fmt(liveCostSheet.purchasePrice, numbers)}
                 </td>
               </tr>
 
               {/* SALE SIDE (ROWS 22–24) */}
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-3)' }}>2.2</td>
-                <td style={{ padding: '6px 8px 5px 24px' }}>FBR Section 236C (Advance Tax on Sale)</td>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Filer (sec236C : 3%)</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-3)', fontSize: '11px' }}>2.2</td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>FBR Section 236C (Advance Tax on Sale)</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Filer (sec236C : 3%)</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="5000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.tax236C ?? 150000}
                     onChange={(e) => updateField('tax236C', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '6px 8px' }}></td>
-                <td style={{ padding: '6px 8px 5px 24px' }}>REAL ESTATE AGENT FEE</td>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>SELL SIDE</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px' }}>REAL ESTATE AGENT FEE</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>SELL SIDE</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.sellSideAgentFee ?? 10000}
                     onChange={(e) => updateField('sellSideAgentFee', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ background: 'rgba(18, 166, 124, 0.08)', borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '8px' }}></td>
-                <td style={{ padding: '8px', fontWeight: 700, color: 'var(--good)' }}>
+                <td style={{ padding: '4px 6px' }}></td>
+                <td style={{ padding: '4px 6px', fontWeight: 700, color: 'var(--good)', fontSize: '12px' }}>
                   GROSS SALE PRICE (incl. CGT)
                 </td>
-                <td style={{ padding: '8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Current Value / Exit</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>
+                <td style={{ padding: '4px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Current Value / Exit</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="50000"
-                    style={{ width: '150px', padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '13px' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '12px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.grossSalePrice ?? form.sellingPrice ?? 5600000}
                     onChange={(e) => updateField('grossSalePrice', +e.target.value)}
                   />
@@ -756,67 +749,67 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
               </tr>
 
               {/* ROW 26: GROSS PROFIT */}
-              <tr style={{ background: 'var(--paper-2)', fontWeight: 800, fontSize: '13.5px', borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '8px' }}></td>
-                <td style={{ padding: '8px' }}>GROSS PROFIT</td>
-                <td style={{ padding: '8px', fontSize: '11.5px', color: 'var(--ink-2)' }}>= F24 − F21</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '15px' }} className={liveCostSheet.grossProfit >= 0 ? 'pos' : 'neg'}>
+              <tr style={{ background: 'var(--paper-2)', fontWeight: 800, borderBottom: '1px solid var(--rule-2)' }}>
+                <td style={{ padding: '4px 6px' }}></td>
+                <td style={{ padding: '4px 6px', fontSize: '12px' }}>GROSS PROFIT</td>
+                <td style={{ padding: '4px 6px', fontSize: '11px', color: 'var(--ink-2)' }}>= Exit − Landed</td>
+                <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '13px' }} className={liveCostSheet.grossProfit >= 0 ? 'pos' : 'neg'}>
                   {M.fmt(liveCostSheet.grossProfit, numbers)}
                 </td>
               </tr>
 
               {/* ROWS 27–30: STATUTORY & PURIFICATION DEDUCTIONS */}
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>Capital Gain Tax (CGT)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>= F26 * 15%</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px', color: 'var(--ink-2)' }}>Capital Gain Tax (CGT)</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>= Profit × 15%</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.cgtAmount ?? Math.max(0, Math.round(liveCostSheet.grossProfit * 0.15))}
                     onChange={(e) => updateField('cgtAmount', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>ZAQAT</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Zakat fund</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px', color: 'var(--ink-2)' }}>ZAQAT</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Zakat fund</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.zakat ?? 10000}
                     onChange={(e) => updateField('zakat', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>CHARITY</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Welfare</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px', color: 'var(--ink-2)' }}>CHARITY</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>Welfare</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.charity ?? 5000}
                     onChange={(e) => updateField('charity', +e.target.value)}
                   />
                 </td>
               </tr>
               <tr style={{ borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>Salary &amp; other Expenses (Deduction)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>= F19</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '2.5px 6px' }}></td>
+                <td style={{ padding: '2.5px 6px 2.5px 18px', color: 'var(--ink-2)' }}>Salary &amp; other Expenses (Deduction)</td>
+                <td style={{ padding: '2.5px 6px', color: 'var(--ink-2)', fontSize: '11px' }}>= F19</td>
+                <td style={{ padding: '2.5px 6px', textAlign: 'right' }}>
                   <input
                     type="number"
                     step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
+                    style={{ width: '130px', height: '22px', padding: '1px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '11.5px', border: '1px solid var(--rule-2)', borderRadius: '3px' }}
                     value={form.officeExpenseDeduction ?? form.salaryExpenses ?? 5000}
                     onChange={(e) => updateField('officeExpenseDeduction', +e.target.value)}
                   />
@@ -824,18 +817,18 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
               </tr>
 
               {/* ROW 31: NET MARGIN */}
-              <tr style={{ background: 'var(--good-wash)', borderTop: '2px solid var(--ink)', fontWeight: 900, fontSize: '15px' }}>
-                <td style={{ padding: '12px 8px' }}></td>
-                <td style={{ padding: '12px 8px' }}>
-                  NET MARGIN
-                  <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--good)' }}>
-                    Net Margin: {(liveCostSheet.netMarginPct || 0).toFixed(1)}% · Cash ROI: {(liveCostSheet.roiPct || 0).toFixed(1)}%
+              <tr style={{ background: 'var(--good-wash)', borderTop: '2px solid var(--ink)', fontWeight: 900 }}>
+                <td style={{ padding: '5px 6px' }}></td>
+                <td style={{ padding: '5px 6px' }}>
+                  <div style={{ fontSize: '12.5px', color: 'var(--good)' }}>NET MARGIN</div>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--ink-2)' }}>
+                    Margin: {(liveCostSheet.netMarginPct || 0).toFixed(1)}% · Cash ROI: {(liveCostSheet.roiPct || 0).toFixed(1)}%
                   </div>
                 </td>
-                <td style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--ink-2)' }}>
+                <td style={{ padding: '5px 6px', fontSize: '10px', color: 'var(--ink-2)' }}>
                   = F26 − F28 − F29 − F27 − F19
                 </td>
-                <td style={{ padding: '12px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '18px' }} className="pos">
+                <td style={{ padding: '5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '15px' }} className="pos">
                   {M.fmt(liveCostSheet.netMargin ?? liveCostSheet.netProfit, numbers)}
                 </td>
               </tr>
