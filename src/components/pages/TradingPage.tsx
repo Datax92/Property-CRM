@@ -241,6 +241,423 @@ export function TradingPage() {
 }
 
 // ---------------------------------------------------------------------------
+// BEAUTIFUL, EXECUTIVE PRINTABLE COST SHEET DOCUMENT
+// ---------------------------------------------------------------------------
+function PrintableCostSheetDoc({
+  sheet,
+  form,
+  numbers,
+}: {
+  sheet: CostSheet;
+  form: any;
+  numbers: any;
+}) {
+  const marginPct = (sheet.netMarginPct || 0).toFixed(1);
+  const roiPct = (sheet.roiPct || 0).toFixed(1);
+
+  return (
+    <div
+      className="printable-cost-sheet-doc"
+      style={{
+        background: '#ffffff',
+        color: '#0f172a',
+        fontFamily: 'var(--font-sans, system-ui, -apple-system, sans-serif)',
+        padding: '24px 28px',
+        maxWidth: '820px',
+        margin: '0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* 1. OFFICIAL CORPORATE LETTERHEAD */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '3px solid #047857',
+          paddingBottom: '10px',
+          marginBottom: '10px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: '#047857',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 900,
+              fontSize: '20px',
+              fontFamily: 'var(--display)',
+              boxShadow: '0 2px 6px rgba(4, 120, 87, 0.25)',
+            }}
+          >
+            M
+          </div>
+          <div>
+            <div style={{ fontSize: '17px', fontWeight: 900, color: '#064e3b', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+              MERIDIAN ESTATES (PVT) LTD
+            </div>
+            <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600, marginTop: '2px' }}>
+              Real Estate Trading &amp; Portfolio RMS · Financial Deal Division
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
+            <span>OFFICIAL COST SHEET</span>
+            <span>·</span>
+            <span>#{sheet.id}</span>
+          </div>
+          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', fontWeight: 500 }}>
+            Issued: <b>{M.fmtDate(M.TODAY)}</b> · Islamabad, PK
+          </div>
+        </div>
+      </div>
+
+      {/* 2. PROPERTY SPECIFICATION & DEAL CONTEXT STRIP */}
+      <div
+        style={{
+          background: '#f8fafc',
+          border: '1px solid #cbd5e1',
+          borderRadius: '6px',
+          padding: '8px 12px',
+          marginBottom: '10px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '10px',
+          fontSize: '11.5px',
+        }}
+      >
+        <div>
+          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Property</span>
+          <span style={{ fontWeight: 800, color: '#0f172a' }}>{sheet.name}</span>
+        </div>
+        <div>
+          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Project / Society</span>
+          <span style={{ fontWeight: 700, color: '#0f172a' }}>{sheet.project}</span>
+        </div>
+        <div>
+          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Location &amp; City</span>
+          <span style={{ fontWeight: 600, color: '#334155' }}>{sheet.city}</span>
+        </div>
+        <div>
+          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Size &amp; Category</span>
+          <span style={{ fontWeight: 700, color: '#047857' }}>{sheet.size} · {sheet.type}</span>
+        </div>
+      </div>
+
+      {/* 3. EXECUTIVE FINANCIAL SUMMARY CARDS */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '8px',
+          marginBottom: '10px',
+        }}
+      >
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px' }}>
+          <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Net Purchase Cost</div>
+          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0f172a', marginTop: '2px' }}>
+            {M.fmt(sheet.netBuyCost || form.netBuyCost, numbers)}
+          </div>
+          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Base Property Price</div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px' }}>
+          <div style={{ fontSize: '9px', color: '#0369a1', textTransform: 'uppercase', fontWeight: 700 }}>Total Landed Basis</div>
+          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0284c7', marginTop: '2px' }}>
+            {M.fmt(sheet.purchasePrice, numbers)}
+          </div>
+          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Cost + Taxes + Fees</div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px' }}>
+          <div style={{ fontSize: '9px', color: '#475569', textTransform: 'uppercase', fontWeight: 700 }}>Gross Sale / Exit</div>
+          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0f172a', marginTop: '2px' }}>
+            {M.fmt(sheet.grossSalePrice || form.grossSalePrice, numbers)}
+          </div>
+          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Target Selling Value</div>
+        </div>
+
+        <div style={{ background: '#ecfdf5', border: '1.5px solid #059669', borderRadius: '6px', padding: '6px 8px' }}>
+          <div style={{ fontSize: '9px', color: '#047857', textTransform: 'uppercase', fontWeight: 800 }}>Clean Net Margin</div>
+          <div style={{ fontSize: '14.5px', fontWeight: 900, fontFamily: 'var(--mono)', color: '#047857', marginTop: '2px' }}>
+            {M.fmt(sheet.netMargin ?? sheet.netProfit, numbers)}
+          </div>
+          <div style={{ fontSize: '9px', color: '#059669', fontWeight: 700, marginTop: '1px' }}>
+            Margin: {marginPct}% · ROI: {roiPct}%
+          </div>
+        </div>
+      </div>
+
+      {/* 4. MASTER LEDGER TABLE */}
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: '11px',
+          marginBottom: '10px',
+        }}
+      >
+        <thead>
+          <tr style={{ background: '#0f172a', color: '#ffffff' }}>
+            <th style={{ padding: '4px 6px', textAlign: 'center', width: '35px', fontWeight: 700 }}>#</th>
+            <th style={{ padding: '4px 6px', textAlign: 'left', fontWeight: 700 }}>Item Description</th>
+            <th style={{ padding: '4px 6px', textAlign: 'left', width: '180px', fontWeight: 600 }}>Calculation Basis / Detail</th>
+            <th style={{ padding: '4px 6px', textAlign: 'right', width: '140px', fontWeight: 700 }}>Amount (PKR)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* NET BUY COST */}
+          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: 700 }}>
+            <td style={{ padding: '4px 6px', textAlign: 'center' }}>•</td>
+            <td style={{ padding: '4px 6px', color: '#047857', fontWeight: 800 }}>NET BUY COST</td>
+            <td style={{ padding: '4px 6px', color: '#64748b' }}>Base property acquisition price</td>
+            <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 800, fontSize: '11.5px' }}>
+              {M.fmt(form.netBuyCost ?? sheet.netBuyCost, numbers)}
+            </td>
+          </tr>
+
+          {/* SECTION 1 */}
+          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>1</td>
+            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
+              Society / Govt Transfer Cost
+            </td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.0</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>NDC &amp; Verification Fee</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Verification fee</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.ndcFee ?? 10000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.1</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Provincial Stamp Duty</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>1% Stamp</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.stampDuty ?? 0, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Capital Value Tax (CVT)</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>1% CVT</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.cvt ?? 0, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.2</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Govt Authority CDA/RDA Transfer Fee</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>0.5% of sale value</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.cdaRdaTransferFee ?? 0, numbers)}</td>
+          </tr>
+
+          {/* SECTION 2 */}
+          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>2</td>
+            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
+              Govt Taxes (Buy Side)
+            </td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>2.1</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>FBR Section 236K (Advance Tax on Purchase)</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Filer (sec236k : 3%)</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{M.fmt(form.tax236K ?? 150000, numbers)}</td>
+          </tr>
+
+          {/* SECTION 3 */}
+          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>3</td>
+            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
+              Handling &amp; Operating Expenses
+            </td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.1</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Renovation &amp; Repairs</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Property repairs &amp; fixes</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.renovationRepairs ?? 0, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.2</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Maintenance &amp; Bills</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Holding upkeep &amp; dues</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.maintenanceBills ?? 0, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.3</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Marketing</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Ad &amp; portal promotion</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.marketingExpenses ?? 1000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.4</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Fuel &amp; Travelling</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Site visits &amp; inspection</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.fuelTravelling ?? 1000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.5</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Salary &amp; other Expenses</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Staff &amp; office allocation</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.salaryExpenses ?? 5000, numbers)}</td>
+          </tr>
+
+          {/* SECTION 4 */}
+          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3.5px 6px', textAlign: 'center', fontWeight: 800, color: '#047857' }}>4</td>
+            <td style={{ padding: '3.5px 6px', fontWeight: 800, color: '#0f172a' }}>REAL ESTATE AGENT FEE</td>
+            <td style={{ padding: '3.5px 6px', color: '#64748b' }}>BUY SIDE</td>
+            <td style={{ padding: '3.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{M.fmt(form.buySideAgentFee ?? 10000, numbers)}</td>
+          </tr>
+
+          {/* PURCHASE PRICE (LANDED BASIS) */}
+          <tr style={{ background: '#047857', color: '#ffffff', fontWeight: 900, borderTop: '2px solid #064e3b', borderBottom: '2px solid #064e3b' }}>
+            <td style={{ padding: '4.5px 6px', textAlign: 'center' }}>★</td>
+            <td style={{ padding: '4.5px 6px', fontSize: '11.5px', letterSpacing: '0.02em' }}>PURCHASE PRICE (ALL-IN LANDED BASIS)</td>
+            <td style={{ padding: '4.5px 6px', fontSize: '10px', opacity: 0.9 }}>= Total Investment Cost</td>
+            <td style={{ padding: '4.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '12px' }}>
+              {M.fmt(sheet.purchasePrice, numbers)}
+            </td>
+          </tr>
+
+          {/* SALE SIDE */}
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>2.2</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>FBR Section 236C (Advance Tax on Sale)</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Filer (sec236C : 3%)</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.tax236C ?? 150000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>REAL ESTATE AGENT FEE</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>SELL SIDE</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.sellSideAgentFee ?? 10000, numbers)}</td>
+          </tr>
+          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3.5px 6px', textAlign: 'center', fontWeight: 800, color: '#047857' }}>5</td>
+            <td style={{ padding: '3.5px 6px', fontWeight: 800, color: '#0f172a' }}>GROSS SALE PRICE (incl. CGT)</td>
+            <td style={{ padding: '3.5px 6px', color: '#64748b' }}>Current Value / Exit Price</td>
+            <td style={{ padding: '3.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 800, fontSize: '11px', color: '#0f172a' }}>
+              {M.fmt(form.grossSalePrice ?? 5600000, numbers)}
+            </td>
+          </tr>
+
+          {/* GROSS PROFIT */}
+          <tr style={{ background: '#ecfdf5', fontWeight: 900, borderTop: '1px solid #10b981', borderBottom: '1px solid #10b981' }}>
+            <td style={{ padding: '4.5px 6px', textAlign: 'center' }}>•</td>
+            <td style={{ padding: '4.5px 6px', fontSize: '11px', color: '#047857' }}>GROSS PROFIT</td>
+            <td style={{ padding: '4.5px 6px', color: '#059669', fontSize: '10px' }}>= Exit Value − Landed Basis</td>
+            <td style={{ padding: '4.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '12px', color: '#047857' }}>
+              {M.fmt(sheet.grossProfit, numbers)}
+            </td>
+          </tr>
+
+          {/* DEDUCTIONS */}
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Capital Gain Tax (CGT)</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>= Profit × 15%</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
+              {M.fmt(form.cgtAmount ?? Math.max(0, Math.round(sheet.grossProfit * 0.15)), numbers)}
+            </td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>ZAQAT</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Zakat fund</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.zakat ?? 10000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>CHARITY</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>Welfare</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.charity ?? 5000, numbers)}</td>
+          </tr>
+          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
+            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
+            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Salary &amp; other Expenses (Deduction)</td>
+            <td style={{ padding: '3px 6px', color: '#64748b' }}>= F19 Allocation</td>
+            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.officeExpenseDeduction ?? 5000, numbers)}</td>
+          </tr>
+
+          {/* NET MARGIN FINAL ROW */}
+          <tr style={{ background: '#dcfce7', borderTop: '2px solid #047857', borderBottom: '2px solid #047857', fontWeight: 900 }}>
+            <td style={{ padding: '6px 6px', textAlign: 'center', color: '#047857', fontSize: '13px' }}>✔</td>
+            <td style={{ padding: '6px 6px' }}>
+              <div style={{ fontSize: '12px', color: '#047857', fontWeight: 900, letterSpacing: '0.02em' }}>
+                NET MARGIN (CLEAN PROFIT)
+              </div>
+              <div style={{ fontSize: '9.5px', color: '#059669', fontWeight: 700, marginTop: '1px' }}>
+                Net Margin: {marginPct}% · Cash ROI: {roiPct}%
+              </div>
+            </td>
+            <td style={{ padding: '6px 6px', fontSize: '9.5px', color: '#475569' }}>
+              = Gross Profit − CGT − Zakat − Charity − Deduction
+            </td>
+            <td style={{ padding: '6px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '15px', color: '#047857', fontWeight: 900 }}>
+              {M.fmt(sheet.netMargin ?? sheet.netProfit, numbers)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 5. OFFICIAL AUTHORIZATION & SIGNATURES */}
+      <div
+        style={{
+          borderTop: '1px solid #cbd5e1',
+          paddingTop: '10px',
+          marginTop: '8px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '16px',
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Prepared By</div>
+          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Trading Desk / Accounts Officer</div>
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Verified &amp; Audited</div>
+          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Chief Financial Officer</div>
+        </div>
+
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
+          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Approved &amp; Accepted</div>
+          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Client / Managing Partner</div>
+        </div>
+      </div>
+
+      {/* 6. DOCUMENT FOOTER */}
+      <div
+        style={{
+          borderTop: '1px dashed #cbd5e1',
+          marginTop: '10px',
+          paddingTop: '5px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '8.5px',
+          color: '#94a3b8',
+        }}
+      >
+        <span>Meridian Estates (Pvt) Ltd · RMS Real Estate Trading Division</span>
+        <span>Certified Deal Record · Deal #{sheet.id}</span>
+        <span>Page 1 of 1 · Confidential</span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SIMPLE, DIRECT COST SHEET (Matches property bussiness erp software.xlsx)
 // ---------------------------------------------------------------------------
 function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
@@ -288,6 +705,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   }, [activeCostSheetId, allSheets]);
 
   const [form, setForm] = useState<any>(defaultSheet);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   useEffect(() => {
     setForm(defaultSheet);
@@ -372,48 +790,68 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
 
   return (
     <div className="page" style={{ paddingTop: '8px' }}>
-      <PrintHead title="Property Business Cost Sheet" />
-      <div
-        className="phead"
-        style={{
-          marginBottom: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '8px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <h1 style={{ fontSize: '18px', margin: 0, letterSpacing: '-0.02em' }}>Property Business Cost Sheet</h1>
-          <span className="u" style={{ fontSize: '12px', color: 'var(--ink-3)' }}>پراپرٹی بزنس لاگت شیٹ</span>
+      {/* SCREEN VIEW (INTERACTIVE FORM) */}
+      <div className="cost-sheet-screen-only">
+        <PrintHead title="Property Business Cost Sheet" />
+        <div
+          className="phead"
+          style={{
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '18px', margin: 0, letterSpacing: '-0.02em' }}>Property Business Cost Sheet</h1>
+            <span className="u" style={{ fontSize: '12px', color: 'var(--ink-3)' }}>پراپرٹی بزنس لاگت شیٹ</span>
+          </div>
+          <div className="acts" data-noprint="1" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' }}>
+            <span style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--ink)' }}>Select Deal:</span>
+            <select
+              className="fldsel"
+              style={{ minWidth: '240px', fontWeight: 600, height: '30px', padding: '2px 8px' }}
+              value={liveCostSheet.id || ''}
+              onChange={(e) => handleSelectProperty(e.target.value)}
+            >
+              <option value="new">➕ New Blank Deal</option>
+              {allSheets.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id} — {s.name} ({s.project})
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handleResetToExcelTemplate} title="Load Plot 940 from Excel">
+              <Icon name="history" /> Excel Template
+            </button>
+            <button
+              type="button"
+              className="btn pri"
+              style={{
+                height: '30px',
+                padding: '0 11px',
+                fontSize: '12px',
+                fontWeight: 700,
+                background: '#047857',
+                borderColor: '#059669',
+                color: '#ffffff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+              }}
+              onClick={() => setShowPrintModal(true)}
+              title="Open and print official Cost Sheet statement"
+            >
+              <Icon name="print" /> Print Cost Sheet
+            </button>
+            <button type="button" className="btn pri" style={{ height: '30px', padding: '0 10px', fontSize: '12px' }} onClick={handleSave}>
+              <Icon name="ok" /> Save
+            </button>
+          </div>
         </div>
-        <div className="acts" data-noprint="1" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' }}>
-          <span style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--ink)' }}>Select Deal:</span>
-          <select
-            className="fldsel"
-            style={{ minWidth: '240px', fontWeight: 600, height: '30px', padding: '2px 8px' }}
-            value={liveCostSheet.id || ''}
-            onChange={(e) => handleSelectProperty(e.target.value)}
-          >
-            <option value="new">➕ New Blank Deal</option>
-            {allSheets.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.id} — {s.name} ({s.project})
-              </option>
-            ))}
-          </select>
-          <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handleResetToExcelTemplate} title="Load Plot 940 from Excel">
-            <Icon name="history" /> Excel Template
-          </button>
-          <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handlePrint}>
-            <Icon name="print" /> Print
-          </button>
-          <button type="button" className="btn pri" style={{ height: '30px', padding: '0 10px', fontSize: '12px' }} onClick={handleSave}>
-            <Icon name="ok" /> Save
-          </button>
-        </div>
-      </div>
 
       {/* SUMMARY TABLE (EXACT ROWS 2–4 OF EXCEL) */}
       <div className="panel" style={{ marginBottom: '8px', overflowX: 'auto', padding: 0 }}>
@@ -849,6 +1287,93 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
           </table>
         </div>
       </div>
+    </div>
+
+      {/* PRINT-ONLY EMBEDDED SHEET (Ensures standard Ctrl+P prints the official document) */}
+      <div className="cost-sheet-print-only">
+        <PrintableCostSheetDoc sheet={liveCostSheet} form={form} numbers={numbers} />
+      </div>
+
+      {/* INTERACTIVE PRINT PREVIEW MODAL */}
+      {showPrintModal && (
+        <div
+          className="cost-sheet-print-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPrintModal(false);
+          }}
+        >
+          <div className="cost-sheet-print-modal-dialog">
+            <div className="cost-sheet-print-modal-header" data-noprint="1">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '6px',
+                    background: '#047857',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="print" size={16} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#ffffff' }}>
+                    Official Cost Sheet Printout — #{liveCostSheet.id}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                    {liveCostSheet.name} ({liveCostSheet.project}) · Formatted for A4 / PDF Export
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn pri"
+                  style={{
+                    height: '32px',
+                    padding: '0 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    background: '#047857',
+                    borderColor: '#059669',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    if (typeof window !== 'undefined') window.print();
+                  }}
+                >
+                  <Icon name="print" /> Print / Save as PDF
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{
+                    height: '32px',
+                    padding: '0 12px',
+                    fontSize: '12px',
+                    background: '#334155',
+                    color: '#ffffff',
+                    borderColor: '#475569',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setShowPrintModal(false)}
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+            <div className="cost-sheet-print-modal-body">
+              <PrintableCostSheetDoc sheet={liveCostSheet} form={form} numbers={numbers} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
