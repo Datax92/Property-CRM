@@ -81,60 +81,83 @@ export interface CostSheet {
   saleDate: Date | string | null;
   heldDays: number;
   
-  // 1. Purchase Side
-  purchasePrice: number;
+  // NET BUY COST
+  netBuyCost: number; // Base purchase price from seller
+
+  // 1. SOCIETY / GOVT TRANSFER COST
+  ndcFee: number; // 1.0 NDC & Verification Fee
+  stampDuty: number; // 1.1 Provincial Stamp Duty (1%)
+  stampDutyPct?: number;
+  cvt: number; // 1.1 Capital Value Tax CVT (1%)
+  cvtPct?: number;
+  cdaRdaTransferFee: number; // 1.2 Govt Authority CDA/RDA Transfer Fee (0.5%)
+  cdaRdaTransferFeePct?: number;
+  societyTransferFee: number;
+  legalCharges?: number;
+  developmentCharges?: number;
+  otherAcquisition?: number;
+  totalSocietyGovtTransfer: number;
+  totalAcquisitionExtras: number;
+
+  // 2. GOVT TAXES (BUY SIDE)
+  tax236K: number; // 2.1 FBR Section 236K (Advance Tax on Purchase)
+  tax236KPct?: number;
+  buyerFilerStatus: FilerStatus;
+
+  // 3. HANDLING / EXPENSES
+  handlingExpenses: number; // 3. Base handling expenses
+  renovationRepairs: number; // 3.1 Renovation & Repairs
+  maintenanceHolding: number; // 3.2 Maintenance & Bills
+  maintenanceBills?: number;
+  marketingExpenses: number; // 3.3 Marketing
+  fuelTravelling: number; // 3.4 Fuel & Travelling
+  salaryExpenses: number; // 3.5 Salary & other Expenses
+  totalHandlingExpenses: number;
+  totalCarryingCosts: number;
+
+  // 4. REAL ESTATE AGENT FEE (BUY SIDE)
+  buySideAgentFee: number;
   purchaseBrokeragePct: number;
   purchaseBrokerage: number;
   purchaseAgentName?: string;
-  
-  // Acquisition Extra Costs & Levies
-  stampDuty: number;
-  cvt: number;
-  tax236K: number;
-  buyerFilerStatus: FilerStatus;
-  societyTransferFee: number;
-  ndcFee: number;
-  legalCharges: number;
-  developmentCharges: number;
-  otherAcquisition: number;
-  totalAcquisitionExtras: number;
-  
-  // 2. Carrying / Improvements
-  renovationRepairs: number;
-  maintenanceHolding: number;
-  marketingExpenses: number;
-  totalCarryingCosts: number;
-  
-  // Total Landed Cost Basis
+
+  // PURCHASE PRICE (Total Landed / Acquisition Basis = SUM(F6:F20))
+  purchasePrice: number;
   totalLandedCost: number;
-  
-  // 3. Sale Side
-  sellingPrice: number;
+
+  // SALE SIDE & EXIT
+  grossSalePrice: number; // Current value / Gross sale price
+  sellingPrice: number; // alias
+  tax236C: number; // 2.2 FBR Section 236C (Advance Tax on Sale)
+  tax236CPct?: number;
+  sellerFilerStatus: FilerStatus;
+  sellSideAgentFee: number; // Real Estate Agent Fee Sell Side
   saleBrokeragePct: number;
   saleBrokerage: number;
   saleAgentName?: string;
-  
-  // Taxes on Sale
-  tax236C: number;
-  sellerFilerStatus: FilerStatus;
-  cgtRatePct: number;
-  cgtAmount: number;
-  municipalTax: number;
-  otherSellingExpenses: number;
-  totalSellingExpenses: number;
-  
-  // 4. Linked Metrics & Bottom Line
-  totalTaxesToPay: number;
-  totalCommissions: number;
-  grossProfit: number;
+  municipalTax?: number;
+  otherSellingExpenses?: number;
+  totalSellingExpenses?: number;
+  totalCommissions: number; // Buy + Sell Agent Commission
+
+  // PROFIT & LOSS WATERFALL
+  grossProfit: number; // Gross Sale Price - Purchase Price
+  grossProfitPct: number;
   grossMarginPct: number;
-  netProfit: number;
+  cgtRatePct: number; // Capital Gains Tax (CGT 15%)
+  cgtAmount: number;
+  zakat: number; // ZAQAT
+  charity: number; // CHARITY
+  officeExpenseDeduction?: number; // Staff / office overhead deduction from deal profit
+  netMargin: number; // NET MARGIN = Gross Profit - CGT - Zakat - Charity - overhead
+  netProfit: number; // alias
   netMarginPct: number;
   roiPct: number;
   annualizedRoiPct: number;
+  totalTaxesToPay: number;
   breakEvenPrice: number;
-  
-  // Counterparties
+
+  // Counterparties & Details
   seller: string;
   buyer?: string;
   notes?: string;
