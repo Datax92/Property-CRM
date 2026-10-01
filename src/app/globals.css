@@ -648,96 +648,89 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 }
 
 /* ==========================================================================
-   LEADWAY CRM LOGIN PORTAL STYLES (MINT/TEAL MODERN SAAS AESTHETIC)
+   PROPERTY CRM LOGIN PORTAL STYLES (MINT/EMERALD MODERN SAAS AESTHETIC)
    ========================================================================== */
-.leadway-login-screen {
+.property-login-viewport {
+  position: relative;
   min-height: 100vh;
   width: 100%;
-  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #f1f7f5;
-  background-image: 
-    radial-gradient(at 0% 0%, #e6f5ef 0px, transparent 55%),
-    radial-gradient(at 100% 100%, #e5f4ee 0px, transparent 55%),
-    radial-gradient(at 50% 50%, #f6faf8 0px, #eef6f3 100%);
+  background-color: #f3faf9;
   overflow: hidden;
   padding: 32px 16px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: #1e293b;
+  color: #0f172a;
 }
 
-/* Background Animated Isometric Teal Grid Mesh on Left */
-.leadway-bg-grid-container {
-  position: absolute;
-  left: -80px;
-  top: 50%;
-  width: 820px;
-  height: 820px;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0.85;
-  transform: translateY(-50%) perspective(1100px) rotateX(26deg) rotateY(-18deg) rotateZ(-5deg);
-  animation: leadwayGridFloat 14s ease-in-out infinite alternate;
-}
-
-@keyframes leadwayGridFloat {
+/* Floating Animated Ambient Gradient Blobs */
+@keyframes propertyDrift {
   0% {
-    transform: translateY(-50%) perspective(1100px) rotateX(26deg) rotateY(-18deg) rotateZ(-5deg) translateY(0);
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -45px) scale(1.1);
+  }
+  66% {
+    transform: translate(-25px, 25px) scale(0.92);
   }
   100% {
-    transform: translateY(-50%) perspective(1100px) rotateX(22deg) rotateY(-14deg) rotateZ(-3deg) translateY(-18px);
+    transform: translate(0, 0) scale(1);
   }
 }
 
-.leadway-grid-svg {
-  width: 100%;
-  height: 100%;
-}
-
-.grid-lines-group line {
-  stroke: #86cebc;
-  stroke-width: 1.4;
-  opacity: 0.55;
-}
-
-/* Soft ambient glow behind the card */
-.leadway-ambient-glow {
+.property-drift-blob {
   position: absolute;
-  width: 680px;
-  height: 680px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(135, 219, 196, 0.28) 0%, rgba(185, 237, 222, 0.12) 48%, transparent 70%);
-  filter: blur(75px);
   pointer-events: none;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  z-index: 1;
 }
 
-/* Main Centered Pure White Card */
-.leadway-card {
+.property-drift-blob.blob-1 {
+  top: 25%;
+  left: 25%;
+  width: 35rem;
+  height: 35rem;
+  transform: translate(-50%, -50%);
+  background: rgba(16, 185, 129, 0.2);
+  filter: blur(120px);
+  animation: propertyDrift 15s ease-in-out infinite;
+}
+
+.property-drift-blob.blob-2 {
+  bottom: 25%;
+  right: 25%;
+  width: 30rem;
+  height: 30rem;
+  transform: translate(50%, 50%);
+  background: rgba(52, 211, 153, 0.18);
+  filter: blur(120px);
+  animation: propertyDrift 20s ease-in-out infinite reverse;
+}
+
+/* Main Elevated White Card */
+.property-login-card {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
   background: #ffffff;
   border-radius: 28px;
   padding: 38px 36px 32px;
   box-shadow:
-    0 24px 64px -12px rgba(25, 75, 65, 0.12),
-    0 4px 16px -2px rgba(25, 75, 65, 0.04),
-    0 0 1px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(220, 238, 232, 0.85);
-  animation: leadwayCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    0 16px 40px -8px rgba(15, 118, 110, 0.08),
+    0 4px 14px -2px rgba(0, 0, 0, 0.03),
+    0 0 1px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  animation: propertyCardEntrance 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes leadwayCardIn {
+@keyframes propertyCardEntrance {
   0% {
     opacity: 0;
-    transform: translateY(18px) scale(0.98);
+    transform: translateY(16px) scale(0.98);
   }
   100% {
     opacity: 1;
@@ -745,297 +738,310 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   }
 }
 
-/* Brand Row & Logo */
-.leadway-brand-row {
+/* Brand Header */
+.property-brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.property-brand-logo-wrap {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  gap: 11px;
   margin-bottom: 12px;
 }
 
-.leadway-logo-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.property-brand-svg {
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
+  filter: drop-shadow(0 6px 14px rgba(16, 185, 129, 0.25));
 }
 
-.leadway-brand-text {
+.property-brand-title-box {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   line-height: 1;
 }
 
-.leadway-brand-text h2 {
-  font-size: 22px;
+.property-brand-main {
+  font-size: 24px;
   font-weight: 800;
-  color: #111827;
-  margin: 0;
-  letter-spacing: -0.4px;
+  color: #0f172a;
+  letter-spacing: -0.5px;
 }
 
-.leadway-brand-text span {
-  font-size: 10px;
+.property-brand-sub {
+  font-size: 11px;
   font-weight: 800;
-  color: #2a8b79;
-  letter-spacing: 2px;
+  color: #059669;
+  letter-spacing: 2.2px;
   margin-top: 3px;
   text-transform: uppercase;
 }
 
-/* Admin Sign-in Pill Badge */
-.leadway-admin-badge {
+/* Role Indicator Pill */
+.property-role-badge {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin: 0 auto 12px;
-  color: #267e6f;
+  color: #059669;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.8px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
 
-/* Card Titles */
-.leadway-card-titles {
-  text-align: center;
-  margin-bottom: 22px;
+.property-role-badge .badge-icon {
+  color: #059669;
 }
 
-.leadway-card-titles h3 {
+/* Titles & Bilingual Subtitles */
+.property-portal-title {
   font-size: 19px;
   font-weight: 700;
-  color: #111827;
+  color: #0f172a;
   margin: 0 0 6px;
   letter-spacing: -0.3px;
 }
 
-.leadway-sub-en {
+.property-portal-subtitles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 13px;
   color: #64748b;
-  margin: 0 0 2px;
 }
 
-.leadway-sub-ur {
+.property-portal-subtitles .sub-en {
+  margin: 0;
+}
+
+.property-portal-subtitles .sub-ur {
+  margin: 0;
   font-size: 12px;
   color: #8898a8;
-  margin: 0;
   font-family: Tahoma, 'Noto Nastaliq Urdu', sans-serif;
   direction: rtl;
 }
 
-/* Role Selector Segmented Pill */
-.leadway-role-pill {
-  background: #f8fafc;
-  border: 1px solid #edf2f7;
-  border-radius: 14px;
-  padding: 4px;
+/* Role Selector Segmented Bar */
+.property-role-tabs {
   display: flex;
+  width: 100%;
+  border-radius: 13px;
+  border: 1px solid #f1f5f9;
+  background: #f8fafc;
+  padding: 4px;
   gap: 4px;
   margin-bottom: 22px;
 }
 
-.role-tab-btn {
+.role-tab-pill {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 9px 8px;
-  border-radius: 11px;
-  border: none;
+  border-radius: 9px;
+  border: 1px solid transparent;
   background: transparent;
+  padding: 9px 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.role-tab-btn:hover:not(.active) {
-  color: #1e293b;
+.role-tab-pill:hover:not(.active) {
+  color: #0f172a;
   background: rgba(0, 0, 0, 0.02);
 }
 
-.role-tab-btn.active {
+.role-tab-pill.active {
   background: #ffffff;
-  color: #287a6c;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.03);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
-/* Error & Info Messages */
-.leadway-error-msg {
+/* Auth Alerts */
+.property-auth-alert {
+  border-radius: 11px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+  margin-bottom: 16px;
+  animation: propertyCardEntrance 0.3s ease;
+}
+
+.property-auth-alert.error {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #dc2626;
-  border-radius: 10px;
-  padding: 9px 14px;
-  font-size: 12px;
-  margin-bottom: 16px;
-  text-align: center;
-  line-height: 1.4;
-  animation: leadwayCardIn 0.3s ease;
 }
 
-.leadway-info-msg {
+.property-auth-alert.info {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   color: #1e40af;
-  border-radius: 10px;
-  padding: 9px 14px;
-  font-size: 12px;
-  margin-bottom: 16px;
-  text-align: center;
-  line-height: 1.4;
-  animation: leadwayCardIn 0.3s ease;
 }
 
-/* Form & Inputs */
-.leadway-form {
+/* Form & Input Fields */
+.property-login-form {
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
-.leadway-field-group {
-  margin-bottom: 16px;
+.property-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   text-align: left;
 }
 
-.leadway-label {
+.property-field-label {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 7px;
   font-size: 13px;
   font-weight: 600;
-  color: #1e293b;
+  color: #334155;
 }
 
-.leadway-ur-label {
+.property-field-label .ur-hint {
   font-size: 11px;
-  font-weight: 500;
-  color: #7f8fa4;
+  font-weight: 400;
+  color: #94a3b8;
   font-family: Tahoma, 'Noto Nastaliq Urdu', sans-serif;
+  direction: rtl;
 }
 
-.leadway-input-wrap {
+.property-input-wrap {
   position: relative;
   display: flex;
   align-items: center;
   width: 100%;
 }
 
-.leadway-icon-left {
+.input-left-icon {
   position: absolute;
-  left: 14px;
-  display: flex;
-  align-items: center;
+  left: 13px;
+  color: #94a3b8;
   pointer-events: none;
-  color: #7c8ba1;
+  transition: color 0.15s ease;
 }
 
-.leadway-input {
+.property-input-wrap:focus-within .input-left-icon {
+  color: #059669;
+}
+
+.property-text-input {
   width: 100%;
-  height: 48px;
-  background: #edf3fb;
-  border: 1.5px solid transparent;
+  height: 46px;
   border-radius: 12px;
-  padding: 0 16px 0 42px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0 14px 0 40px;
   font-size: 14px;
-  color: #1e293b;
+  color: #0f172a;
   outline: none;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
 }
 
-.leadway-input.has-toggle {
-  padding-right: 42px;
+.property-text-input.with-toggle {
+  padding-right: 40px;
 }
 
-.leadway-input:focus {
-  background: #f3f7fd;
-  border-color: #358376;
-  box-shadow: 0 0 0 3px rgba(53, 131, 118, 0.16);
+.property-text-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
 }
 
-.leadway-input::placeholder {
-  color: #9aa9bc;
+.property-text-input::placeholder {
+  color: #94a3b8;
 }
 
-.leadway-icon-right {
+.input-eye-toggle {
   position: absolute;
-  right: 12px;
+  right: 11px;
   background: none;
   border: none;
   padding: 6px;
   cursor: pointer;
-  color: #7c8ba1;
+  color: #94a3b8;
   display: flex;
   align-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: color 0.15s ease;
 }
 
-.leadway-icon-right:hover {
-  color: #358376;
+.input-eye-toggle:hover {
+  color: #059669;
 }
 
-/* Elevated Teal Submit Button */
-.leadway-submit-btn {
+/* Elevated Emerald Submit Button */
+.property-submit-btn {
   width: 100%;
   height: 48px;
-  margin-top: 18px;
-  background: #358376;
-  color: #ffffff;
-  border: none;
+  margin-top: 8px;
   border-radius: 12px;
-  font-size: 15px;
+  border: none;
+  background: #059669;
+  color: #ffffff;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 8px 20px -3px rgba(53, 131, 118, 0.38);
+  box-shadow: 0 10px 25px -4px rgba(5, 150, 105, 0.32);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.leadway-submit-btn:hover:not(:disabled) {
-  background: #2c7266;
+.property-submit-btn:hover:not(:disabled) {
+  background: #047857;
   transform: translateY(-1.5px);
-  box-shadow: 0 12px 24px -4px rgba(53, 131, 118, 0.48);
+  box-shadow: 0 14px 28px -4px rgba(5, 150, 105, 0.42);
 }
 
-.leadway-submit-btn:active:not(:disabled) {
+.property-submit-btn:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 4px 10px rgba(53, 131, 118, 0.3);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.22);
 }
 
-.leadway-submit-btn:disabled {
-  opacity: 0.7;
+.property-submit-btn:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 /* Card Footer */
-.leadway-card-footer {
-  margin-top: 22px;
+.property-card-footer {
+  margin-top: 24px;
   text-align: center;
   font-size: 13px;
   color: #64748b;
 }
 
-.leadway-card-footer p {
+.property-card-footer p {
   margin: 0 0 4px;
 }
 
-.leadway-link-btn {
+.property-footer-link {
   background: none;
   border: none;
   padding: 0;
-  color: #358376;
+  color: #059669;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1043,11 +1049,11 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   transition: text-decoration 0.15s ease;
 }
 
-.leadway-link-btn:hover {
+.property-footer-link:hover {
   text-decoration: underline;
 }
 
-.leadway-footer-note {
+.property-footer-note {
   display: block;
   font-size: 11px;
   color: #94a3b8;
