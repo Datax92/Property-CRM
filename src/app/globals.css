@@ -795,3 +795,302 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   width: 100%;
 }
 
+/* ==========================================================================
+   OFFICIAL RECEIPT VOUCHER STYLES
+   ========================================================================== */
+.receipt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.receipt-modal-card {
+  background: #ffffff;
+  color: #1a1a1a;
+  width: 100%;
+  max-width: 820px;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  margin: auto;
+}
+
+.receipt-modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.printable-voucher {
+  padding: 36px 40px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+.voucher-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.voucher-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.voucher-brand h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: #111;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.voucher-brand span {
+  font-size: 11px;
+  color: #666;
+  display: block;
+}
+
+.voucher-doc-meta {
+  text-align: right;
+}
+
+.voucher-badge {
+  display: inline-block;
+  background: #111;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.voucher-copy-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  margin: 4px 0 6px;
+}
+
+.voucher-meta-row {
+  font-size: 12px;
+  color: #444;
+}
+
+.voucher-meta-row span {
+  margin-right: 6px;
+}
+
+.voucher-divider {
+  height: 2px;
+  background: #111;
+  margin-bottom: 20px;
+}
+
+.voucher-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.voucher-box {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #fbfbfb;
+}
+
+.voucher-box-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #333;
+  border-bottom: 1px solid #e5e5e5;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.voucher-table-mini {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.voucher-table-mini td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+
+.voucher-table-mini td:first-child {
+  color: #666;
+  width: 40%;
+}
+
+.voucher-financials {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 14px;
+  background: #ffffff;
+  margin-bottom: 18px;
+}
+
+.voucher-table-main {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.voucher-table-main th {
+  background: #f2f2f2;
+  color: #222;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+
+.voucher-table-main td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #eee;
+  color: #222;
+}
+
+.voucher-tot-row td {
+  background: #f9f9f9;
+  border-top: 2px solid #ccc;
+  border-bottom: 2px solid #ccc;
+  font-size: 14px;
+}
+
+.voucher-notes {
+  font-size: 11px;
+  color: #555;
+  background: #fcfcfc;
+  border: 1px dashed #ccc;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 24px;
+}
+
+.voucher-notes p {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+.voucher-signatures {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 40px;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.sig-block {
+  width: 220px;
+  text-align: center;
+}
+
+.sig-line {
+  border-bottom: 1px solid #222;
+  margin-bottom: 8px;
+}
+
+.sig-name {
+  font-size: 12px;
+  color: #111;
+}
+
+.sig-title {
+  font-size: 10px;
+  color: #666;
+}
+
+.sig-stamp-space {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stamp-box {
+  width: 100px;
+  height: 60px;
+  border: 1px dashed #bbb;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.voucher-footer {
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #888;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+  .receipt-modal-card {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  [data-noprint="1"],
+  .receipt-modal-actions {
+    display: none !important;
+  }
+  .printable-voucher,
+  .printable-voucher * {
+    visibility: visible;
+  }
+  .printable-voucher {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20mm;
+    margin: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

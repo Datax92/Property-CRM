@@ -1,15 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
 import { ShareBar, RankedList } from '../Charts';
 import { Icon } from '../Icons';
 import { PAGE_META, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
+import { InvoiceReceiptModal } from '../InvoiceReceiptModal';
+import type { Invoice } from '../../lib/types';
 
 export function SalesPage() {
   const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
 
@@ -131,6 +134,21 @@ export function SalesPage() {
       { key: 'transferDate', label: 'Transfer date', cls: 'mono', render: (i: any) => M.fmtDate(i.transferDate) },
       { key: 'receivedByName', label: 'Received by' },
       { key: 'receivedFromName', label: 'Received from' },
+      {
+        key: 'voucher',
+        label: 'Voucher Slip',
+        render: (i: any) => (
+          <button
+            type="button"
+            className="btn sm pri"
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+            onClick={() => setSelectedInvoice(i)}
+            title="View & Print Official Receipt Voucher"
+          >
+            <Icon name="print" size={12} /> Receipt Slip
+          </button>
+        ),
+      },
     ];
 
     const modalType = tab === 'saleInvoices' ? 'saleInvoice' : 'purchaseInvoice';
@@ -157,6 +175,11 @@ export function SalesPage() {
         ) : (
           <DataTable cols={invCols} rows={invRows} totals={true} />
         )}
+        <InvoiceReceiptModal
+          invoice={selectedInvoice}
+          onClose={() => setSelectedInvoice(null)}
+          numbers={numbers}
+        />
       </PageShell>
     );
   }
@@ -202,6 +225,27 @@ export function SalesPage() {
         </button>
       ),
     },
+    {
+      key: 'receipt',
+      label: 'Receipt Voucher',
+      render: (s: any) => (
+        <button
+          type="button"
+          className="btn pri sm"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => {
+            let inv = M.DATA.invoices.find((i: any) => i.saleId === s.id && i.type === 'sale');
+            if (!inv) {
+              inv = M.generateInvoiceFromSale(s.id, 'sale');
+            }
+            setSelectedInvoice(inv);
+          }}
+          title="Generate & Print Sale Receipt Voucher"
+        >
+          <Icon name="print" size={12} /> Receipt Slip
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -217,6 +261,11 @@ export function SalesPage() {
     >
       <SummaryKpis pairs={summaryPairs} />
       <DataTable cols={cols} rows={rows} totals={true} />
+      <InvoiceReceiptModal
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        numbers={numbers}
+      />
     </PageShell>
   );
 }
