@@ -44,6 +44,8 @@ export const NAV: NavSection[] = [
     group: 'Operations',
     tabs: [
       { id: 'register', label: 'Sales register' },
+      { id: 'saleInvoices', label: 'Sale invoices' },
+      { id: 'purchaseInvoices', label: 'Purchase invoices' },
       { id: 'receivables', label: 'Receivables', need: 'receivables' },
     ],
   },
@@ -109,6 +111,8 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'trading/calculator': { t: 'Deal cost calculator', u: 'لاگت کیلکولیٹر', p: 'Interactive trade modeller: link buy-sell pricing, holding carrying costs, commission splits, FBR taxes, break-even exit, and sensitivity.' },
   'trading/analytics': { t: 'Trading analytics', u: 'تجزیہ منافع', p: 'Portfolio-level trading velocity, capital turnover, tax-to-profit ratios, and realized margin breakdown.' },
   'sales/register': { t: 'Sales register', u: 'فروخت رجسٹر', p: 'Every sale with buyer, agent, amount received and amount outstanding.' },
+  'sales/saleInvoices': { t: 'Sale invoices', u: 'فروخت رسید', p: 'Invoices given to buyers — receipt of sale with all transaction details.' },
+  'sales/purchaseInvoices': { t: 'Purchase invoices', u: 'خرید رسید', p: 'Invoices kept by the company — internal purchase receipts for record keeping.' },
   'sales/receivables': { t: 'Accounts receivable', u: 'واجب الوصول', p: 'What customers still owe, and how far past due each balance is.' },
   'agents/directory': { t: 'Agent directory', u: 'ایجنٹ', p: 'Sales, profit generated and commission for every agent in the period.' },
   'agents/commissions': { t: 'Commission ledger', u: 'کمیشن کھاتہ', p: 'What each agent earned, what has been paid, and what is still owed.' },

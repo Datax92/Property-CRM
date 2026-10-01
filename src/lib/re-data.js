@@ -94,7 +94,7 @@ function buildData() {
   const audit = [];
   const costSheets = [];
 
-  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets };
+  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices: [] };
 }
 
 
@@ -152,6 +152,7 @@ export const RANGE_KEYS = [
   ['today','Today'],['yesterday','Yesterday'],['thisWeek','This week'],['lastWeek','Last week'],
   ['thisMonth','This month'],['lastMonth','Last month'],['thisQuarter','This quarter'],
   ['thisYear','This year'],['lastYear','Last year'],
+  ['thisFiscalYear','This fiscal year (Jul–Jun)'],['lastFiscalYear','Last fiscal year (Jul–Jun)'],
   ['last7','Last 7 days'],['last30','Last 30 days'],['last90','Last 90 days'],
   ['custom','Custom range'],
 ];
@@ -166,6 +167,18 @@ export function rangeFor(key, custom) {
     case 'lastWeek': { const s = addDays(startOfWeek(t), -7); return wrap(s, addDays(s, 6), 'Week of ' + fmtDate(s)); }
     case 'thisMonth': return wrap(new Date(y, m, 1), t, MONTHS[m] + ' ' + y);
     case 'lastMonth': { const s = new Date(y, m - 1, 1); return wrap(s, new Date(y, m, 0), MONTHS[s.getMonth()] + ' ' + s.getFullYear()); }
+    case 'thisFiscalYear': {
+      // Pakistan fiscal year: July 1 to June 30
+      const fyStart = m >= 6 ? new Date(y, 6, 1) : new Date(y - 1, 6, 1); // July 1
+      const fyEnd = m >= 6 ? new Date(y + 1, 5, 30) : new Date(y, 5, 30); // June 30
+      const label = 'FY ' + fyStart.getFullYear() + '–' + fyEnd.getFullYear();
+      return wrap(fyStart, cap(fyEnd) || t, label);
+    }
+    case 'lastFiscalYear': {
+      const fyStart = m >= 6 ? new Date(y - 1, 6, 1) : new Date(y - 2, 6, 1);
+      const fyEnd = m >= 6 ? new Date(y, 5, 30) : new Date(y - 1, 5, 30);
+      return wrap(fyStart, fyEnd, 'FY ' + fyStart.getFullYear() + '–' + fyEnd.getFullYear());
+    }
     case 'last7': return wrap(addDays(t, -6), t, 'Last 7 days');
     case 'last30': return wrap(addDays(t, -29), t, 'Last 30 days');
     case 'last90': return wrap(addDays(t, -89), t, 'Last 90 days');
@@ -561,6 +574,9 @@ export function sourceCount(view, r, f) {
     sheets: () => DATA.costSheets.length,
     calculator: () => DATA.costSheets.length,
     analytics: () => DATA.costSheets.length,
+    invoices: () => DATA.invoices.length,
+    saleInvoices: () => DATA.invoices.filter((i) => i.type === 'sale').length,
+    purchaseInvoices: () => DATA.invoices.filter((i) => i.type === 'purchase').length,
   }[view];
   return n ? n() : 0;
 }
@@ -698,6 +714,108 @@ export function voidPayment(id, user) {
     note: 'Voided — original record retained', manual: true,
   });
   return t;
+}
+
+/* ====================================================================
+   INVOICES — Sale Invoice (given to buyer) & Purchase Invoice (kept by company)
+   ==================================================================== */
+
+export function addInvoice(v) {
+  const inv = {
+    id: nextId(DATA.invoices, 'INV-', 5),
+    srNo: DATA.invoices.filter((i) => i.type === v.type).length + 1,
+    type: v.type, // 'sale' or 'purchase'
+    receiptDate: parseDate(v.receiptDate || TODAY),
+    propertyId: v.propertyId || null,
+    propertyName: v.propertyName || '',
+    saleId: v.saleId || null,
+
+    buyerName: v.buyerName || '',
+    buyerCompany: v.buyerCompany || '',
+    buyerCnic: v.buyerCnic || '',
+
+    paymentDate: v.paymentDate ? parseDate(v.paymentDate) : null,
+    bankDetailsBuyer: v.bankDetailsBuyer || '',
+    bankDetailsSeller: v.bankDetailsSeller || '',
+
+    totalAmount: Math.round(+v.totalAmount || 0),
+    balanceAmount: Math.round(+v.balanceAmount || 0),
+    tokenAmount: Math.round(+v.tokenAmount || 0),
+    tokenDate: v.tokenDate ? parseDate(v.tokenDate) : null,
+    transferDate: v.transferDate ? parseDate(v.transferDate) : null,
+
+    receivedByName: v.receivedByName || '',
+    receivedByCnic: v.receivedByCnic || '',
+    receivedFromName: v.receivedFromName || '',
+    receivedFromCnic: v.receivedFromCnic || '',
+
+    notes: v.notes || '',
+    manual: true,
+  };
+  DATA.invoices.push(inv);
+
+  DATA.audit.unshift({
+    id: nextId(DATA.audit, 'AU-', 4),
+    date: inv.receiptDate,
+    txnId: inv.id,
+    action: 'Created',
+    user: 'Manual entry',
+    entity: inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice',
+    prevAmount: null,
+    newAmount: inv.totalAmount,
+    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.buyerName}`,
+    manual: true,
+  });
+  return inv;
+}
+
+export function generateInvoiceFromSale(saleId, type) {
+  const sale = DATA.sales.find((s) => s.id === saleId);
+  if (!sale) throw new Error('Sale not found');
+  const prop = DATA.properties.find((p) => p.id === sale.propertyId);
+  return addInvoice({
+    type: type, // 'sale' or 'purchase'
+    receiptDate: sale.date,
+    propertyId: sale.propertyId,
+    propertyName: sale.property,
+    saleId: sale.id,
+    buyerName: sale.buyer,
+    totalAmount: sale.sellingPrice,
+    balanceAmount: sale.outstanding,
+    tokenAmount: sale.received,
+    tokenDate: sale.date,
+    receivedByName: type === 'sale' ? sale.buyer : (prop ? prop.seller : ''),
+    receivedFromName: type === 'sale' ? (prop ? prop.seller : '') : sale.buyer,
+  });
+}
+
+export function fiscalYearTaxSummary(f) {
+  // Get current fiscal year (Jul-Jun)
+  const m = TODAY.getMonth(), y = TODAY.getFullYear();
+  const fyStart = m >= 6 ? new Date(y, 6, 1) : new Date(y - 1, 6, 1);
+  const fyEnd = m >= 6 ? new Date(y + 1, 5, 30) : new Date(y, 5, 30);
+  const fyRange = { start: fyStart, end: endOfDay(fyEnd > TODAY ? TODAY : fyEnd), label: 'FY', key: 'custom' };
+
+  const taxes = DATA.taxes.filter((t) => inR(t.date, fyRange) && (f.office === 'all' || t.office === f.office));
+  const sales = DATA.sales.filter((s) => inR(s.date, fyRange));
+
+  const advanceTax236K = taxes.filter((t) => t.type === 'Advance Tax §236K').reduce((a, t) => a + t.amount, 0);
+  const advanceTax236C = taxes.filter((t) => t.type === 'Advance Tax §236C').reduce((a, t) => a + t.amount, 0);
+  const cgt = taxes.filter((t) => t.type === 'Capital Gains Tax').reduce((a, t) => a + t.amount, 0);
+  const withholdingTax = sales.reduce((a, s) => a + s.tax, 0);
+  const totalTax = taxes.reduce((a, t) => a + t.amount, 0);
+  const totalPaid = taxes.reduce((a, t) => a + t.paid, 0);
+  const totalPending = taxes.reduce((a, t) => a + t.outstanding, 0);
+
+  return {
+    fyLabel: 'FY ' + fyStart.getFullYear() + '–' + fyEnd.getFullYear(),
+    fyStart, fyEnd,
+    advanceTax236K, advanceTax236C, cgt, withholdingTax,
+    totalTax, totalPaid, totalPending,
+    taxEntries: taxes,
+    salesCount: sales.length,
+    totalRevenue: sales.reduce((a, s) => a + s.sellingPrice, 0),
+  };
 }
 
 /* ====================================================================

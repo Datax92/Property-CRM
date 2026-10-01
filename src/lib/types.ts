@@ -50,7 +50,7 @@ export interface TableColumn<T = any> {
 }
 
 export interface ModalState {
-  id: 'property' | 'sale' | 'expense' | 'payment';
+  id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice';
   values: Record<string, any>;
   errors: Record<string, string>;
 }
@@ -164,3 +164,40 @@ export interface CostSheet {
   manual?: boolean;
 }
 
+export interface Invoice {
+  id: string;
+  srNo: number;
+  type: 'sale' | 'purchase'; // sale = given to buyer, purchase = kept by company
+  receiptDate: Date | string;
+  propertyId?: string;
+  propertyName?: string;
+  saleId?: string;
+
+  // Buyer info
+  buyerName: string;
+  buyerCompany?: string;
+  buyerCnic?: string;
+
+  // Payment info
+  paymentDate?: Date | string;
+  bankDetailsBuyer?: string;
+  bankDetailsSeller?: string;
+
+  // Amounts
+  totalAmount: number;
+  balanceAmount: number;
+  tokenAmount: number;
+  tokenDate?: Date | string;
+  transferDate?: Date | string;
+
+  // Received by (seller side)
+  receivedByName: string;
+  receivedByCnic?: string;
+
+  // Received from (buyer side)
+  receivedFromName: string;
+  receivedFromCnic?: string;
+
+  notes?: string;
+  manual?: boolean;
+}

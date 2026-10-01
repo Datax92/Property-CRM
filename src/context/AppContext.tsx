@@ -38,6 +38,7 @@ interface AppContextType {
   goto: (path: string) => void;
   setUser: (u: User) => void;
   setRangeKey: (k: string) => void;
+  setCustom: (c: { start: string; end: string }) => void;
   setFilter: (k: string, v: string) => void;
   clearFilters: () => void;
   setNumbers: (fmt: 'cr' | 'm' | 'full') => void;
@@ -50,7 +51,7 @@ interface AppContextType {
   setGrossBasis: (b: 'cogs' | 'doc') => void;
   openMenu: (id: string, x: number, y: number) => void;
   closeMenu: () => void;
-  openModal: (id: 'property' | 'sale' | 'expense' | 'payment') => void;
+  openModal: (id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice') => void;
   closeModal: () => void;
   setModalField: (key: string, value: any) => void;
   submitModal: () => void;
@@ -269,6 +270,106 @@ export const FORMS_DEF: Record<string, any> = {
       return { id: t.id, msg: 'Transaction ' + t.id + ' posted', go: 'admin/transactions' };
     },
   },
+  saleInvoice: {
+    title: 'Create sale invoice',
+    sub: 'Invoice/receipt given to the buyer with all transaction details.',
+    fields: [
+      { g: 'Invoice' },
+      { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      {
+        k: 'propertyId',
+        l: 'Property',
+        type: 'select',
+        opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+      },
+      { g: 'Buyer details' },
+      { k: 'buyerName', l: 'Buyer name', req: true, ph: 'Kamran Aziz' },
+      { k: 'buyerCompany', l: 'Company', ph: 'Company name (optional)' },
+      { k: 'buyerCnic', l: 'Buyer CNIC', ph: '00000-0000000-0' },
+      { g: 'Payment details' },
+      { k: 'paymentDate', l: 'Payment date', type: 'date' },
+      { k: 'bankDetailsBuyer', l: 'Buyer bank details', ph: 'Bank name & account' },
+      { k: 'bankDetailsSeller', l: 'Seller bank details', ph: 'Bank name & account' },
+      { g: 'Amounts' },
+      { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money' },
+      { k: 'tokenAmount', l: 'Token amount (PKR)', type: 'money' },
+      { k: 'tokenDate', l: 'Token date', type: 'date' },
+      { k: 'transferDate', l: 'Transfer date', type: 'date' },
+      { g: 'Received by (seller)' },
+      { k: 'receivedByName', l: 'Name', req: true, ph: 'Person receiving payment' },
+      { k: 'receivedByCnic', l: 'CNIC', ph: '00000-0000000-0' },
+      { g: 'Received from (buyer)' },
+      { k: 'receivedFromName', l: 'Name', req: true, ph: 'Person making payment' },
+      { k: 'receivedFromCnic', l: 'CNIC', ph: '00000-0000000-0' },
+      { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
+    ],
+    calc: (v: any) => [
+      ['Total amount', n(v.totalAmount)],
+      ['Token / advance', n(v.tokenAmount)],
+      ['Balance remaining', n(v.balanceAmount) || Math.max(0, n(v.totalAmount) - n(v.tokenAmount)), true],
+    ],
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
+      if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
+      return e;
+    },
+    submit: (v: any) => {
+      const inv = M.addInvoice({ ...v, type: 'sale' });
+      return { id: inv.id, msg: 'Sale invoice ' + inv.id + ' created', go: 'sales/saleInvoices' };
+    },
+  },
+  purchaseInvoice: {
+    title: 'Create purchase invoice',
+    sub: 'Invoice/receipt kept by the company for internal records.',
+    fields: [
+      { g: 'Invoice' },
+      { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      {
+        k: 'propertyId',
+        l: 'Property',
+        type: 'select',
+        opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+      },
+      { g: 'Buyer details' },
+      { k: 'buyerName', l: 'Buyer name', req: true, ph: 'Kamran Aziz' },
+      { k: 'buyerCompany', l: 'Company', ph: 'Company name (optional)' },
+      { k: 'buyerCnic', l: 'Buyer CNIC', ph: '00000-0000000-0' },
+      { g: 'Payment details' },
+      { k: 'paymentDate', l: 'Payment date', type: 'date' },
+      { k: 'bankDetailsBuyer', l: 'Buyer bank details', ph: 'Bank name & account' },
+      { k: 'bankDetailsSeller', l: 'Seller bank details', ph: 'Bank name & account' },
+      { g: 'Amounts' },
+      { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money' },
+      { k: 'tokenAmount', l: 'Token amount (PKR)', type: 'money' },
+      { k: 'tokenDate', l: 'Token date', type: 'date' },
+      { k: 'transferDate', l: 'Transfer date', type: 'date' },
+      { g: 'Received by (company)' },
+      { k: 'receivedByName', l: 'Name', req: true, ph: 'Company representative' },
+      { k: 'receivedByCnic', l: 'CNIC', ph: '00000-0000000-0' },
+      { g: 'Received from (seller)' },
+      { k: 'receivedFromName', l: 'Name', req: true, ph: 'Seller / vendor name' },
+      { k: 'receivedFromCnic', l: 'CNIC', ph: '00000-0000000-0' },
+      { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
+    ],
+    calc: (v: any) => [
+      ['Total amount', n(v.totalAmount)],
+      ['Token / advance', n(v.tokenAmount)],
+      ['Balance remaining', n(v.balanceAmount) || Math.max(0, n(v.totalAmount) - n(v.tokenAmount)), true],
+    ],
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
+      if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
+      return e;
+    },
+    submit: (v: any) => {
+      const inv = M.addInvoice({ ...v, type: 'purchase' });
+      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + ' created', go: 'sales/purchaseInvoices' };
+    },
+  },
 };
 
 function formDefaults(id: string) {
@@ -296,7 +397,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [page, setPage] = useState<string>('dashboard');
   const [tab, setTab] = useState<string | null>('overview');
   const [rangeKey, setRangeKey] = useState<string>('thisYear');
-  const [custom] = useState<{ start: string; end: string }>({ start: '2026-01-01', end: '2026-09-01' });
+  const [custom, setCustomState] = useState<{ start: string; end: string }>({ start: '2026-01-01', end: '2026-09-01' });
   const [filters, setFilters] = useState<Filters>({ ...M.EMPTY_FILTERS });
   const [numbers, setNumbers] = useState<'cr' | 'm' | 'full'>('cr');
   const [query, setQuery] = useState<string>('');
@@ -455,6 +556,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [goto, toast]
   );
 
+  const setCustom = useCallback((c: { start: string; end: string }) => {
+    setCustomState(c);
+  }, []);
+
   const setFilter = useCallback((k: string, v: string) => {
     setFilters((prev) => ({ ...prev, [k]: v }));
   }, []);
@@ -492,7 +597,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
-  const openModal = useCallback((id: 'property' | 'sale' | 'expense' | 'payment') => {
+  const openModal = useCallback((id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice') => {
     setModal({ id, values: formDefaults(id), errors: {} });
     setMenu(null);
   }, []);
@@ -535,7 +640,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit'];
+    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;
@@ -732,6 +837,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         goto,
         setUser,
         setRangeKey,
+        setCustom,
         setFilter,
         clearFilters,
         setNumbers,

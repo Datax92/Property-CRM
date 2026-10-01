@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
+import { PageShell, SummaryKpis, DataTable, Tag, FigText } from '../Shared';
 import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
@@ -101,6 +101,7 @@ export function CostsPage() {
   if (tab === 'tax') {
     const k = M.computeKPIs(r, f);
     const rows = M.DATA.taxes.filter((t: any) => M.inRange(t.date, r) && (f.office === 'all' || t.office === f.office));
+    const fySummary = M.fiscalYearTaxSummary(f);
 
     const summaryPairs: [string, string][] = [
       ['Entries', M.fmtNum(rows.length)],
@@ -126,6 +127,47 @@ export function CostsPage() {
     return (
       <PageShell title={meta.t} u={meta.u} p={meta.p}>
         <SummaryKpis pairs={summaryPairs} />
+
+        {/* Fiscal Year Tax Summary Panel */}
+        <div className="panel" style={{ marginBottom: '14px' }}>
+          <div className="panel-h">
+            <h3>{fySummary.fyLabel} — Tax summary</h3>
+            <span className="sub">Pakistan fiscal year runs July to June. Closing month is June.</span>
+          </div>
+          <div className="panel-b">
+            <div className="kpis">
+              <div className="kpi">
+                <span className="k">Advance Tax §236K (buy)</span>
+                <span className="v"><FigText str={M.fmt(fySummary.advanceTax236K, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Advance Tax §236C (sell)</span>
+                <span className="v"><FigText str={M.fmt(fySummary.advanceTax236C, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Capital Gains Tax</span>
+                <span className="v"><FigText str={M.fmt(fySummary.cgt, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Withholding tax (from sales)</span>
+                <span className="v"><FigText str={M.fmt(fySummary.withholdingTax, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Total tax (FY)</span>
+                <span className="v"><FigText str={M.fmt(fySummary.totalTax, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Paid (FY)</span>
+                <span className="v"><FigText str={M.fmt(fySummary.totalPaid, numbers)} /></span>
+              </div>
+              <div className="kpi">
+                <span className="k">Tax pending (FY)</span>
+                <span className="v" style={{ color: fySummary.totalPending > 0 ? 'var(--bad)' : 'inherit' }}><FigText str={M.fmt(fySummary.totalPending, numbers)} /></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="note" style={{ marginBottom: '14px' }} data-noprint="1">
           <span className="ic">
             <Icon name="info" />
@@ -133,7 +175,7 @@ export function CostsPage() {
           <div>
             <b>Two kinds of tax, never added together.</b> Withholding tax on a sale is already deducted
             inside that sale's net revenue. Only advance and corporate income tax is subtracted again in the
-            profit bridge.
+            profit bridge. The fiscal year closes in <b>June</b> — all tracking below follows July→June.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} />

@@ -143,7 +143,7 @@ export function PrintHead({ title }: { title: string }) {
 }
 
 export function PeriodControl() {
-  const { rangeKey, setRangeKey, range } = useApp();
+  const { rangeKey, setRangeKey, range, custom, setCustom } = useApp();
 
   return (
     <>
@@ -160,6 +160,31 @@ export function PeriodControl() {
           </option>
         ))}
       </select>
+      {rangeKey === 'custom' && (
+        <>
+          <input
+            type="date"
+            className="fldsel"
+            value={custom.start}
+            max={M.dateInput(M.TODAY)}
+            onChange={(e) => setCustom({ ...custom, start: e.target.value })}
+            aria-label="Start date"
+            title="Start date"
+            style={{ width: 'auto', minWidth: '120px' }}
+          />
+          <span className="vs">to</span>
+          <input
+            type="date"
+            className="fldsel"
+            value={custom.end}
+            max={M.dateInput(M.TODAY)}
+            onChange={(e) => setCustom({ ...custom, end: e.target.value })}
+            aria-label="End date"
+            title="End date"
+            style={{ width: 'auto', minWidth: '120px' }}
+          />
+        </>
+      )}
       <span className="vs" title={`${M.fmtDate(range.start)} to ${M.fmtDate(range.end)}`}>
         {range.label}
       </span>

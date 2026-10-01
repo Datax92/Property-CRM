@@ -123,6 +123,25 @@ export function Menus() {
         >
           <Icon name="calculator" /> Trade cost calculator
         </button>
+        <div className="sep" />
+        <h5>Invoices</h5>
+        <button
+          type="button"
+          onClick={() => {
+            openModal('saleInvoice' as any);
+          }}
+        >
+          <Icon name="receipt" /> Sale invoice
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            openModal('purchaseInvoice' as any);
+          }}
+        >
+          <Icon name="receipt" /> Purchase invoice
+        </button>
+        <div className="sep" />
         <button
           type="button"
           disabled={denied('expenses')}
@@ -346,6 +365,22 @@ export function Menus() {
               }}
             >
               <Icon name="plus" /> Record sale
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openModal('saleInvoice' as any);
+              }}
+            >
+              <Icon name="receipt" /> Sale invoice
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openModal('purchaseInvoice' as any);
+              }}
+            >
+              <Icon name="receipt" /> Purchase invoice
             </button>
           </>
         )}

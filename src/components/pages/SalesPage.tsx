@@ -103,6 +103,64 @@ export function SalesPage() {
     );
   }
 
+  if (tab === 'saleInvoices' || tab === 'purchaseInvoices') {
+    const invoiceType = tab === 'saleInvoices' ? 'sale' : 'purchase';
+    const invRows = M.DATA.invoices.filter(
+      (i: any) => i.type === invoiceType && M.inRange(i.receiptDate, r)
+    );
+
+    const summaryPairs: [string, string][] = [
+      ['Invoices', M.fmtNum(invRows.length)],
+      ['Total value', M.fmt(invRows.reduce((a: number, i: any) => a + i.totalAmount, 0), numbers)],
+      ['Token received', M.fmt(invRows.reduce((a: number, i: any) => a + i.tokenAmount, 0), numbers)],
+      ['Balance pending', M.fmt(invRows.reduce((a: number, i: any) => a + i.balanceAmount, 0), numbers)],
+    ];
+
+    const invCols = [
+      { key: 'id', label: 'Invoice #' },
+      { key: 'srNo', label: 'Sr No.' },
+      { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
+      { key: 'buyerName', label: 'Buyer name' },
+      { key: 'buyerCompany', label: 'Company' },
+      { key: 'buyerCnic', label: 'CNIC' },
+      { key: 'propertyName', label: 'Property' },
+      { key: 'totalAmount', label: 'Total amount', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.totalAmount, numbers) },
+      { key: 'tokenAmount', label: 'Token', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.tokenAmount, numbers) },
+      { key: 'balanceAmount', label: 'Balance', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.balanceAmount, numbers) },
+      { key: 'tokenDate', label: 'Token date', cls: 'mono', render: (i: any) => M.fmtDate(i.tokenDate) },
+      { key: 'transferDate', label: 'Transfer date', cls: 'mono', render: (i: any) => M.fmtDate(i.transferDate) },
+      { key: 'receivedByName', label: 'Received by' },
+      { key: 'receivedFromName', label: 'Received from' },
+    ];
+
+    const modalType = tab === 'saleInvoices' ? 'saleInvoice' : 'purchaseInvoice';
+    const btnLabel = tab === 'saleInvoices' ? 'Create sale invoice' : 'Create purchase invoice';
+
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <button type="button" className="btn pri" onClick={() => openModal(modalType as any)}>
+            <Icon name="plus" /> {btnLabel}
+          </button>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
+        {invRows.length === 0 ? (
+          <div className="empty">
+            <Icon name="empty" />
+            <h3>No {tab === 'saleInvoices' ? 'sale' : 'purchase'} invoices yet</h3>
+            <p>Click "{btnLabel}" to create one, or generate from an existing sale.</p>
+          </div>
+        ) : (
+          <DataTable cols={invCols} rows={invRows} totals={true} />
+        )}
+      </PageShell>
+    );
+  }
+
   // Sales register (default)
   const ids = new Set(M.DATA.properties.filter((p: any) => M.propMatch(p, f)).map((p: any) => p.id));
   const rows = M.DATA.sales.filter((s: any) => M.saleMatch(s, f, ids) && M.inRange(s.date, r));
