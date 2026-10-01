@@ -9,9 +9,18 @@ export interface FirebaseConfig {
   storageBucket: string;
   messagingSenderId: string;
   appId: string;
+  measurementId?: string;
 }
 
-const DEFAULT_PROJECT_ID = 'property-crm';
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBanRvPdiDpB4q1y4btd_-FEW9DmphLXVM',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'property-crm-5a401.firebaseapp.com',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'property-crm-5a401',
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'property-crm-5a401.firebasestorage.app',
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '583726252771',
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:583726252771:web:bb4ae70d621d576d56fbd6',
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-GS0YMYVFHE',
+};
 
 export function getStoredFirebaseConfig(): FirebaseConfig | null {
   if (typeof window === 'undefined') return null;
@@ -47,15 +56,7 @@ export function getActiveFirebaseConfig(): FirebaseConfig {
   if (stored && stored.apiKey && stored.projectId) {
     return stored;
   }
-
-  return {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID}.firebaseapp.com`,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || DEFAULT_PROJECT_ID}.appspot.com`,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '',
-  };
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 let app: FirebaseApp | null = null;
