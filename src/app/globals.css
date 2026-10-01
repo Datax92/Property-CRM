@@ -647,3 +647,151 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   }
 }
 
+/* ==========================================================================
+   LOGIN PAGE STYLES
+   ========================================================================== */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: radial-gradient(circle at 50% 20%, rgba(200, 160, 90, 0.08) 0%, rgba(18, 20, 24, 0.98) 70%), var(--bg);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.login-head {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.login-brand h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--fg);
+}
+
+.login-sub {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--mute);
+  display: block;
+}
+
+.login-tagline {
+  font-size: 13px;
+  color: var(--mute);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.login-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.login-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mute);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.login-tab:hover {
+  color: var(--fg);
+}
+
+.login-tab.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+.login-form .fld {
+  margin-bottom: 14px;
+}
+
+.login-form .fld label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--fg);
+}
+
+.login-form input,
+.login-form select {
+  width: 100%;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0 16px;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-divider span {
+  padding: 0 10px;
+  color: var(--mute);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.linkbtn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.linkbtn:hover {
+  text-decoration: underline;
+}
+
+.btn.full {
+  width: 100%;
+}
+

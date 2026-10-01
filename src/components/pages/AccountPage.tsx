@@ -2,13 +2,15 @@
 
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { PageShell } from '../Shared';
 import { Icon } from '../Icons';
 import { NAV, PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function AccountPage() {
-  const { user, role, visibleTabs, openMenu } = useApp();
+  const { user, role, visibleTabs } = useApp();
+  const { firebaseUser, signOut } = useAuth();
   const meta = PAGE_META['account'] || { t: 'My account', u: 'میرا اکاؤنٹ' };
 
   const allowed = NAV.flatMap((s) => visibleTabs(s).map((t: any) => `${s.label} · ${t.label}`));
@@ -42,6 +44,10 @@ export function AccountPage() {
                 <input value={user.name} readOnly />
               </div>
               <div className="fld">
+                <span>Email address</span>
+                <input value={firebaseUser?.email || '—'} readOnly />
+              </div>
+              <div className="fld">
                 <span>Job title</span>
                 <input value={user.title} readOnly />
               </div>
@@ -53,7 +59,7 @@ export function AccountPage() {
                 <span>Office / branch</span>
                 <input value={user.office} readOnly />
               </div>
-              <div className="fld full">
+              <div className="fld">
                 <span>User ID</span>
                 <input value={user.id} readOnly />
               </div>
@@ -87,16 +93,14 @@ export function AccountPage() {
         </div>
       </div>
 
-      <div style={{ marginTop: '14px' }}>
+      <div style={{ marginTop: '14px', display: 'flex', gap: '10px' }}>
         <button
           type="button"
           className="btn"
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            openMenu('account', r.left, r.bottom + 6);
-          }}
+          onClick={() => signOut()}
+          style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }}
         >
-          <Icon name="user" /> Switch to another account
+          <Icon name="x" /> Sign out of account
         </button>
       </div>
     </PageShell>

@@ -1,3 +1,5 @@
+import { saveRecordToFirestore } from './firestore-service';
+
 // Real Estate Management System — Reporting Module
 // Deterministic in-memory dataset + all financial aggregation logic.
 // Frontend-only: no network, no backend. Every figure below is computed
@@ -65,22 +67,8 @@ function propertyName(type, project, i) {
 }
 
 function buildData() {
-  const agents = AGENT_NAMES.slice(0, 2).map((n, i) => ({
-    id: 'AG-' + String(i + 1).padStart(3, '0'),
-    name: n,
-    office: OFFICES[i % OFFICES.length],
-    joined: dstr(TODAY),
-    rate: 2.0,
-  }));
-
-  const employees = EMP.slice(0, 2).map((e, i) => ({
-    id: 'EMP-' + String(i + 1).padStart(3, '0'),
-    name: e[0],
-    dept: e[1],
-    basic: 0,
-    office: OFFICES[i % OFFICES.length],
-  }));
-
+  const agents = [];
+  const employees = [];
   const properties = [];
   const sales = [];
   const commissions = [];
@@ -93,8 +81,9 @@ function buildData() {
   const zakatSummary = { calculated: 0, paid: 0, remaining: 0, zakatable: 0, eligibleAssets: 0, rate: 2.5 };
   const audit = [];
   const costSheets = [];
+  const invoices = [];
 
-  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices: [] };
+  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices };
 }
 
 
@@ -430,7 +419,7 @@ export const ROLES = {
   Manager: { label: 'Manager', deny: ['salaries', 'tax', 'zakat', 'pnl', 'cashflow', 'payables', 'audit'] },
   Agent: { label: 'Agent', deny: ['salaries', 'tax', 'zakat', 'pnl', 'cashflow', 'payables', 'audit', 'expenses', 'bills', 'purchases', 'profit', 'agents', 'receivables', 'transactions'] },
 };
-export const AGENT_SELF = DATA.agents[0];
+export const AGENT_SELF = DATA.agents[0] || { id: 'AG-001', name: 'Agent', office: OFFICES[0], rate: 2.0 };
 
 export function csv(columns, rows) {
   const esc = (v) => {
@@ -591,10 +580,7 @@ const nextId = (arr, prefix, pad) =>
   prefix + String(arr.reduce((m, x) => Math.max(m, +String(x.id).replace(/\D/g, '') || 0), 0) + 1).padStart(pad, '0');
 
 export const USERS = [
-  { id: 'U-01', name: 'M. Salman', role: 'CEO', title: 'Chief Executive', initials: 'MS', office: OFFICES[0] },
-  { id: 'U-02', name: 'Faisal Nadeem', role: 'Accountant', title: 'Head of Accounts', initials: 'FN', office: OFFICES[0] },
-  { id: 'U-03', name: 'Omar Farooq', role: 'Manager', title: 'Sales Manager', initials: 'OF', office: OFFICES[1] },
-  { id: 'U-04', name: AGENT_SELF.name, role: 'Agent', title: 'Property Consultant', initials: AGENT_SELF.name.split(' ').map((x) => x[0]).join(''), office: AGENT_SELF.office, agentId: AGENT_SELF.id },
+  { id: 'U-01', name: 'Admin', role: 'CEO', title: 'Administrator', initials: 'AD', office: OFFICES[0] },
 ];
 
 function recomputeProperty(p) {
@@ -619,6 +605,7 @@ export function addProperty(v) {
     manual: true,
   });
   DATA.properties.push(p);
+  saveRecordToFirestore('properties', p.id, p);
   if (p.paid > 0) addPayment({
     date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: p.paid,
     party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer',
@@ -632,14 +619,14 @@ export function addSale(v) {
   if (!p) throw new Error('Unknown property');
   const agent = DATA.agents.find((a) => a.id === v.agentId) || DATA.agents[0];
   const price = +v.sellingPrice, received = Math.min(+v.received || 0, price);
-  const pctRate = v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
+  const pctRate = v.commissionPct === '' || v.commissionPct == null ? (agent ? agent.rate : 2.0) : +v.commissionPct;
   const commission = Math.round((price * pctRate) / 100);
   const saleTax = Math.round(+v.tax || price * 0.01);
   const other = +v.otherExpenses || 0;
   const dueDate = addDays(parseDate(v.date), 60);
   const s = {
     id: nextId(DATA.sales, 'S-', 4), propertyId: p.id, property: p.name,
-    buyer: v.buyer, agentId: agent.id, agent: agent.name, date: parseDate(v.date),
+    buyer: v.buyer, agentId: agent ? agent.id : 'AG-001', agent: agent ? agent.name : 'Direct Sale', date: parseDate(v.date),
     sellingPrice: price, received, outstanding: Math.max(0, price - received), dueDate,
     method: v.method, commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
     netRevenue: price - commission - saleTax - other,
@@ -651,12 +638,17 @@ export function addSale(v) {
   };
   DATA.sales.push(s);
   p.status = 'Sold';
-  DATA.commissions.push({
-    id: nextId(DATA.commissions, 'CM-', 4), agentId: agent.id, agent: agent.name,
+  saveRecordToFirestore('sales', s.id, s);
+  saveRecordToFirestore('properties', p.id, p);
+
+  const cm = {
+    id: nextId(DATA.commissions, 'CM-', 4), agentId: agent ? agent.id : 'AG-001', agent: agent ? agent.name : 'Direct Sale',
     propertyId: p.id, property: p.name, counterparty: s.buyer, txnType: 'Sale', date: s.date,
     pct: pctRate, amount: commission, paid: 0, outstanding: commission, paidDate: '—',
     status: 'Unpaid', office: p.office, manual: true,
-  });
+  };
+  DATA.commissions.push(cm);
+  saveRecordToFirestore('commissions', cm.id, cm);
   if (received > 0) addPayment({
     date: v.date, dir: 'in', category: 'Property Sale', amount: received,
     party: s.buyer, propertyId: p.id, agentId: agent.id, office: p.office,
@@ -675,6 +667,7 @@ export function addExpense(v) {
     status: paid >= amount ? 'Paid' : paid === 0 ? 'Unpaid' : 'Partially Paid',
   };
   DATA.expenses.push(e);
+  saveRecordToFirestore('expenses', e.id, e);
   if (paid > 0) addPayment({
     date: v.date, dir: 'out', category: v.group, amount: paid, party: v.vendor,
     office: v.office, method: v.method, note: e.note,
@@ -695,11 +688,14 @@ export function addPayment(v) {
   };
   DATA.payments.push(t);
   DATA.payments.sort((a, b) => b.date - a.date);
-  DATA.audit.unshift({
+  saveRecordToFirestore('payments', t.id, t);
+  const au = {
     id: nextId(DATA.audit, 'AU-', 4), date: t.date, txnId: t.id, action: 'Created',
     user: v.createdBy || 'Manual entry', entity: t.category, prevAmount: null,
     newAmount: t.amount, note: 'Created through manual entry form', manual: true,
-  });
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
   return t;
 }
 
@@ -708,11 +704,14 @@ export function voidPayment(id, user) {
   const t = DATA.payments.find((p) => p.id === id);
   if (!t || t.status === 'Voided') return null;
   t.status = 'Voided';
-  DATA.audit.unshift({
+  saveRecordToFirestore('payments', t.id, t);
+  const au = {
     id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: t.id, action: 'Voided',
     user: user || 'Manual entry', entity: t.category, prevAmount: t.amount, newAmount: 0,
     note: 'Voided — original record retained', manual: true,
-  });
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
   return t;
 }
 
@@ -753,8 +752,9 @@ export function addInvoice(v) {
     manual: true,
   };
   DATA.invoices.push(inv);
+  saveRecordToFirestore('invoices', inv.id, inv);
 
-  DATA.audit.unshift({
+  const au = {
     id: nextId(DATA.audit, 'AU-', 4),
     date: inv.receiptDate,
     txnId: inv.id,
@@ -765,7 +765,9 @@ export function addInvoice(v) {
     newAmount: inv.totalAmount,
     note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.buyerName}`,
     manual: true,
-  });
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
   return inv;
 }
 
@@ -1071,6 +1073,7 @@ export function saveCostSheet(raw, user) {
   } else {
     DATA.costSheets.unshift(cs);
   }
+  saveRecordToFirestore('costSheets', cs.id, cs);
 
   // Synchronize with property if matched
   const p = DATA.properties.find((x) => x.id === cs.propertyId);
@@ -1084,6 +1087,7 @@ export function saveCostSheet(raw, user) {
     };
     p.totalCost = cs.totalLandedCost;
     p.currentValue = cs.sellingPrice;
+    saveRecordToFirestore('properties', p.id, p);
     if (cs.status === 'Sold') {
       const sale = DATA.sales.find((s) => s.propertyId === p.id);
       if (sale) {
@@ -1092,11 +1096,12 @@ export function saveCostSheet(raw, user) {
         sale.grossProfit = cs.grossProfit;
         sale.netProfit = cs.netProfit;
         sale.tax = cs.tax236C;
+        saveRecordToFirestore('sales', sale.id, sale);
       }
     }
   }
 
-  DATA.audit.unshift({
+  const au = {
     id: nextId(DATA.audit, 'AU-', 4),
     date: TODAY,
     txnId: cs.id,
@@ -1107,7 +1112,9 @@ export function saveCostSheet(raw, user) {
     newAmount: cs.netProfit,
     note: `Cost Sheet ${cs.id} (${cs.name}) ${idx >= 0 ? 'updated' : 'created'} with net margin ${cs.netMarginPct.toFixed(1)}%`,
     manual: true,
-  });
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
 
   return cs;
 }

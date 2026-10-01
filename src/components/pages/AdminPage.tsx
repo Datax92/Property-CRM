@@ -1,11 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
 import { Icon } from '../Icons';
 import { NAV, PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
+import { getFirebaseFirestore } from '../../lib/firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 export function AdminPage() {
   const {
@@ -13,11 +15,27 @@ export function AdminPage() {
     effectiveFilters: f,
     range: r,
     user,
-    setUser,
     voidPayment,
     openModal,
     numbers,
   } = useApp();
+
+  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    const db = getFirebaseFirestore();
+    if (!db) return;
+    try {
+      const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+        const uList: any[] = [];
+        snap.forEach((d) => uList.push({ id: d.id, ...d.data() }));
+        if (uList.length) setRegisteredUsers(uList);
+      });
+      return () => unsub();
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const meta = PAGE_META[`admin/${tab}`] || { t: 'Admin' };
 
@@ -69,30 +87,29 @@ export function AdminPage() {
     return (
       <PageShell title={meta.t} u={meta.u} p={meta.p} tools={false}>
         <div className="grid c3" style={{ marginBottom: '16px' }}>
-          {M.USERS.map((u: any) => (
-            <button
-              key={u.id}
-              type="button"
+          {(registeredUsers.length ? registeredUsers : [user]).map((u: any) => (
+            <div
+              key={u.id || u.uid}
               className="panel"
-              onClick={() => setUser(u)}
-              style={{ textAlign: 'left', cursor: 'pointer' }}
+              style={{ textAlign: 'left' }}
             >
               <div className="panel-b" style={{ display: 'flex', gap: '11px', alignItems: 'center' }}>
                 <div className="rolestrip" style={{ margin: 0, padding: 0, border: 0, background: 'none' }}>
-                  <div className="ini">{u.initials}</div>
+                  <div className="ini">{u.initials || (u.name ? u.name.slice(0, 2).toUpperCase() : 'U')}</div>
                 </div>
                 <div>
                   <div style={{ fontWeight: 700 }}>
                     {u.name}
-                    {u.id === user.id && <span className="tag new"> signed in</span>}
+                    {u.id === user.id && <span className="tag ok"> you</span>}
                   </div>
+                  {u.email && <div className="vs" style={{ color: 'var(--brand)' }}>{u.email}</div>}
                   <div className="vs">
-                    {u.title} · {u.role}
+                    {u.title || u.role} · <span className="tag mute">{u.role}</span>
                   </div>
                   <div className="vs">{u.office}</div>
                 </div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
 

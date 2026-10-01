@@ -65,6 +65,7 @@ interface AppContextType {
   exportCsv: () => void;
   exportXls: () => void;
   print: () => void;
+  refreshData: () => void;
 }
 
 
@@ -802,6 +803,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toast('Excel file downloaded');
   }, [page, tab, range, user.name, role, toast]);
 
+  const refreshData = useCallback(() => {
+    setDataVersion((v) => v + 1);
+  }, []);
+
   const print = useCallback(() => {
     if (typeof window !== 'undefined') window.print();
   }, []);
@@ -864,6 +869,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         exportCsv,
         exportXls,
         print,
+        refreshData,
       }}
 
     >

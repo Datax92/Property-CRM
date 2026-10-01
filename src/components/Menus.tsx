@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Icon } from './Icons';
 import { NAV } from '../lib/constants';
 import * as M from '../lib/re-data';
@@ -47,6 +48,8 @@ export function Menus() {
 
   let inner: React.ReactNode = null;
 
+  const { signOut } = useAuth();
+
   if (id === 'account') {
     inner = (
       <>
@@ -67,22 +70,15 @@ export function Menus() {
           </span>
         </button>
         <div className="sep" />
-        <h5>Switch account</h5>
-        {M.USERS.map((u: any) => (
-          <button
-            key={u.id}
-            type="button"
-            className={u.id === user.id ? 'on' : ''}
-            onClick={() => setUser(u)}
-          >
-            <Icon name="user" />
-            <span className="row2">
-              {u.name}
-              <small>{u.role}</small>
-            </span>
-          </button>
-        ))}
-        <div className="sep" />
+        <button
+          type="button"
+          onClick={() => {
+            goto('account');
+            closeMenu();
+          }}
+        >
+          <Icon name="user" /> My account &amp; permissions
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -91,6 +87,17 @@ export function Menus() {
           }}
         >
           <Icon name="shield" /> Users &amp; roles
+        </button>
+        <div className="sep" />
+        <button
+          type="button"
+          onClick={async () => {
+            closeMenu();
+            await signOut();
+          }}
+          style={{ color: 'var(--bad)' }}
+        >
+          <Icon name="x" /> Sign out
         </button>
       </>
     );
