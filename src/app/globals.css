@@ -648,687 +648,409 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 }
 
 /* ==========================================================================
-   LUXURY ANIMATED LOGIN PORTAL STYLES (ELEVATED & URDU TYPOGRAPHY)
+   LEADWAY CRM LOGIN PORTAL STYLES (MINT/TEAL MODERN SAAS AESTHETIC)
    ========================================================================== */
-.login-super-wrap {
+.leadway-login-screen {
   min-height: 100vh;
+  width: 100%;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #090b0e;
+  background-color: #f1f7f5;
+  background-image: 
+    radial-gradient(at 0% 0%, #e6f5ef 0px, transparent 55%),
+    radial-gradient(at 100% 100%, #e5f4ee 0px, transparent 55%),
+    radial-gradient(at 50% 50%, #f6faf8 0px, #eef6f3 100%);
   overflow: hidden;
   padding: 32px 16px;
-  font-family: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #1e293b;
 }
 
-/* Ambient Animated Lighting */
-.ambient-background {
+/* Background Animated Isometric Teal Grid Mesh on Left */
+.leadway-bg-grid-container {
   position: absolute;
-  inset: 0;
+  left: -80px;
+  top: 50%;
+  width: 820px;
+  height: 820px;
   pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
+  z-index: 1;
+  opacity: 0.85;
+  transform: translateY(-50%) perspective(1100px) rotateX(26deg) rotateY(-18deg) rotateZ(-5deg);
+  animation: leadwayGridFloat 14s ease-in-out infinite alternate;
 }
 
-.ambient-orb {
+@keyframes leadwayGridFloat {
+  0% {
+    transform: translateY(-50%) perspective(1100px) rotateX(26deg) rotateY(-18deg) rotateZ(-5deg) translateY(0);
+  }
+  100% {
+    transform: translateY(-50%) perspective(1100px) rotateX(22deg) rotateY(-14deg) rotateZ(-3deg) translateY(-18px);
+  }
+}
+
+.leadway-grid-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.grid-lines-group line {
+  stroke: #86cebc;
+  stroke-width: 1.4;
+  opacity: 0.55;
+}
+
+/* Soft ambient glow behind the card */
+.leadway-ambient-glow {
   position: absolute;
+  width: 680px;
+  height: 680px;
   border-radius: 50%;
-  pointer-events: none;
-}
-
-.orb-1 {
-  width: 650px;
-  height: 650px;
-  top: -140px;
-  left: -120px;
-  background: radial-gradient(circle, rgba(212, 175, 55, 0.2) 0%, rgba(180, 130, 30, 0.06) 50%, transparent 75%);
-  filter: blur(80px);
-  animation: floatOrb1 20s ease-in-out infinite;
-}
-
-.orb-2 {
-  width: 780px;
-  height: 780px;
-  bottom: -180px;
-  right: -160px;
-  background: radial-gradient(circle, rgba(24, 75, 150, 0.25) 0%, rgba(15, 35, 80, 0.08) 55%, transparent 75%);
-  filter: blur(100px);
-  animation: floatOrb2 24s ease-in-out infinite;
-}
-
-.orb-3 {
-  width: 480px;
-  height: 480px;
-  top: 35%;
-  right: 15%;
-  background: radial-gradient(circle, rgba(16, 140, 100, 0.14) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(135, 219, 196, 0.28) 0%, rgba(185, 237, 222, 0.12) 48%, transparent 70%);
   filter: blur(75px);
-  animation: floatOrb3 16s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
-@keyframes floatOrb1 {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(60px, -45px) scale(1.15); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-@keyframes floatOrb2 {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-55px, 60px) scale(1.2); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-@keyframes floatOrb3 {
-  0% { transform: translate(0, 0) scale(1); opacity: 0.35; }
-  50% { transform: translate(40px, 35px) scale(0.9); opacity: 0.7; }
-  100% { transform: translate(0, 0) scale(1); opacity: 0.35; }
-}
-
-.ambient-grid-overlay {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 52px 52px;
-  mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 30%, transparent 85%);
-  -webkit-mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 1) 30%, transparent 85%);
-}
-
-.ambient-scanline {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.4), transparent);
-  animation: scanLine 8s linear infinite;
-  opacity: 0.6;
-}
-
-@keyframes scanLine {
-  0% { top: -5%; opacity: 0; }
-  10% { opacity: 0.6; }
-  90% { opacity: 0.6; }
-  100% { top: 105%; opacity: 0; }
-}
-
-/* Elevated Glassmorphic Card Container */
-.login-container {
+/* Main Centered Pure White Card */
+.leadway-card {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 580px;
-  margin: 0 auto;
-}
-
-.login-card-elevated {
-  background: rgba(16, 20, 26, 0.84);
-  backdrop-filter: blur(32px) saturate(190%);
-  -webkit-backdrop-filter: blur(32px) saturate(190%);
-  border: 1px solid rgba(212, 175, 55, 0.22);
-  border-radius: 22px;
-  padding: 38px 36px 30px;
+  max-width: 440px;
+  background: #ffffff;
+  border-radius: 28px;
+  padding: 38px 36px 32px;
   box-shadow:
-    0 35px 110px -15px rgba(0, 0, 0, 0.9),
-    0 0 50px rgba(212, 175, 55, 0.1),
-    inset 0 1px 1px rgba(255, 255, 255, 0.15);
-  animation: cardEntrance 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    0 24px 64px -12px rgba(25, 75, 65, 0.12),
+    0 4px 16px -2px rgba(25, 75, 65, 0.04),
+    0 0 1px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(220, 238, 232, 0.85);
+  animation: leadwayCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes cardEntrance {
-  0% { opacity: 0; transform: translateY(20px) scale(0.97); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes leadwayCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* Brand Header */
-.brand-badge-header {
+/* Brand Row & Logo */
+.leadway-brand-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.brand-logo-glow {
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(212, 175, 55, 0.08);
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  box-shadow: 0 0 24px rgba(212, 175, 55, 0.22);
+.leadway-logo-mark {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.brand-titles {
-  flex: 1;
-}
-
-.brand-row-main {
+.leadway-brand-text {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
 }
 
-.brand-row-main h1 {
-  font-size: 23px;
+.leadway-brand-text h2 {
+  font-size: 22px;
   font-weight: 800;
-  color: #ffffff;
+  color: #111827;
   margin: 0;
   letter-spacing: -0.4px;
 }
 
-.urdu-gold-pill {
-  font-size: 13px;
-  font-weight: 700;
-  color: #dfba5c;
-  background: rgba(212, 175, 55, 0.14);
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  border-radius: 20px;
-  padding: 2px 10px;
-  display: inline-block;
-  font-family: Tahoma, 'Noto Nastaliq Urdu', sans-serif;
+.leadway-brand-text span {
+  font-size: 10px;
+  font-weight: 800;
+  color: #2a8b79;
+  letter-spacing: 2px;
+  margin-top: 3px;
+  text-transform: uppercase;
 }
 
-.brand-sub-title {
-  font-size: 12px;
-  color: #8e98a5;
-  margin: 4px 0 0;
-  line-height: 1.4;
-}
-
-.urdu-sub-txt {
-  display: block;
+/* Admin Sign-in Pill Badge */
+.leadway-admin-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 auto 12px;
+  color: #267e6f;
   font-size: 11px;
-  color: #c9ab62;
-  margin-top: 2px;
-  font-family: Tahoma, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.8px;
 }
 
-.luxury-gold-line {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.5) 30%, rgba(212, 175, 55, 0.9) 50%, rgba(212, 175, 55, 0.5) 70%, transparent);
-  margin: 18px 0 22px;
+/* Card Titles */
+.leadway-card-titles {
+  text-align: center;
+  margin-bottom: 22px;
 }
 
-/* Luxury Segmented Tabs */
-.luxury-tab-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
+.leadway-card-titles h3 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 6px;
+  letter-spacing: -0.3px;
+}
+
+.leadway-sub-en {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 2px;
+}
+
+.leadway-sub-ur {
+  font-size: 12px;
+  color: #8898a8;
+  margin: 0;
+  font-family: Tahoma, 'Noto Nastaliq Urdu', sans-serif;
+  direction: rtl;
+}
+
+/* Role Selector Segmented Pill */
+.leadway-role-pill {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 14px;
   padding: 4px;
+  display: flex;
   gap: 4px;
   margin-bottom: 22px;
 }
 
-.luxury-tab-item {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  padding: 9px 12px;
-  cursor: pointer;
-  transition: all 0.22s ease;
-  text-align: center;
-  color: #8c96a3;
-}
-
-.luxury-tab-item:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.luxury-tab-item.active {
-  background: linear-gradient(180deg, rgba(212, 175, 55, 0.22) 0%, rgba(212, 175, 55, 0.08) 100%);
-  color: #f7e7b4;
-  border-color: rgba(212, 175, 55, 0.4);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.tab-en {
-  display: block;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-.tab-ur {
-  display: block;
-  font-size: 11px;
-  opacity: 0.85;
-  margin-top: 1px;
-  font-family: Tahoma, sans-serif;
-}
-
-/* Forgot Password Header */
-.forgot-header-bar {
-  margin-bottom: 20px;
-}
-
-.btn-back-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #dfba5c;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 10px;
-}
-
-.btn-back-link:hover {
-  text-decoration: underline;
-}
-
-.forgot-header-bar h3 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 4px;
-}
-
-.forgot-header-bar p {
-  font-size: 12px;
-  color: #8e98a5;
-  margin: 0;
-}
-
-/* Status Banners */
-.status-banner {
+.role-tab-btn {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border-radius: 11px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.role-tab-btn:hover:not(.active) {
+  color: #1e293b;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.role-tab-btn.active {
+  background: #ffffff;
+  color: #287a6c;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+/* Error & Info Messages */
+.leadway-error-msg {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
   border-radius: 10px;
+  padding: 9px 14px;
   font-size: 12px;
   margin-bottom: 16px;
-  line-height: 1.45;
+  text-align: center;
+  line-height: 1.4;
+  animation: leadwayCardIn 0.3s ease;
 }
 
-.success-banner {
-  background: rgba(16, 140, 100, 0.15);
-  border: 1px solid rgba(16, 140, 100, 0.4);
-  color: #4ade80;
-}
-
-.error-banner {
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  color: #f87171;
-}
-
-.banner-icon {
-  flex-shrink: 0;
-}
-
-/* Dual Label Layout */
-.form-group-lux {
-  margin-bottom: 15px;
-}
-
-.label-dual {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+.leadway-info-msg {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  border-radius: 10px;
+  padding: 9px 14px;
   font-size: 12px;
+  margin-bottom: 16px;
+  text-align: center;
+  line-height: 1.4;
+  animation: leadwayCardIn 0.3s ease;
+}
+
+/* Form & Inputs */
+.leadway-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.leadway-field-group {
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.leadway-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 7px;
+  font-size: 13px;
   font-weight: 600;
-  color: #d1d5db;
-  margin-bottom: 6px;
+  color: #1e293b;
 }
 
-.ur-hint {
+.leadway-ur-label {
   font-size: 11px;
-  color: #c9ab62;
-  font-family: Tahoma, sans-serif;
   font-weight: 500;
+  color: #7f8fa4;
+  font-family: Tahoma, 'Noto Nastaliq Urdu', sans-serif;
 }
 
-/* Inputs with Icons */
-.input-with-icon {
+.leadway-input-wrap {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
-.input-leading-icon {
+.leadway-icon-left {
   position: absolute;
-  left: 12px;
-  color: #8c96a3;
-  pointer-events: none;
+  left: 14px;
   display: flex;
   align-items: center;
+  pointer-events: none;
+  color: #7c8ba1;
 }
 
-.lux-input {
+.leadway-input {
   width: 100%;
-  background: rgba(8, 10, 14, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
-  padding: 11px 14px 11px 36px;
-  font-size: 13px;
-  color: #ffffff;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
-}
-
-.lux-input:focus {
-  border-color: #d4af37;
+  height: 48px;
+  background: #edf3fb;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  padding: 0 16px 0 42px;
+  font-size: 14px;
+  color: #1e293b;
   outline: none;
-  box-shadow:
-    0 0 0 3px rgba(212, 175, 55, 0.22),
-    0 6px 16px rgba(0, 0, 0, 0.35),
-    inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
-.lux-select {
-  padding-left: 14px;
+.leadway-input.has-toggle {
+  padding-right: 42px;
 }
 
-.input-trailing-action {
+.leadway-input:focus {
+  background: #f3f7fd;
+  border-color: #358376;
+  box-shadow: 0 0 0 3px rgba(53, 131, 118, 0.16);
+}
+
+.leadway-input::placeholder {
+  color: #9aa9bc;
+}
+
+.leadway-icon-right {
   position: absolute;
   right: 12px;
   background: none;
   border: none;
-  padding: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: #dfba5c;
+  padding: 6px;
   cursor: pointer;
-}
-
-.input-trailing-action:hover {
-  text-decoration: underline;
-}
-
-.link-subtle {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #dfba5c;
-  font-size: 11px;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.link-subtle:hover {
-  text-decoration: underline;
-}
-
-/* Role Selector Grid */
-.role-selector-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.role-option-card {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
-  padding: 9px 10px;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  user-select: none;
-}
-
-.role-option-card:hover {
-  background: rgba(212, 175, 55, 0.05);
-  border-color: rgba(212, 175, 55, 0.35);
-}
-
-.role-option-card.selected {
-  background: rgba(212, 175, 55, 0.12);
-  border-color: #d4af37;
-  box-shadow: 0 0 16px rgba(212, 175, 55, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-}
-
-.role-card-top {
+  color: #7c8ba1;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 3px;
+  border-radius: 8px;
+  transition: color 0.15s ease;
 }
 
-.role-en-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
+.leadway-icon-right:hover {
+  color: #358376;
 }
 
-.role-ur-pill {
-  font-size: 9px;
-  color: #dfba5c;
-  background: rgba(212, 175, 55, 0.15);
-  padding: 1px 5px;
-  border-radius: 10px;
-  font-family: Tahoma, sans-serif;
-}
-
-.role-desc {
-  display: block;
-  font-size: 10px;
-  color: #8c96a3;
-  line-height: 1.35;
-}
-
-/* Elevated Primary Action Button */
-.btn-lux-elevated {
+/* Elevated Teal Submit Button */
+.leadway-submit-btn {
   width: 100%;
+  height: 48px;
+  margin-top: 18px;
+  background: #358376;
+  color: #ffffff;
   border: none;
-  border-radius: 11px;
-  padding: 13px 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  margin-top: 10px;
-  background: linear-gradient(135deg, #f7dc8a 0%, #d4af37 45%, #b58d22 100%);
-  color: #120e04;
-  box-shadow:
-    0 10px 28px -4px rgba(212, 175, 55, 0.45),
-    0 2px 6px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 20px -3px rgba(53, 131, 118, 0.38);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.btn-lux-elevated:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow:
-    0 16px 36px -4px rgba(212, 175, 55, 0.65),
-    0 4px 10px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+.leadway-submit-btn:hover:not(:disabled) {
+  background: #2c7266;
+  transform: translateY(-1.5px);
+  box-shadow: 0 12px 24px -4px rgba(53, 131, 118, 0.48);
 }
 
-.btn-lux-elevated:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow:
-    0 6px 18px rgba(212, 175, 55, 0.3),
-    inset 0 1px 0 rgba(0, 0, 0, 0.2);
+.leadway-submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(53, 131, 118, 0.3);
 }
 
-.btn-lux-elevated:disabled {
+.leadway-submit-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-.btn-content-dual {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.ur-inline {
-  font-size: 12px;
-  opacity: 0.85;
-  font-family: Tahoma, sans-serif;
-  font-weight: 600;
-}
-
-.loading-spinner-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.spinner-mini {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 0, 0, 0.25);
-  border-top-color: #000;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-/* Divider */
-.lux-divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  margin: 18px 0 14px;
-}
-
-.lux-divider::before,
-.lux-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.lux-divider span {
-  padding: 0 12px;
-  color: #707b8a;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-}
-
-/* Google Elevated Button */
-.btn-google-elevated {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 11px 18px;
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-}
-
-.btn-google-elevated:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-
-.btn-google-elevated:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.google-ur {
-  font-size: 11px;
-  color: #dfba5c;
-  font-family: Tahoma, sans-serif;
-  opacity: 0.9;
-}
-
-/* Footer & Security Bar */
-.lux-footer-bar {
+/* Card Footer */
+.leadway-card-footer {
   margin-top: 22px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-}
-
-.security-tag-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #717d8e;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.sec-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 8px #10b981;
-}
-
-.sec-ur {
-  color: #dfba5c;
-  font-family: Tahoma, sans-serif;
-  font-size: 10px;
-}
-
-.btn-settings-pill {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 4px 12px;
-  font-size: 11px;
-  color: #8c96a3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-settings-pill:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
-  border-color: rgba(212, 175, 55, 0.3);
-}
-
-/* Config Accordion Box */
-.lux-config-box {
-  margin-top: 14px;
-  padding: 14px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(212, 175, 55, 0.25);
-  border-radius: 12px;
-}
-
-.config-box-head h4 {
+  text-align: center;
   font-size: 13px;
-  font-weight: 700;
-  color: #dfba5c;
-  margin: 0 0 2px;
+  color: #64748b;
 }
 
-.config-box-head p {
+.leadway-card-footer p {
+  margin: 0 0 4px;
+}
+
+.leadway-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #358376;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: text-decoration 0.15s ease;
+}
+
+.leadway-link-btn:hover {
+  text-decoration: underline;
+}
+
+.leadway-footer-note {
+  display: block;
   font-size: 11px;
-  color: #8e98a5;
-  margin: 0 0 10px;
-}
-
-.lux-input.sm {
-  padding: 7px 10px;
-  font-size: 12px;
-}
-
-.lux-input.mono {
-  font-family: monospace;
+  color: #94a3b8;
 }
 
 
