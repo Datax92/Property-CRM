@@ -1,4 +1,11 @@
 import React from 'react';
+import { COMPANY } from '../lib/re-data';
+
+const COMPANY_INITIALS = COMPANY.split(/\s+/)
+  .filter((w) => /^[A-Za-z]/.test(w))
+  .slice(0, 2)
+  .map((w) => w[0].toUpperCase())
+  .join('');
 
 interface IconProps {
   name: string;
@@ -181,6 +188,13 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M5.7 7V5a2.3 2.3 0 0 1 4.6 0v2" />
         </svg>
       );
+    case 'history':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9L2.6 5.6" />
+          <path d="M2.6 2.8v2.8h2.8M8 5.2V8l2 1.4" />
+        </svg>
+      );
     case 'burger':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -203,7 +217,7 @@ export function LogoMark() {
       </g>
       <circle cx="20" cy="20" r="9.5" fill="#08432F" stroke="#E0951B" strokeWidth="1.2" />
       <text x="20" y="24.2" textAnchor="middle" fontFamily="Fraunces, Georgia, serif" fontSize="10.5" fontWeight="700" fill="#FAF6EC">
-        ME
+        {COMPANY_INITIALS}
       </text>
     </svg>
   );

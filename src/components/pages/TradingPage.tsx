@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, Tag, PrintHead } from '../Shared';
+import { PageShell, SummaryKpis, DataTable, PrintHead } from '../Shared';
+import { ledgersReady } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
@@ -14,7 +15,6 @@ export function TradingPage() {
     effectiveFilters: f,
     numbers,
     activeCostSheetId,
-    setActiveCostSheetId,
     openCostSheet,
   } = useApp();
 
@@ -157,12 +157,9 @@ export function TradingPage() {
           <button
             type="button"
             className="btn pri"
-            onClick={() => {
-              setActiveCostSheetId('new');
-              openCostSheet('new');
-            }}
+            onClick={() => openCostSheet('new')}
           >
-            <Icon name="calculator" /> + New Cost Sheet
+            <Icon name="calculator" /> New Cost Sheet
           </button>
         }
       >
@@ -296,11 +293,11 @@ function PrintableCostSheetDoc({
               boxShadow: '0 2px 6px rgba(4, 120, 87, 0.25)',
             }}
           >
-            M
+            {M.COMPANY[0].toUpperCase()}
           </div>
           <div>
             <div style={{ fontSize: '17px', fontWeight: 900, color: '#064e3b', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              MERIDIAN ESTATES (PVT) LTD
+              {M.COMPANY.toUpperCase()}
             </div>
             <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600, marginTop: '2px' }}>
               Real Estate Trading &amp; Portfolio RMS · Financial Deal Division
@@ -315,7 +312,7 @@ function PrintableCostSheetDoc({
             <span>#{sheet.id || 'NEW'}</span>
           </div>
           <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', fontWeight: 500 }}>
-            Issued: <b>{M.fmtDate(M.TODAY)}</b> · Islamabad, PK
+            Issued: <b>{M.fmtDate(M.TODAY)}</b>
           </div>
         </div>
       </div>
@@ -661,17 +658,19 @@ function PrintableCostSheetDoc({
 // SIMPLE, DIRECT COST SHEET (Matches property bussiness erp software.xlsx)
 // ---------------------------------------------------------------------------
 function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
-  const { numbers, toast, goto } = useApp();
+  const { numbers, toast, setActiveCostSheetId } = useApp();
   const allSheets: CostSheet[] = (M.DATA as any).costSheets || [];
 
-  const blankDeal = () =>
+  const blankDeal = (over: Record<string, any> = {}) =>
     M.calculateCostSheet({
       id: '',
       name: '',
-      project: 'DHA Phase 6',
-      city: 'Lahore',
+      project: M.PROJECTS[0].name,
+      city: M.PROJECTS[0].city,
       type: 'Residential Plot',
-      size: '1 Kanal',
+      size: '',
+      status: 'Active Deal',
+      office: M.OFFICES[0],
       netBuyCost: 0,
       ndcFee: 0,
       stampDuty: 0,
@@ -697,28 +696,54 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
       zakat: 0,
       charity: 0,
       officeExpenseDeduction: 0,
+      ...over,
     });
 
-  // Default to active sheet or clean blank deal
-  const defaultSheet = useMemo(() => {
-    if (activeCostSheetId === 'new') {
-      return blankDeal();
-    }
+  // The deal asked for: a saved sheet (by its own ID or its property's), else a new sheet
+  // started from that property's purchase, else a blank one.
+  const wanted = activeCostSheetId && activeCostSheetId !== 'new' ? activeCostSheetId : null;
+  const target = wanted ? allSheets.find((s) => s.id === wanted || s.propertyId === wanted) : null;
+  const targetProp = wanted && !target ? M.DATA.properties.find((p: any) => p.id === wanted) : null;
 
-    if (activeCostSheetId) {
-      const found = allSheets.find((s) => s.id === activeCostSheetId || s.propertyId === activeCostSheetId);
-      if (found) return found;
+  const initialSheet = () => {
+    if (target) return target;
+    if (targetProp) {
+      // A property that is already sold brings its actual sale price and date.
+      const sale = M.DATA.sales.find((s: any) => s.propertyId === targetProp.id);
+      const exit = sale ? sale.sellingPrice : targetProp.currentValue;
+      return blankDeal({
+        propertyId: targetProp.id,
+        name: targetProp.name,
+        project: targetProp.project,
+        city: targetProp.location,
+        type: targetProp.type,
+        size: targetProp.size,
+        office: targetProp.office,
+        seller: targetProp.seller,
+        purchaseDate: targetProp.purchaseDate,
+        netBuyCost: targetProp.price,
+        tax236K: Math.round(targetProp.price * 0.03),
+        grossSalePrice: exit,
+        tax236C: Math.round(exit * 0.03),
+        saleDate: sale ? sale.date : null,
+        buyer: sale ? sale.buyer : undefined,
+        status: targetProp.status === 'Sold' ? 'Sold' : 'Active Deal',
+      });
     }
-
+    if (activeCostSheetId === 'new') return blankDeal();
     return allSheets[0] || blankDeal();
-  }, [activeCostSheetId, allSheets]);
+  };
 
-  const [form, setForm] = useState<any>(defaultSheet);
+  const [form, setForm] = useState<any>(initialSheet);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
+  // Reload the form only when a different deal is asked for (or it first arrives from the
+  // server) — never just because the ledger refreshed, which would wipe unsaved edits.
+  const loadKey = `${activeCostSheetId || ''}|${target ? target.id : targetProp ? 'property' : allSheets.length ? 'first' : 'blank'}`;
   useEffect(() => {
-    setForm(defaultSheet);
-  }, [defaultSheet]);
+    setForm(initialSheet());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadKey]);
 
   // Recalculate
   const liveCostSheet: CostSheet = useMemo(() => {
@@ -742,13 +767,8 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   };
 
   const handleSelectProperty = (id: string) => {
-    if (id === 'new') {
-      goto('trading/calculator');
-      setForm(blankDeal());
-      return;
-    }
-    const found = allSheets.find((s) => s.id === id || s.propertyId === id);
-    if (found) setForm(found);
+    setActiveCostSheetId(id);
+    if (id === 'new') setForm(blankDeal());
   };
 
   const handleResetToExcelTemplate = () => {
@@ -792,10 +812,21 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   };
 
   const handleSave = () => {
+    if (!String(form.name || '').trim()) {
+      toast('Enter the property name under “Deal details” before saving');
+      return;
+    }
+    if (!ledgersReady()) {
+      toast('Your records are still loading — please try again in a moment');
+      return;
+    }
     const saved = M.saveCostSheet(liveCostSheet);
     setForm(saved);
+    setActiveCostSheetId(saved.id);
     toast(`Cost Sheet #${saved.id} saved!`);
   };
+
+  const dateValue = (d: any) => (d ? M.dateInput(M.parseDate(d)) : '');
 
   const handlePrint = () => {
     if (typeof window !== 'undefined') window.print();
@@ -826,7 +857,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
             <select
               className="fldsel"
               style={{ minWidth: '240px', fontWeight: 600, height: '30px', padding: '2px 8px' }}
-              value={liveCostSheet.id || ''}
+              value={liveCostSheet.id || 'new'}
               onChange={(e) => handleSelectProperty(e.target.value)}
             >
               <option value="new">➕ New Blank Deal</option>
@@ -865,6 +896,79 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
             </button>
           </div>
         </div>
+
+      {/* DEAL DETAILS — which property this sheet is for */}
+      <div className="panel" style={{ marginBottom: '8px' }} data-noprint="1">
+        <div className="panel-h">
+          <h3>Deal details</h3>
+          <span className="sub">Which property this cost sheet is for</span>
+        </div>
+        <div className="panel-b">
+          <div className="formgrid">
+            <div className="fld">
+              <label htmlFor="cs-name">Property name *</label>
+              <input id="cs-name" value={form.name || ''} placeholder="Plot 940, A Block" onChange={(e) => updateField('name', e.target.value)} />
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-project">Project / society</label>
+              <input id="cs-project" list="cs-projects" value={form.project || ''} onChange={(e) => updateField('project', e.target.value)} />
+              <datalist id="cs-projects">
+                {M.PROJECTS.map((p: any) => (
+                  <option key={p.id} value={p.name} />
+                ))}
+              </datalist>
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-city">City</label>
+              <input id="cs-city" value={form.city || ''} onChange={(e) => updateField('city', e.target.value)} />
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-type">Property type</label>
+              <select id="cs-type" value={form.type || M.TYPES[0]} onChange={(e) => updateField('type', e.target.value)}>
+                {M.TYPES.map((t: string) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-size">Size</label>
+              <input id="cs-size" value={form.size || ''} placeholder="10 Marla" onChange={(e) => updateField('size', e.target.value)} />
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-status">Deal status</label>
+              <select id="cs-status" value={form.status || 'Active Deal'} onChange={(e) => updateField('status', e.target.value)}>
+                {['Draft', 'Active Deal', 'Reserved', 'Sold'].map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-pdate">Purchase date</label>
+              <input id="cs-pdate" type="date" value={dateValue(form.purchaseDate)} onChange={(e) => updateField('purchaseDate', e.target.value || M.TODAY)} />
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-sdate">Sale date</label>
+              <input id="cs-sdate" type="date" value={dateValue(form.saleDate)} onChange={(e) => updateField('saleDate', e.target.value || null)} />
+            </div>
+            <div className="fld">
+              <label htmlFor="cs-prop">Linked property</label>
+              <select id="cs-prop" value={form.propertyId || ''} onChange={(e) => updateField('propertyId', e.target.value)}>
+                <option value="">— Not linked —</option>
+                {M.DATA.properties.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id} — {p.name}
+                  </option>
+                ))}
+              </select>
+              <span className="hint">Saving updates this property’s cost and value.</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* SUMMARY TABLE (EXACT ROWS 2–4 OF EXCEL) */}
       <div className="panel" style={{ marginBottom: '8px', overflowX: 'auto', padding: 0 }}>

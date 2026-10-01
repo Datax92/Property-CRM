@@ -40,6 +40,21 @@ export function PropertiesPage() {
       { key: 'payStatus', label: 'Payment', render: (p: any) => <Tag text={p.payStatus} /> },
       { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },
       {
+        key: 'pay',
+        label: '',
+        render: (p: any) =>
+          p.remaining > 0 ? (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openModal('payment', { settle: 'prop:' + p.id })}
+              title="Record a payment to the seller"
+            >
+              Pay seller
+            </button>
+          ) : null,
+      },
+      {
         key: 'sheet',
         label: 'Cost Sheet',
         render: (p: any) => (
@@ -67,6 +82,53 @@ export function PropertiesPage() {
           </button>
         }
       >
+        <SummaryKpis pairs={summaryPairs} />
+        <DataTable cols={cols} rows={rows} totals={true} />
+      </PageShell>
+    );
+  }
+
+  if (tab === 'projects') {
+    const rows = M.projectSummary(r, f);
+    const sum = (key: string) => rows.reduce((a: number, x: any) => a + x[key], 0);
+
+    const summaryPairs: [string, string][] = [
+      ['Projects', M.fmtNum(rows.length)],
+      ['Properties held', M.fmtNum(sum('held'))],
+      ['Cost of stock held', M.fmt(sum('heldCost'), numbers)],
+      ['Market value', M.fmt(sum('heldValue'), numbers)],
+      ['Sales in period', M.fmt(sum('revenue'), numbers)],
+    ];
+
+    const cols = [
+      { key: 'project', label: 'Project / society' },
+      { key: 'city', label: 'City' },
+      { key: 'total', label: 'Properties', a: 'r' as const, cls: 'mono', render: (x: any) => M.fmtNum(x.total) },
+      { key: 'held', label: 'Held', a: 'r' as const, cls: 'mono', render: (x: any) => M.fmtNum(x.held) },
+      { key: 'heldCost', label: 'Cost of stock', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.heldCost, numbers) },
+      { key: 'heldValue', label: 'Market value', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.heldValue, numbers) },
+      {
+        key: 'upside',
+        label: 'Potential profit',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (x: any) => <span className={x.upside > 0 ? 'pos' : x.upside < 0 ? 'neg' : ''}>{M.fmt(x.upside, numbers)}</span>,
+      },
+      { key: 'sold', label: 'Sold in period', a: 'r' as const, cls: 'mono', render: (x: any) => M.fmtNum(x.sold) },
+      { key: 'revenue', label: 'Sales', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.revenue, numbers) },
+      {
+        key: 'netProfit',
+        label: 'Net profit',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (x: any) => <span className={x.netProfit > 0 ? 'pos' : x.netProfit < 0 ? 'neg' : ''}>{M.fmt(x.netProfit, numbers)}</span>,
+      },
+    ];
+
+    return (
+      <PageShell title={meta.t} u={meta.u} p={meta.p}>
         <SummaryKpis pairs={summaryPairs} />
         <DataTable cols={cols} rows={rows} totals={true} />
       </PageShell>

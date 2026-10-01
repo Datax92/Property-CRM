@@ -3,6 +3,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { LogoMark, Icon } from './Icons';
+import * as M from '../lib/re-data';
 
 export function Sidebar() {
   const { page, user, role, visibleSections, visibleTabs, goto, openMenu } = useApp();
@@ -15,7 +16,7 @@ export function Sidebar() {
       <div className="side-logo">
         <LogoMark />
         <span className="txt">
-          <b>Meridian Estates</b>
+          <b>{M.COMPANY.replace(/\s*\(Pvt\)\s*Ltd\.?$/i, '')}</b>
           <span>Real Estate MS</span>
         </span>
       </div>

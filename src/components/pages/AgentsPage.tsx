@@ -3,11 +3,12 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
+import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function AgentsPage() {
-  const { tab, effectiveFilters: f, range: r, numbers } = useApp();
+  const { tab, effectiveFilters: f, range: r, numbers, openModal } = useApp();
 
   const meta = PAGE_META[`agents/${tab}`] || { t: 'Agents' };
 
@@ -35,6 +36,21 @@ export function AgentsPage() {
       { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (c: any) => M.fmt(c.paid, numbers) },
       { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (c: any) => M.fmt(c.outstanding, numbers) },
       { key: 'status', label: 'Status', render: (c: any) => <Tag text={c.status} /> },
+      {
+        key: 'pay',
+        label: '',
+        render: (c: any) =>
+          c.outstanding > 0 ? (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openModal('payment', { settle: 'comm:' + c.id })}
+              title="Record a commission payment to this agent"
+            >
+              Pay
+            </button>
+          ) : null,
+      },
     ];
 
     return (
@@ -61,6 +77,8 @@ export function AgentsPage() {
     { key: 'name', label: 'Agent' },
     { key: 'id', label: 'Agent ID' },
     { key: 'office', label: 'Office' },
+    { key: 'phone', label: 'Phone', cls: 'mono' },
+    { key: 'rate', label: 'Rate', a: 'r' as const, cls: 'mono', render: (a: any) => `${a.rate}%` },
     { key: 'transactions', label: 'Deals', a: 'r' as const, cls: 'mono', render: (a: any) => M.fmtNum(a.transactions) },
     { key: 'salesValue', label: 'Sales value', a: 'r' as const, sum: true, cls: 'mono', render: (a: any) => M.fmt(a.salesValue, numbers) },
     {
@@ -77,9 +95,26 @@ export function AgentsPage() {
   ];
 
   return (
-    <PageShell title={meta.t} u={meta.u} p={meta.p}>
+    <PageShell
+      title={meta.t}
+      u={meta.u}
+      p={meta.p}
+      acts={
+        <button type="button" className="btn pri" onClick={() => openModal('agent')}>
+          <Icon name="plus" /> Add agent
+        </button>
+      }
+    >
       <SummaryKpis pairs={summaryPairs} />
-      <DataTable cols={cols} rows={rows} totals={true} />
+      {rows.length === 0 ? (
+        <div className="empty">
+          <Icon name="empty" />
+          <h3>No agents yet</h3>
+          <p>Add your agents here. They can then be picked when recording a sale and earn commission on it.</p>
+        </div>
+      ) : (
+        <DataTable cols={cols} rows={rows} totals={true} />
+      )}
     </PageShell>
   );
 }

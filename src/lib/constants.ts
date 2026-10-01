@@ -8,7 +8,8 @@ export const NAV: NavSection[] = [
     icon: 'home',
     group: 'Main',
     tabs: [
-      { id: 'overview', label: 'Overview' },
+      { id: 'home', label: 'Home' },
+      { id: 'overview', label: 'Graphs & comparison' },
       { id: 'alerts', label: 'Alerts' },
     ],
   },
@@ -22,6 +23,7 @@ export const NAV: NavSection[] = [
       { id: 'inventory', label: 'Inventory' },
       { id: 'purchases', label: 'Purchase register', need: 'purchases' },
       { id: 'performance', label: 'Performance' },
+      { id: 'projects', label: 'Projects' },
     ],
   },
   {
@@ -85,6 +87,7 @@ export const NAV: NavSection[] = [
       { id: 'bills', label: 'Bills', need: 'bills' },
       { id: 'tax', label: 'Tax', need: 'tax' },
       { id: 'zakat', label: 'Zakat', need: 'zakat' },
+      { id: 'charity', label: 'Charity' },
     ],
   },
   {
@@ -96,17 +99,19 @@ export const NAV: NavSection[] = [
     tabs: [
       { id: 'transactions', label: 'Transactions', need: 'transactions' },
       { id: 'audit', label: 'Audit trail', need: 'audit' },
-      { id: 'users', label: 'Users & roles' },
+      { id: 'users', label: 'Admin account' },
     ],
   },
 ];
 
 export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = {
+  'dashboard/home': { t: 'Home', u: 'ہوم' },
   'dashboard/overview': { t: 'Dashboard', u: 'ڈیش بورڈ' },
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost, what it is worth today, and the difference.' },
   'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought, with acquisition costs and what is still owed to the seller.' },
   'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, after acquisition costs, commission, tax and selling costs.' },
+  'properties/projects': { t: 'Projects', u: 'منصوبے', p: 'Every project / society: stock held, what it cost, what it is worth, and what has been sold.' },
   'trading/sheets': { t: 'Cost sheet register', u: 'لاگت رجسٹر', p: 'Complete trading ledger: acquisition cost basis, sale realization, brokerage, statutory taxes, and net margins.' },
   'trading/calculator': { t: 'Deal cost calculator', u: 'لاگت کیلکولیٹر', p: 'Interactive trade modeller: link buy-sell pricing, holding carrying costs, commission splits, FBR taxes, break-even exit, and sensitivity.' },
   'trading/analytics': { t: 'Trading analytics', u: 'تجزیہ منافع', p: 'Portfolio-level trading velocity, capital turnover, tax-to-profit ratios, and realized margin breakdown.' },
@@ -125,9 +130,10 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'costs/bills': { t: 'Bills', u: 'بل', p: 'Recurring and one-off bills, their due dates and anything overdue.' },
   'costs/tax': { t: 'Tax', u: 'ٹیکس', p: 'All tax obligations, split between transaction withholding tax and corporate income tax.' },
   'costs/zakat': { t: 'Zakat', u: 'زکوٰۃ', p: 'Zakat calculated, paid and remaining — reported separately from operating expenses.' },
+  'costs/charity': { t: 'Charity', u: 'خیرات', p: 'Charity and donations given — from deal cost sheets and from the expense ledger.' },
   'admin/transactions': { t: 'Transaction ledger', u: 'لین دین کھاتہ', p: 'Every financial transaction with reference, method, account and approver.' },
   'admin/audit': { t: 'Audit trail', u: 'آڈٹ', p: 'Who did what, and when. Records are voided or reversed, never deleted.' },
-  'admin/users': { t: 'Users & roles', u: 'اجازتیں', p: 'Who can see what. Sign in as any user to view the system through their eyes.' },
+  'admin/users': { t: 'Admin account', u: 'ایڈمن اکاؤنٹ', p: 'This portal has a single administrator account with full access.' },
   'account': { t: 'My account', u: 'میرا اکاؤنٹ' },
   'search': { t: 'Search results', u: 'تلاش' },
 };

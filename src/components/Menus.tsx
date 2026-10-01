@@ -13,7 +13,6 @@ export function Menus() {
     closeMenu,
     user,
     role,
-    setUser,
     numbers,
     setNumbers,
     filters,
@@ -28,6 +27,7 @@ export function Menus() {
     visibleSections,
     visibleTabs,
   } = useApp();
+  const { signOut } = useAuth();
 
   if (!menu) return null;
 
@@ -47,8 +47,6 @@ export function Menus() {
   };
 
   let inner: React.ReactNode = null;
-
-  const { signOut } = useAuth();
 
   if (id === 'account') {
     inner = (
@@ -77,16 +75,7 @@ export function Menus() {
             closeMenu();
           }}
         >
-          <Icon name="user" /> My account &amp; permissions
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            goto('admin/users');
-            closeMenu();
-          }}
-        >
-          <Icon name="shield" /> Users &amp; roles
+          <Icon name="user" /> My account
         </button>
         <div className="sep" />
         <button
@@ -97,7 +86,7 @@ export function Menus() {
           }}
           style={{ color: 'var(--bad)' }}
         >
-          <Icon name="x" /> Sign out
+          <Icon name="logout" /> Sign out
         </button>
       </>
     );
@@ -135,7 +124,7 @@ export function Menus() {
         <button
           type="button"
           onClick={() => {
-            openModal('saleInvoice' as any);
+            openModal('saleInvoice');
           }}
         >
           <Icon name="receipt" /> Sale invoice
@@ -143,7 +132,7 @@ export function Menus() {
         <button
           type="button"
           onClick={() => {
-            openModal('purchaseInvoice' as any);
+            openModal('purchaseInvoice');
           }}
         >
           <Icon name="receipt" /> Purchase invoice
@@ -166,6 +155,16 @@ export function Menus() {
           }}
         >
           <Icon name="receipt" /> Payment
+        </button>
+        <div className="sep" />
+        <button type="button" onClick={() => openModal('agent')}>
+          <Icon name="users" /> Agent
+        </button>
+        <button type="button" disabled={denied('tax')} onClick={() => !denied('tax') && openModal('tax')}>
+          <Icon name="chart" /> Tax entry
+        </button>
+        <button type="button" disabled={denied('bills')} onClick={() => !denied('bills') && openModal('bill')}>
+          <Icon name="wallet" /> Bill
         </button>
       </>
     );
@@ -376,7 +375,7 @@ export function Menus() {
             <button
               type="button"
               onClick={() => {
-                openModal('saleInvoice' as any);
+                openModal('saleInvoice');
               }}
             >
               <Icon name="receipt" /> Sale invoice
@@ -384,7 +383,7 @@ export function Menus() {
             <button
               type="button"
               onClick={() => {
-                openModal('purchaseInvoice' as any);
+                openModal('purchaseInvoice');
               }}
             >
               <Icon name="receipt" /> Purchase invoice

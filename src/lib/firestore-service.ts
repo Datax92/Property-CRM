@@ -12,6 +12,7 @@ import { getFirebaseFirestore } from './firebase';
 import * as M from './re-data';
 
 const COLLECTIONS = [
+  'agents',
   'properties',
   'sales',
   'costSheets',
@@ -30,8 +31,10 @@ export type CollectionName = typeof COLLECTIONS[number] | 'users';
 
 function serializeForFirestore(obj: any): any {
   if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'number') return Number.isFinite(obj) ? obj : 0;
   if (obj instanceof Date) {
-    return Timestamp.fromDate(obj);
+    // An invalid Date cannot be stored as a Timestamp.
+    return isNaN(obj.getTime()) ? null : Timestamp.fromDate(obj);
   }
   if (Array.isArray(obj)) {
     return obj.map(serializeForFirestore);
@@ -39,6 +42,8 @@ function serializeForFirestore(obj: any): any {
   if (typeof obj === 'object') {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(obj)) {
+      // Firestore rejects the whole write if any field is undefined.
+      if (v === undefined) continue;
       out[k] = serializeForFirestore(v);
     }
     return out;
@@ -71,6 +76,24 @@ function deserializeFromFirestore(obj: any): any {
   return obj;
 }
 
+// A failed write must not pass silently: the record exists on screen but would
+// be gone after a reload. The shell subscribes here and tells the user.
+let saveErrorHandler: ((message: string) => void) | null = null;
+export function onFirestoreSaveError(handler: ((message: string) => void) | null) {
+  saveErrorHandler = handler;
+}
+
+function reportSaveError(collName: string, err: any) {
+  const code = err && err.code ? String(err.code) : '';
+  const message =
+    code === 'permission-denied'
+      ? 'Not saved — this account is not allowed to write to the database (check Firestore rules).'
+      : code === 'unavailable'
+      ? 'Not saved yet — you appear to be offline.'
+      : `Could not save to ${collName} — please try again.`;
+  if (saveErrorHandler) saveErrorHandler(message);
+}
+
 export async function saveRecordToFirestore(collName: CollectionName, id: string, data: any) {
   const db = getFirebaseFirestore();
   if (!db) {
@@ -84,6 +107,7 @@ export async function saveRecordToFirestore(collName: CollectionName, id: string
     await setDoc(docRef, cleanData, { merge: true });
   } catch (err) {
     console.error(`Error saving to Firestore collection ${collName}:`, err);
+    reportSaveError(collName, err);
   }
 }
 
@@ -101,6 +125,14 @@ export async function deleteRecordFromFirestore(collName: CollectionName, id: st
 
 let activeUnsubscribers: (() => void)[] = [];
 
+// New record IDs are numbered from what is already loaded, so nothing may be
+// saved until every ledger has answered once — otherwise a new record could
+// reuse (and overwrite) an existing ID.
+const loaded = new Set<string>();
+export function ledgersReady(): boolean {
+  return activeUnsubscribers.length === 0 || loaded.size >= COLLECTIONS.length;
+}
+
 export function syncFirestoreData(onUpdate: () => void): () => void {
   const db = getFirebaseFirestore();
   if (!db) {
@@ -110,6 +142,7 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
   // Cleanup old listeners
   activeUnsubscribers.forEach((unsub) => unsub());
   activeUnsubscribers = [];
+  loaded.clear();
 
   COLLECTIONS.forEach((colName) => {
     try {
@@ -125,13 +158,17 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
           });
 
           // Update DATA in-memory
-          if (docs.length > 0 || (M.DATA as any)[colName]?.length > 0) {
-            (M.DATA as any)[colName] = docs;
+          const first = !loaded.has(colName);
+          loaded.add(colName);
+          if (first || docs.length > 0 || (M.DATA as any)[colName]?.length > 0) {
+            (M.DATA as any)[colName] = M.normalizeLedger(colName, docs);
             onUpdate();
           }
         },
         (error) => {
           console.warn(`Firestore listener warning for ${colName}:`, error.message);
+          loaded.add(colName);
+          onUpdate();
         }
       );
       activeUnsubscribers.push(unsub);
@@ -143,5 +180,6 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
   return () => {
     activeUnsubscribers.forEach((u) => u());
     activeUnsubscribers = [];
+    loaded.clear();
   };
 }

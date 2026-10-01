@@ -73,7 +73,7 @@ export function FinancePage() {
         a: 'r' as const,
         sum: true,
         cls: 'mono',
-        render: (p: any) => <span className="pos">{M.fmt(p.gross, numbers)}</span>,
+        render: (p: any) => <span className={p.gross > 0 ? 'pos' : p.gross < 0 ? 'neg' : ''}>{M.fmt(p.gross, numbers)}</span>,
       },
       { key: 'commission', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.commission, numbers) },
       { key: 'expenses', label: 'Expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
@@ -83,7 +83,7 @@ export function FinancePage() {
         a: 'r' as const,
         sum: true,
         cls: 'mono',
-        render: (p: any) => <span className="pos">{M.fmt(p.net, numbers)}</span>,
+        render: (p: any) => <span className={p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}>{M.fmt(p.net, numbers)}</span>,
       },
     ];
 
@@ -134,7 +134,7 @@ export function FinancePage() {
 
   if (tab === 'cashflow') {
     const cl = M.cashLedger(r, f);
-    const rows = M.DATA.payments
+    const rows = M.livePayments()
       .filter((p: any) => M.inRange(p.date, r) && (f.office === 'all' || p.office === f.office))
       .map((p: any) => ({
         ...p,
@@ -368,7 +368,7 @@ export function FinancePage() {
                       className={`r mono ${x.kind ? 'strong' : ''}`}
                       style={{ fontSize: x.kind === 'g' ? '15px' : undefined }}
                     >
-                      <span className={x.v && x.v < 0 ? '' : x.kind ? 'pos' : ''}>
+                      <span className={!x.kind ? '' : x.v && x.v < 0 ? 'neg' : 'pos'}>
                         {x.v !== null ? M.fmt(x.v, numbers) : ''}
                       </span>
                     </td>

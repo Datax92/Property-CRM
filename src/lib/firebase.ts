@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
 export interface FirebaseConfig {
@@ -22,40 +22,7 @@ export const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-GS0YMYVFHE',
 };
 
-export function getStoredFirebaseConfig(): FirebaseConfig | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('property_crm_firebase_config');
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore parse error
-  }
-  return null;
-}
-
-export function saveStoredFirebaseConfig(config: FirebaseConfig) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('property_crm_firebase_config', JSON.stringify(config));
-  } catch (err) {
-    console.error('Failed to save Firebase config in localStorage:', err);
-  }
-}
-
-export function clearStoredFirebaseConfig() {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem('property_crm_firebase_config');
-  } catch {
-    // ignore
-  }
-}
-
 export function getActiveFirebaseConfig(): FirebaseConfig {
-  const stored = getStoredFirebaseConfig();
-  if (stored && stored.apiKey && stored.projectId) {
-    return stored;
-  }
   return DEFAULT_FIREBASE_CONFIG;
 }
 
@@ -99,6 +66,3 @@ export function getFirebaseFirestore(): Firestore | null {
   }
   return db;
 }
-
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });

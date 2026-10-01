@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
 import { Icon } from '../Icons';
-import { NAV, PAGE_META } from '../../lib/constants';
+import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 import { getFirebaseFirestore } from '../../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -82,8 +82,6 @@ export function AdminPage() {
   }
 
   if (tab === 'users') {
-    const allTabs = NAV.flatMap((s) => s.tabs.map((t) => ({ sec: s.label, ...t })));
-
     return (
       <PageShell title={meta.t} u={meta.u} p={meta.p} tools={false}>
         <div className="grid c3" style={{ marginBottom: '16px' }}>
@@ -100,7 +98,7 @@ export function AdminPage() {
                 <div>
                   <div style={{ fontWeight: 700 }}>
                     {u.name}
-                    {u.id === user.id && <span className="tag ok"> you</span>}
+                    {u.id === user.id && <span className="tag ok" style={{ marginLeft: '6px' }}>you</span>}
                   </div>
                   {u.email && <div className="vs" style={{ color: 'var(--brand)' }}>{u.email}</div>}
                   <div className="vs">
@@ -113,51 +111,14 @@ export function AdminPage() {
           ))}
         </div>
 
-        <div className="panel">
-          <div className="panel-h">
-            <h3>What each role can see</h3>
-          </div>
-          <div className="tblwrap">
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Section</th>
-                  <th>Screen</th>
-                  {Object.keys(M.ROLES).map((x) => (
-                    <th key={x} style={{ textAlign: 'center' }}>
-                      {x}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {allTabs.map((t: any, idx: number) => (
-                  <tr key={idx}>
-                    <td className="vs">{t.sec}</td>
-                    <td className="strong">{t.label}</td>
-                    {Object.keys(M.ROLES).map((rl) => {
-                      const ok = !t.need || ((M.ROLES as any)[rl].deny || []).indexOf(t.need) < 0;
-                      return (
-                        <td key={rl} style={{ textAlign: 'center' }}>
-                          {ok ? <span className="tag ok">Allowed</span> : <span className="tag mute">Hidden</span>}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="note" style={{ marginTop: '14px' }}>
+        <div className="note calm">
           <span className="ic">
-            <Icon name="warn" />
+            <Icon name="info" />
           </span>
           <div>
-            <b>Open question for the client.</b> The requirement document says Accountant salary access is
-            "according to company policy", which a developer cannot build from. It is set to <b>hidden</b>{' '}
-            here — please confirm.
+            <b>Single administrator.</b> This portal is used by one admin account with full access to every
+            screen. The account, its email and its password are managed in the Firebase console
+            (Authentication → Users) — there is no sign-up inside the app.
           </div>
         </div>
       </PageShell>
@@ -166,28 +127,32 @@ export function AdminPage() {
 
   // Transactions tab (default)
   const rows = M.DATA.payments.filter((p: any) => M.inRange(p.date, r) && (f.office === 'all' || p.office === f.office));
+  // Voided entries stay listed but no longer count as cash.
+  const live = rows.filter((p: any) => p.status !== 'Voided');
 
   const summaryPairs: [string, string][] = [
     ['Transactions', M.fmtNum(rows.length)],
     [
       'Cash in',
       M.fmt(
-        rows.filter((p: any) => p.dir === 'in').reduce((a: number, p: any) => a + p.amount, 0),
+        live.filter((p: any) => p.dir === 'in').reduce((a: number, p: any) => a + p.amount, 0),
         numbers
       ),
     ],
     [
       'Cash out',
       M.fmt(
-        rows.filter((p: any) => p.dir === 'out').reduce((a: number, p: any) => a + p.amount, 0),
+        live.filter((p: any) => p.dir === 'out').reduce((a: number, p: any) => a + p.amount, 0),
         numbers
       ),
     ],
+    ['Voided', M.fmtNum(rows.length - live.length)],
   ];
 
   const cols = [
     { key: 'id', label: 'Transaction ID' },
     { key: 'date', label: 'Date', cls: 'mono', render: (p: any) => M.fmtDate(p.date) },
+    { key: 'dir', label: 'In / out', render: (p: any) => (p.dir === 'in' ? 'In' : 'Out') },
     { key: 'category', label: 'Type' },
     { key: 'party', label: 'Customer / vendor' },
     { key: 'amount', label: 'Amount', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.amount, numbers) },

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
 import { ShareBar, RankedList } from '../Charts';
@@ -13,6 +13,7 @@ import type { Invoice } from '../../lib/types';
 export function SalesPage() {
   const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
 
@@ -48,6 +49,21 @@ export function SalesPage() {
         ),
       },
       { key: 'payStatus', label: 'Status', render: (s: any) => <Tag text={s.payStatus} /> },
+      {
+        key: 'receive',
+        label: 'Collect',
+        render: (s: any) => (
+          <button
+            type="button"
+            className="btn pri"
+            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+            onClick={() => openModal('payment', { settle: 'sale:' + s.id })}
+            title="Record a payment received against this balance"
+          >
+            <Icon name="plus" size={12} /> Receive
+          </button>
+        ),
+      },
       {
         key: 'sheet',
         label: 'Cost Sheet',
@@ -124,9 +140,10 @@ export function SalesPage() {
       { key: 'srNo', label: 'Sr No.' },
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },
-      { key: 'buyerCompany', label: 'Company' },
-      { key: 'buyerCnic', label: 'CNIC' },
+      { key: 'buyerCnic', label: 'Buyer CNIC' },
+      { key: 'sellerName', label: 'Seller name' },
       { key: 'propertyName', label: 'Property' },
+      { key: 'paymentMode', label: 'Payment mode' },
       { key: 'totalAmount', label: 'Total amount', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.totalAmount, numbers) },
       { key: 'tokenAmount', label: 'Token', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.tokenAmount, numbers) },
       { key: 'balanceAmount', label: 'Balance', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.balanceAmount, numbers) },
@@ -134,22 +151,23 @@ export function SalesPage() {
       { key: 'transferDate', label: 'Transfer date', cls: 'mono', render: (i: any) => M.fmtDate(i.transferDate) },
       { key: 'receivedByName', label: 'Received by' },
       { key: 'receivedFromName', label: 'Received from' },
-      {
-        key: 'voucher',
-        label: 'Voucher Slip',
-        render: (i: any) => (
-          <button
-            type="button"
-            className="btn sm pri"
-            style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-            onClick={() => setSelectedInvoice(i)}
-            title="View & Print Official Receipt Voucher"
-          >
-            <Icon name="print" size={12} /> Receipt Slip
-          </button>
-        ),
-      },
     ];
+    // The print action leads the row so it is never hidden behind a sideways scroll.
+    invCols.unshift({
+      key: 'voucher',
+      label: 'Voucher',
+      render: (i: any) => (
+        <button
+          type="button"
+          className="btn sm pri"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => setSelectedInvoice(i)}
+          title="Open the printable receipt / voucher (A4 or thermal)"
+        >
+          <Icon name="print" size={12} /> Print Receipt
+        </button>
+      ),
+    } as any);
 
     const modalType = tab === 'saleInvoices' ? 'saleInvoice' : 'purchaseInvoice';
     const btnLabel = tab === 'saleInvoices' ? 'Create sale invoice' : 'Create purchase invoice';
@@ -160,7 +178,7 @@ export function SalesPage() {
         u={meta.u}
         p={meta.p}
         acts={
-          <button type="button" className="btn pri" onClick={() => openModal(modalType as any)}>
+          <button type="button" className="btn pri" onClick={() => openModal(modalType)}>
             <Icon name="plus" /> {btnLabel}
           </button>
         }
@@ -170,16 +188,15 @@ export function SalesPage() {
           <div className="empty">
             <Icon name="empty" />
             <h3>No {tab === 'saleInvoices' ? 'sale' : 'purchase'} invoices yet</h3>
-            <p>Click "{btnLabel}" to create one, or generate from an existing sale.</p>
+            <p>
+              Click “{btnLabel}” to create one
+              {tab === 'saleInvoices' ? ', or use “Receipt Slip” on a row of the sales register.' : '.'}
+            </p>
           </div>
         ) : (
           <DataTable cols={invCols} rows={invRows} totals={true} />
         )}
-        <InvoiceReceiptModal
-          invoice={selectedInvoice}
-          onClose={() => setSelectedInvoice(null)}
-          numbers={numbers}
-        />
+        <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
       </PageShell>
     );
   }
@@ -236,7 +253,7 @@ export function SalesPage() {
           onClick={() => {
             let inv = M.DATA.invoices.find((i: any) => i.saleId === s.id && i.type === 'sale');
             if (!inv) {
-              inv = M.generateInvoiceFromSale(s.id, 'sale');
+              inv = M.generateInvoiceFromSale(s.id);
             }
             setSelectedInvoice(inv);
           }}
@@ -261,11 +278,7 @@ export function SalesPage() {
     >
       <SummaryKpis pairs={summaryPairs} />
       <DataTable cols={cols} rows={rows} totals={true} />
-      <InvoiceReceiptModal
-        invoice={selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-        numbers={numbers}
-      />
+      <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
     </PageShell>
   );
 }

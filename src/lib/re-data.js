@@ -1,12 +1,19 @@
 import { saveRecordToFirestore } from './firestore-service';
 
 // Real Estate Management System — Reporting Module
-// Deterministic in-memory dataset + all financial aggregation logic.
-// Frontend-only: no network, no backend. Every figure below is computed
-// from the underlying transaction records (per requirements §37).
+// In-memory ledgers (mirrored to Firestore) + all financial aggregation logic.
+// Every figure below is computed from the underlying transaction records
+// (per requirements §37).
 
-export const TODAY = new Date(2026, 8, 1); // 01 Sep 2026
-export const COMPANY = 'Meridian Estates (Pvt) Ltd';
+const _now = new Date();
+export const TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+export const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME || 'Meridian Estates (Pvt) Ltd';
+export const COMPANY_ADDRESS = process.env.NEXT_PUBLIC_COMPANY_ADDRESS || '';
+export const COMPANY_PHONE = process.env.NEXT_PUBLIC_COMPANY_PHONE || '';
+
+// Who is making entries — stamped on the cash ledger and the audit trail.
+let ACTOR = 'Admin';
+export const setActor = (name) => { ACTOR = name || 'Admin'; };
 
 let _s = 20260901;
 const rnd = () => ((_s = (_s * 1664525 + 1013904223) >>> 0), _s / 4294967296);
@@ -219,8 +226,12 @@ const overheadMatch = (x, f) => f.office === 'all' || x.office === f.office;
 export const scopedToProperty = (f) => f.project !== 'all' || f.agent !== 'all' || f.type !== 'all' || f.property !== 'all' || !!f.propIds;
 
 /* ============================ core aggregation ============================ */
+/** §31 — a voided transaction stays on the ledger but no longer moves cash. */
+export const livePayments = () => DATA.payments.filter((p) => p.status !== 'Voided');
+
 export function computeKPIs(r, f) {
   const D = DATA;
+  refreshZakatSummary();
   const props = D.properties.filter((p) => propMatch(p, f));
   const propIds = new Set(props.map((p) => p.id));
 
@@ -284,7 +295,7 @@ export function computeKPIs(r, f) {
   // company overheads are not allocated to a single agent or project.
   const netProfit = scoped ? grossProfit - commission - directCosts : grossProfit - totalExpenses;
 
-  const pay = D.payments.filter((p) => inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
+  const pay = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
   const cashIn = pay.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
   const cashOut = pay.filter((p) => p.dir === 'out').reduce((a, p) => a + p.amount, 0);
 
@@ -474,9 +485,9 @@ export function aging(f) {
 // Cash balance: starts at 0 for a clean database
 export const OPENING_BALANCE = 0;
 export function cashLedger(r, f) {
-  const before = DATA.payments.filter((p) => p.date < r.start && overheadMatch(p, f));
+  const before = livePayments().filter((p) => p.date < r.start && overheadMatch(p, f));
   const opening = before.reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), OPENING_BALANCE);
-  const within = DATA.payments.filter((p) => inR(p.date, r) && overheadMatch(p, f));
+  const within = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f));
   const cashIn = within.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
   const cashOut = within.filter((p) => p.dir === 'out').reduce((a, p) => a + p.amount, 0);
   const byCategory = {};
@@ -538,6 +549,44 @@ export function propertyPerf(r, f) {
   }).sort((a, b) => b.netProfit - a.netProfit);
 }
 
+/* Per-project roll-up: stock held and what has been sold in the period. Properties carry the
+   project name, so societies typed on a cost sheet but missing from PROJECTS still show up. */
+export function projectSummary(r, f) {
+  const by = {};
+  const row = (name, city) => by[name] || (by[name] = {
+    id: name, project: name, city: city || '—', total: 0, held: 0, sold: 0,
+    heldCost: 0, heldValue: 0, revenue: 0, netProfit: 0,
+  });
+  PROJECTS.forEach((p) => row(p.name, p.city));
+  const props = DATA.properties.filter((p) => propMatch(p, f));
+  const ids = new Set(props.map((p) => p.id));
+  props.forEach((p) => {
+    const x = row(p.project, p.location);
+    x.total++;
+    if (p.status !== 'Sold') { x.held++; x.heldCost += p.totalCost; x.heldValue += p.currentValue; }
+  });
+  DATA.sales.filter((s) => saleMatch(s, f, ids) && inR(s.date, r)).forEach((s) => {
+    const p = props.find((q) => q.id === s.propertyId);
+    const x = row(p.project, p.location);
+    x.sold++; x.revenue += s.sellingPrice; x.netProfit += s.netProfit;
+  });
+  return Object.keys(by).map((k) => ({ ...by[k], upside: by[k].heldValue - by[k].heldCost }))
+    .sort((a, b) => b.total - a.total || b.revenue - a.revenue);
+}
+
+/* Charity given: the charity line of each deal cost sheet, plus expenses booked as charity. */
+const CHARITY_RE = /charit|donat|sadaq|sadq|khairat/i;
+export function charityRows(r) {
+  const rows = [];
+  DATA.costSheets.filter((cs) => cs.charity > 0).forEach((cs) => {
+    const date = cs.saleDate instanceof Date ? cs.saleDate : cs.purchaseDate;
+    if (inR(date, r)) rows.push({ id: cs.id, source: 'Deal cost sheet', detail: cs.name || '—', party: cs.project || '—', date, amount: cs.charity });
+  });
+  DATA.expenses.filter((e) => CHARITY_RE.test(e.category + ' ' + e.note) && inR(e.date, r))
+    .forEach((e) => rows.push({ id: e.id, source: 'Expense ledger', detail: e.note || e.category, party: e.vendor, date: e.date, amount: e.amount }));
+  return rows.sort((a, b) => b.date - a.date);
+}
+
 /* E7 - Drill-down provenance. Section 35 requires every figure to be clickable; it
    never says the CEO should be told how many records are behind the figure. Showing
    the count is what makes a drill-down trustworthy rather than just a link. */
@@ -558,6 +607,7 @@ export function sourceCount(view, r, f) {
     zakat: () => DATA.zakat.filter((z) => inR(z.date, r)).length,
     receivables: () => receivables(f).length,
     transactions: () => DATA.payments.filter((p) => inR(p.date, r) && overheadMatch(p, f)).length,
+    agentList: () => DATA.agents.length,
     cashflow: () => cashLedger(r, f).count,
     audit: () => DATA.audit.length,
     sheets: () => DATA.costSheets.length,
@@ -609,7 +659,7 @@ export function addProperty(v) {
   if (p.paid > 0) addPayment({
     date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: p.paid,
     party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer',
-    note: 'Purchase payment — ' + p.name,
+    note: 'Purchase payment — ' + p.name, settleKey: 'prop:' + p.id,
   });
   return p;
 }
@@ -617,16 +667,17 @@ export function addProperty(v) {
 export function addSale(v) {
   const p = DATA.properties.find((x) => x.id === v.propertyId);
   if (!p) throw new Error('Unknown property');
-  const agent = DATA.agents.find((a) => a.id === v.agentId) || DATA.agents[0];
+  // No agent selected = a direct sale: no commission is earned or owed.
+  const agent = DATA.agents.find((a) => a.id === v.agentId) || null;
   const price = +v.sellingPrice, received = Math.min(+v.received || 0, price);
-  const pctRate = v.commissionPct === '' || v.commissionPct == null ? (agent ? agent.rate : 2.0) : +v.commissionPct;
+  const pctRate = !agent ? 0 : v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
   const commission = Math.round((price * pctRate) / 100);
-  const saleTax = Math.round(+v.tax || price * 0.01);
+  const saleTax = v.tax === '' || v.tax == null ? Math.round(price * 0.01) : Math.round(+v.tax);
   const other = +v.otherExpenses || 0;
   const dueDate = addDays(parseDate(v.date), 60);
   const s = {
     id: nextId(DATA.sales, 'S-', 4), propertyId: p.id, property: p.name,
-    buyer: v.buyer, agentId: agent ? agent.id : 'AG-001', agent: agent ? agent.name : 'Direct Sale', date: parseDate(v.date),
+    buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date: parseDate(v.date),
     sellingPrice: price, received, outstanding: Math.max(0, price - received), dueDate,
     method: v.method, commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
     netRevenue: price - commission - saleTax - other,
@@ -641,18 +692,20 @@ export function addSale(v) {
   saveRecordToFirestore('sales', s.id, s);
   saveRecordToFirestore('properties', p.id, p);
 
-  const cm = {
-    id: nextId(DATA.commissions, 'CM-', 4), agentId: agent ? agent.id : 'AG-001', agent: agent ? agent.name : 'Direct Sale',
-    propertyId: p.id, property: p.name, counterparty: s.buyer, txnType: 'Sale', date: s.date,
-    pct: pctRate, amount: commission, paid: 0, outstanding: commission, paidDate: '—',
-    status: 'Unpaid', office: p.office, manual: true,
-  };
-  DATA.commissions.push(cm);
-  saveRecordToFirestore('commissions', cm.id, cm);
+  if (agent && commission > 0) {
+    const cm = {
+      id: nextId(DATA.commissions, 'CM-', 4), agentId: agent.id, agent: agent.name,
+      propertyId: p.id, property: p.name, counterparty: s.buyer, txnType: 'Sale', date: s.date,
+      pct: pctRate, amount: commission, paid: 0, outstanding: commission, paidDate: '—',
+      status: 'Unpaid', office: p.office, manual: true,
+    };
+    DATA.commissions.push(cm);
+    saveRecordToFirestore('commissions', cm.id, cm);
+  }
   if (received > 0) addPayment({
     date: v.date, dir: 'in', category: 'Property Sale', amount: received,
-    party: s.buyer, propertyId: p.id, agentId: agent.id, office: p.office,
-    method: v.method, note: 'Sale receipt — ' + p.name,
+    party: s.buyer, propertyId: p.id, agentId: agent ? agent.id : null, office: p.office,
+    method: v.method, note: 'Sale receipt — ' + p.name, settleKey: 'sale:' + s.id,
   });
   return s;
 }
@@ -670,7 +723,7 @@ export function addExpense(v) {
   saveRecordToFirestore('expenses', e.id, e);
   if (paid > 0) addPayment({
     date: v.date, dir: 'out', category: v.group, amount: paid, party: v.vendor,
-    office: v.office, method: v.method, note: e.note,
+    office: v.office, method: v.method, note: e.note, settleKey: 'exp:' + e.id,
   });
   return e;
 }
@@ -683,7 +736,8 @@ export function addPayment(v) {
     propertyId: v.propertyId || null, agentId: v.agentId || null,
     ref: v.ref || 'REF-' + Math.floor(100000 + Math.random() * 899999),
     note: v.note || v.category, office: v.office || OFFICES[0],
-    createdBy: v.createdBy || 'Manual entry', approvedBy: v.approvedBy || 'Pending approval',
+    createdBy: v.createdBy || ACTOR, approvedBy: v.approvedBy || ACTOR,
+    settleKey: v.settleKey || null,
     status: 'Posted', manual: true,
   };
   DATA.payments.push(t);
@@ -691,8 +745,8 @@ export function addPayment(v) {
   saveRecordToFirestore('payments', t.id, t);
   const au = {
     id: nextId(DATA.audit, 'AU-', 4), date: t.date, txnId: t.id, action: 'Created',
-    user: v.createdBy || 'Manual entry', entity: t.category, prevAmount: null,
-    newAmount: t.amount, note: 'Created through manual entry form', manual: true,
+    user: v.createdBy || ACTOR, entity: t.category, prevAmount: null,
+    newAmount: t.amount, note: t.note || 'Created through manual entry form', manual: true,
   };
   DATA.audit.unshift(au);
   saveRecordToFirestore('audit', au.id, au);
@@ -705,9 +759,11 @@ export function voidPayment(id, user) {
   if (!t || t.status === 'Voided') return null;
   t.status = 'Voided';
   saveRecordToFirestore('payments', t.id, t);
+  // Put the balance back on whatever this payment had settled.
+  if (t.settleKey) applySettlement(t.settleKey, -t.amount, t.date);
   const au = {
     id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: t.id, action: 'Voided',
-    user: user || 'Manual entry', entity: t.category, prevAmount: t.amount, newAmount: 0,
+    user: user || ACTOR, entity: t.category, prevAmount: t.amount, newAmount: 0,
     note: 'Voided — original record retained', manual: true,
   };
   DATA.audit.unshift(au);
@@ -720,26 +776,36 @@ export function voidPayment(id, user) {
    ==================================================================== */
 
 export function addInvoice(v) {
+  const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+  const total = Math.round(+v.totalAmount || 0);
+  const token = Math.round(+v.tokenAmount || 0);
   const inv = {
     id: nextId(DATA.invoices, 'INV-', 5),
-    srNo: DATA.invoices.filter((i) => i.type === v.type).length + 1,
+    srNo: DATA.invoices.filter((i) => i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
     type: v.type, // 'sale' or 'purchase'
     receiptDate: parseDate(v.receiptDate || TODAY),
     propertyId: v.propertyId || null,
-    propertyName: v.propertyName || '',
+    propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
     saleId: v.saleId || null,
 
     buyerName: v.buyerName || '',
     buyerCompany: v.buyerCompany || '',
     buyerCnic: v.buyerCnic || '',
+    sellerName: v.sellerName || '',
+    sellerCompany: v.sellerCompany || '',
+    sellerCnic: v.sellerCnic || '',
 
     paymentDate: v.paymentDate ? parseDate(v.paymentDate) : null,
+    paymentMode: v.paymentMode || '',
+    paymentRef: v.paymentRef || '',
+    paymentTerms: v.paymentTerms || '',
     bankDetailsBuyer: v.bankDetailsBuyer || '',
     bankDetailsSeller: v.bankDetailsSeller || '',
 
-    totalAmount: Math.round(+v.totalAmount || 0),
-    balanceAmount: Math.round(+v.balanceAmount || 0),
-    tokenAmount: Math.round(+v.tokenAmount || 0),
+    totalAmount: total,
+    // A blank balance means "whatever the token did not cover".
+    balanceAmount: v.balanceAmount === '' || v.balanceAmount == null ? Math.max(0, total - token) : Math.round(+v.balanceAmount || 0),
+    tokenAmount: token,
     tokenDate: v.tokenDate ? parseDate(v.tokenDate) : null,
     transferDate: v.transferDate ? parseDate(v.transferDate) : null,
 
@@ -747,6 +813,7 @@ export function addInvoice(v) {
     receivedByCnic: v.receivedByCnic || '',
     receivedFromName: v.receivedFromName || '',
     receivedFromCnic: v.receivedFromCnic || '',
+    approvedByName: v.approvedByName || '',
 
     notes: v.notes || '',
     manual: true,
@@ -759,11 +826,11 @@ export function addInvoice(v) {
     date: inv.receiptDate,
     txnId: inv.id,
     action: 'Created',
-    user: 'Manual entry',
+    user: ACTOR,
     entity: inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice',
     prevAmount: null,
     newAmount: inv.totalAmount,
-    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.buyerName}`,
+    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.type === 'sale' ? inv.buyerName : inv.sellerName || inv.buyerName}`,
     manual: true,
   };
   DATA.audit.unshift(au);
@@ -771,24 +838,227 @@ export function addInvoice(v) {
   return inv;
 }
 
-export function generateInvoiceFromSale(saleId, type) {
+/** Sale receipt for an existing sale: the company is the seller and receives from the buyer. */
+export function generateInvoiceFromSale(saleId) {
   const sale = DATA.sales.find((s) => s.id === saleId);
   if (!sale) throw new Error('Sale not found');
-  const prop = DATA.properties.find((p) => p.id === sale.propertyId);
   return addInvoice({
-    type: type, // 'sale' or 'purchase'
+    type: 'sale',
     receiptDate: sale.date,
     propertyId: sale.propertyId,
     propertyName: sale.property,
     saleId: sale.id,
     buyerName: sale.buyer,
+    sellerName: COMPANY,
+    paymentMode: sale.method || '',
     totalAmount: sale.sellingPrice,
     balanceAmount: sale.outstanding,
     tokenAmount: sale.received,
     tokenDate: sale.date,
-    receivedByName: type === 'sale' ? sale.buyer : (prop ? prop.seller : ''),
-    receivedFromName: type === 'sale' ? (prop ? prop.seller : '') : sale.buyer,
+    receivedByName: ACTOR,
+    receivedFromName: sale.buyer,
   });
+}
+
+/* ====================================================================
+   AGENTS, TAX, ZAKAT, BILLS, SALARIES — registers that need manual entry
+   ==================================================================== */
+const settled = (amount, paid) => (paid >= amount ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Unpaid');
+const dueState = (amount, paid, dueDate) =>
+  paid >= amount ? 'Paid' : dueDate instanceof Date && dueDate < TODAY ? 'Overdue' : paid > 0 ? 'Partially Paid' : 'Pending';
+
+export function addAgent(v) {
+  const a = {
+    id: nextId(DATA.agents, 'AG-', 3), name: v.name, phone: v.phone || '', cnic: v.cnic || '',
+    office: v.office || OFFICES[0], rate: v.rate === '' || v.rate == null ? 2 : +v.rate, manual: true,
+  };
+  DATA.agents.push(a);
+  saveRecordToFirestore('agents', a.id, a);
+  return a;
+}
+
+export const TAX_TYPES = ['Advance Tax §236K', 'Advance Tax §236C', 'Capital Gains Tax', 'Withholding Tax', 'Income Tax', 'Property Tax', 'Other'];
+
+export function addTax(v) {
+  const amount = Math.round(+v.amount || 0), paid = Math.min(Math.round(+v.paid || 0), amount);
+  const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+  const dueDate = v.dueDate ? parseDate(v.dueDate) : parseDate(v.date);
+  const t = {
+    id: nextId(DATA.taxes, 'TX-', 4), type: v.type, ref: v.ref || '—',
+    propertyId: prop ? prop.id : null, property: prop ? prop.name : '—',
+    authority: v.authority || 'FBR', date: parseDate(v.date), dueDate,
+    amount, paid, outstanding: amount - paid, status: dueState(amount, paid, dueDate),
+    office: v.office || OFFICES[0], manual: true,
+  };
+  DATA.taxes.push(t);
+  saveRecordToFirestore('taxes', t.id, t);
+  if (paid > 0) addPayment({
+    date: v.date, dir: 'out', category: 'Taxes', amount: paid, party: t.authority,
+    propertyId: t.propertyId, office: t.office, method: v.method, note: t.type + (t.ref !== '—' ? ' — ' + t.ref : ''),
+    settleKey: 'tax:' + t.id,
+  });
+  return t;
+}
+
+export function addZakat(v) {
+  const eligibleAssets = Math.round(+v.eligibleAssets || 0);
+  const zakatable = Math.max(0, eligibleAssets - Math.round(+v.liabilities || 0));
+  const rate = v.rate === '' || v.rate == null ? 2.5 : +v.rate;
+  const z = {
+    id: nextId(DATA.zakat, 'ZK-', 4), period: v.period, eligibleAssets, zakatable, rate,
+    calculated: Math.round((zakatable * rate) / 100), amount: Math.round(+v.amount || 0),
+    date: parseDate(v.date), ref: v.ref || '—', manual: true,
+  };
+  DATA.zakat.push(z);
+  saveRecordToFirestore('zakat', z.id, z);
+  if (z.amount > 0) addPayment({
+    date: v.date, dir: 'out', category: 'Zakat', amount: z.amount, party: v.paidTo || 'Zakat recipients',
+    method: v.method, note: 'Zakat — ' + z.period,
+  });
+  refreshZakatSummary();
+  return z;
+}
+
+/** Zakat due is the latest assessment of each period; every entry's payment counts toward it. */
+export function refreshZakatSummary() {
+  const byPeriod = {};
+  let latest = null;
+  DATA.zakat.forEach((z) => {
+    if (!byPeriod[z.period] || z.date >= byPeriod[z.period].date) byPeriod[z.period] = z;
+    if (!latest || z.date >= latest.date) latest = z;
+  });
+  const calculated = Object.keys(byPeriod).reduce((a, k) => a + (byPeriod[k].calculated || 0), 0);
+  const paid = DATA.zakat.reduce((a, z) => a + (z.amount || 0), 0);
+  DATA.zakatSummary = {
+    calculated, paid, remaining: Math.max(0, calculated - paid),
+    zakatable: latest ? latest.zakatable : 0, eligibleAssets: latest ? latest.eligibleAssets : 0,
+    rate: latest ? latest.rate : 2.5,
+  };
+  return DATA.zakatSummary;
+}
+
+export const BILL_KINDS = BILL_TYPES.map((b) => b[0]).concat(['Other']);
+
+export function addBill(v) {
+  const amount = Math.round(+v.amount || 0), paid = Math.min(Math.round(+v.paid || 0), amount);
+  const dueDate = parseDate(v.dueDate);
+  const b = {
+    id: nextId(DATA.bills, 'BL-', 4), type: v.type, vendor: v.vendor, number: v.number || '—',
+    period: v.period || MONTHS[dueDate.getMonth()] + ' ' + dueDate.getFullYear(), dueDate,
+    amount, paid, outstanding: amount - paid, status: dueState(amount, paid, dueDate),
+    office: v.office || OFFICES[0], manual: true,
+  };
+  DATA.bills.push(b);
+  saveRecordToFirestore('bills', b.id, b);
+  if (paid > 0) addPayment({
+    date: dateInput(dueDate > TODAY ? TODAY : dueDate), dir: 'out', category: 'Bills', amount: paid, party: b.vendor,
+    office: b.office, method: v.method, note: b.type + ' bill — ' + b.period, settleKey: 'bill:' + b.id,
+  });
+  return b;
+}
+
+export function addSalary(v) {
+  const basic = Math.round(+v.basic || 0), bonus = Math.round(+v.bonus || 0);
+  const allowance = Math.round(+v.allowance || 0), deduction = Math.round(+v.deduction || 0);
+  const date = parseDate(v.date);
+  const sl = {
+    id: nextId(DATA.salaries, 'SL-', 4), employee: v.employee, dept: v.dept || '—',
+    monthLabel: v.monthLabel || MONTHS[date.getMonth()] + ' ' + date.getFullYear(),
+    basic, bonus, allowance, deduction, net: basic + bonus + allowance - deduction,
+    date, status: v.status === 'Pending' ? 'Pending' : 'Paid', office: v.office || OFFICES[0], manual: true,
+  };
+  DATA.salaries.push(sl);
+  saveRecordToFirestore('salaries', sl.id, sl);
+  if (sl.status === 'Paid' && sl.net > 0) addPayment({
+    date: v.date, dir: 'out', category: 'Employee Salaries', amount: sl.net, party: sl.employee,
+    office: sl.office, method: v.method, note: 'Salary — ' + sl.monthLabel, settleKey: 'sal:' + sl.id,
+  });
+  return sl;
+}
+
+/* ====================================================================
+   SETTLEMENT — a payment can be applied to an open balance (a customer
+   receivable, a seller, an agent's commission, a bill, a tax, an unpaid
+   expense or a pending salary), so "outstanding" figures actually come
+   down when money moves.
+   ==================================================================== */
+export function openItems() {
+  const out = [];
+  const add = (key, label, o) => out.push({ key, label: label + ' — ' + fmt(o.outstanding, 'full') + ' open', ...o });
+  DATA.sales.filter((s) => s.outstanding > 0).forEach((s) => add('sale:' + s.id, 'Receive · ' + s.buyer + ' · ' + s.property,
+    { dir: 'in', category: 'Customer Payment', party: s.buyer, outstanding: s.outstanding, propertyId: s.propertyId, agentId: s.agentId, office: s.office }));
+  DATA.properties.filter((p) => p.remaining > 0).forEach((p) => add('prop:' + p.id, 'Pay seller · ' + p.seller + ' · ' + p.name,
+    { dir: 'out', category: 'Property Purchase', party: p.seller, outstanding: p.remaining, propertyId: p.id, office: p.office }));
+  DATA.commissions.filter((c) => c.outstanding > 0).forEach((c) => add('comm:' + c.id, 'Pay commission · ' + c.agent + ' · ' + c.property,
+    { dir: 'out', category: 'Agent Commission', party: c.agent, outstanding: c.outstanding, propertyId: c.propertyId, agentId: c.agentId, office: c.office }));
+  DATA.bills.filter((b) => b.outstanding > 0).forEach((b) => add('bill:' + b.id, 'Pay bill · ' + b.type + ' · ' + b.vendor,
+    { dir: 'out', category: 'Bills', party: b.vendor, outstanding: b.outstanding, office: b.office }));
+  DATA.taxes.filter((t) => t.outstanding > 0).forEach((t) => add('tax:' + t.id, 'Pay tax · ' + t.type,
+    { dir: 'out', category: 'Taxes', party: t.authority, outstanding: t.outstanding, propertyId: t.propertyId, office: t.office }));
+  DATA.expenses.filter((e) => e.outstanding > 0).forEach((e) => add('exp:' + e.id, 'Pay expense · ' + e.category + ' · ' + e.vendor,
+    { dir: 'out', category: e.group, party: e.vendor, outstanding: e.outstanding, office: e.office }));
+  DATA.salaries.filter((s) => s.status === 'Pending').forEach((s) => add('sal:' + s.id, 'Pay salary · ' + s.employee + ' · ' + s.monthLabel,
+    { dir: 'out', category: 'Employee Salaries', party: s.employee, outstanding: s.net, office: s.office }));
+  return out;
+}
+
+/** Move `amount` (negative to reverse) onto the record behind a settle key. */
+export function applySettlement(key, amount, date) {
+  const [kind, id] = String(key).split(':');
+  const find = (arr) => arr.find((x) => x.id === id);
+  if (kind === 'sale') {
+    const s = find(DATA.sales); if (!s) return null;
+    s.received = Math.max(0, Math.min(s.sellingPrice, s.received + amount));
+    s.outstanding = s.sellingPrice - s.received;
+    s.payStatus = s.outstanding === 0 ? 'Paid' : s.dueDate < TODAY ? 'Overdue' : s.received > 0 ? 'Partially Paid' : 'Unpaid';
+    s.saleStatus = s.outstanding === 0 ? 'Completed' : 'In Payment';
+    saveRecordToFirestore('sales', s.id, s); return s;
+  }
+  if (kind === 'prop') {
+    const p = find(DATA.properties); if (!p) return null;
+    p.paid = Math.max(0, p.paid + amount); recomputeProperty(p);
+    saveRecordToFirestore('properties', p.id, p); return p;
+  }
+  if (kind === 'sal') {
+    const s = find(DATA.salaries); if (!s) return null;
+    s.status = amount > 0 ? 'Paid' : 'Pending';
+    saveRecordToFirestore('salaries', s.id, s); return s;
+  }
+  const map = { comm: ['commissions', DATA.commissions], bill: ['bills', DATA.bills], tax: ['taxes', DATA.taxes], exp: ['expenses', DATA.expenses] }[kind];
+  if (!map) return null;
+  const x = find(map[1]); if (!x) return null;
+  x.paid = Math.max(0, Math.min(x.amount, x.paid + amount));
+  x.outstanding = x.amount - x.paid;
+  if (kind === 'comm') { x.status = settled(x.amount, x.paid); x.paidDate = x.paid > 0 ? fmtDate(parseDate(date || TODAY)) : '—'; }
+  else if (kind === 'exp') x.status = settled(x.amount, x.paid);
+  else x.status = dueState(x.amount, x.paid, x.dueDate);
+  saveRecordToFirestore(map[0], x.id, x);
+  return x;
+}
+
+/** Record a payment and, when it is linked to an open balance, settle that balance. */
+export function recordPayment(v) {
+  const item = v.settle ? openItems().find((o) => o.key === v.settle) : null;
+  if (v.settle && !item) throw new Error('That balance is no longer open.');
+  if (item && +v.amount > item.outstanding) throw new Error('Amount is more than the ' + fmt(item.outstanding, 'full') + ' still open.');
+  const t = addPayment(item
+    ? { ...v, dir: item.dir, category: item.category, party: v.party || item.party, propertyId: item.propertyId, agentId: item.agentId, office: v.office || item.office, settleKey: item.key }
+    : v);
+  if (item) applySettlement(item.key, t.amount, t.date);
+  return t;
+}
+
+/* Statuses that depend on today's date ("Overdue") and day counts go stale in
+   storage, so they are re-derived every time a ledger is loaded. */
+export function normalizeLedger(name, rows) {
+  const isDate = (d) => d instanceof Date;
+  if (name === 'properties') rows.forEach((p) => { if (isDate(p.purchaseDate)) p.heldDays = Math.max(0, Math.round((TODAY - p.purchaseDate) / day)); });
+  if (name === 'sales') rows.forEach((s) => { if (s.outstanding > 0 && isDate(s.dueDate)) s.payStatus = s.dueDate < TODAY ? 'Overdue' : s.received > 0 ? 'Partially Paid' : 'Unpaid'; });
+  if (name === 'bills' || name === 'taxes') rows.forEach((x) => { x.status = dueState(x.amount, x.paid, x.dueDate); });
+  if (name === 'commissions') rows.forEach((c) => { if (c.outstanding > 0 && isDate(c.date) && c.date < addDays(TODAY, -30)) c.status = 'Overdue'; });
+  if (name === 'payments') rows.sort((a, b) => b.date - a.date);
+  if (name === 'audit' || name === 'costSheets') rows.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  return rows;
 }
 
 export function fiscalYearTaxSummary(f) {
@@ -1078,24 +1348,30 @@ export function saveCostSheet(raw, user) {
   // Synchronize with property if matched
   const p = DATA.properties.find((x) => x.id === cs.propertyId);
   if (p) {
-    p.price = cs.purchasePrice;
+    // The property's cost is the sheet's landed cost: base price plus the named extras, with
+    // everything else on the sheet (taxes, handling, agent fee) carried as "other".
+    p.price = cs.netBuyCost;
     p.extras = {
       registration: cs.societyTransferFee,
       legal: cs.legalCharges,
       development: cs.developmentCharges,
-      other: cs.otherAcquisition,
+      other: Math.max(0, cs.totalLandedCost - cs.netBuyCost - cs.societyTransferFee - cs.legalCharges - cs.developmentCharges),
     };
-    p.totalCost = cs.totalLandedCost;
-    p.currentValue = cs.sellingPrice;
+    recomputeProperty(p);
+    if (cs.sellingPrice > 0) p.currentValue = cs.sellingPrice;
     saveRecordToFirestore('properties', p.id, p);
     if (cs.status === 'Sold') {
       const sale = DATA.sales.find((s) => s.propertyId === p.id);
       if (sale) {
         sale.sellingPrice = cs.sellingPrice;
+        sale.received = Math.min(sale.received, sale.sellingPrice);
+        sale.outstanding = sale.sellingPrice - sale.received;
+        sale.propertyCost = cs.totalLandedCost;
         sale.commission = cs.saleBrokerage;
         sale.grossProfit = cs.grossProfit;
         sale.netProfit = cs.netProfit;
         sale.tax = cs.tax236C;
+        sale.netRevenue = sale.sellingPrice - sale.commission - sale.tax - (sale.otherExpenses || 0);
         saveRecordToFirestore('sales', sale.id, sale);
       }
     }
@@ -1106,7 +1382,7 @@ export function saveCostSheet(raw, user) {
     date: TODAY,
     txnId: cs.id,
     action: idx >= 0 ? 'Edited' : 'Created',
-    user: user || 'Manual entry',
+    user: user || ACTOR,
     entity: 'Trading Cost Sheet',
     prevAmount: null,
     newAmount: cs.netProfit,

@@ -19,7 +19,7 @@ export function CostsPage() {
       ['Payslips', M.fmtNum(rows.length)],
       ['Basic', M.fmt(rows.reduce((a: number, s: any) => a + s.basic, 0), numbers)],
       ['Bonus + allowance', M.fmt(rows.reduce((a: number, s: any) => a + s.bonus + s.allowance, 0), numbers)],
-      ['Net paid', M.fmt(rows.reduce((a: number, s: any) => a + s.net, 0), numbers)],
+      ['Net pay', M.fmt(rows.reduce((a: number, s: any) => a + s.net, 0), numbers)],
     ];
 
     const cols = [
@@ -31,13 +31,32 @@ export function CostsPage() {
       { key: 'bonus', label: 'Bonus', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.bonus, numbers) },
       { key: 'allowance', label: 'Allowance', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.allowance, numbers) },
       { key: 'deduction', label: 'Deduction', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.deduction, numbers) },
-      { key: 'net', label: 'Net paid', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.net, numbers) },
+      { key: 'net', label: 'Net pay', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.net, numbers) },
       { key: 'date', label: 'Pay date', cls: 'mono', render: (s: any) => M.fmtDate(s.date) },
       { key: 'status', label: 'Status', render: (s: any) => <Tag text={s.status} /> },
+      {
+        key: 'pay',
+        label: '',
+        render: (x: any) =>
+          x.status === 'Pending' ? (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openModal('payment', { settle: 'sal:' + x.id })}
+              title="Record a payment against this balance"
+            >
+              Pay
+            </button>
+          ) : null,
+      },
     ];
 
     return (
-      <PageShell title={meta.t} u={meta.u} p={meta.p}>
+      <PageShell title={meta.t} u={meta.u} p={meta.p} acts={
+          <button type="button" className="btn pri" onClick={() => openModal('salary')}>
+            <Icon name="plus" /> Add payslip
+          </button>
+        }>
         <SummaryKpis pairs={summaryPairs} />
         <DataTable cols={cols} rows={rows} totals={true} />
       </PageShell>
@@ -66,6 +85,21 @@ export function CostsPage() {
       { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (b: any) => M.fmt(b.paid, numbers) },
       { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (b: any) => M.fmt(b.outstanding, numbers) },
       { key: 'status', label: 'Status', render: (b: any) => <Tag text={b.status} /> },
+      {
+        key: 'pay',
+        label: '',
+        render: (x: any) =>
+          x.outstanding > 0 ? (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openModal('payment', { settle: 'bill:' + x.id })}
+              title="Record a payment against this balance"
+            >
+              Pay
+            </button>
+          ) : null,
+      },
     ];
 
     return (
@@ -74,8 +108,8 @@ export function CostsPage() {
         u={meta.u}
         p={meta.p}
         acts={
-          <button type="button" className="btn pri" onClick={() => openModal('payment')}>
-            <Icon name="plus" /> Record payment
+          <button type="button" className="btn pri" onClick={() => openModal('bill')}>
+            <Icon name="plus" /> Add bill
           </button>
         }
       >
@@ -122,10 +156,29 @@ export function CostsPage() {
       { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (t: any) => M.fmt(t.outstanding, numbers) },
       { key: 'dueDate', label: 'Due', cls: 'mono', render: (t: any) => M.fmtDate(t.dueDate) },
       { key: 'status', label: 'Status', render: (t: any) => <Tag text={t.status} /> },
+      {
+        key: 'pay',
+        label: '',
+        render: (x: any) =>
+          x.outstanding > 0 ? (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openModal('payment', { settle: 'tax:' + x.id })}
+              title="Record a payment against this balance"
+            >
+              Pay
+            </button>
+          ) : null,
+      },
     ];
 
     return (
-      <PageShell title={meta.t} u={meta.u} p={meta.p}>
+      <PageShell title={meta.t} u={meta.u} p={meta.p} acts={
+          <button type="button" className="btn pri" onClick={() => openModal('tax')}>
+            <Icon name="plus" /> Add tax entry
+          </button>
+        }>
         <SummaryKpis pairs={summaryPairs} />
 
         {/* Fiscal Year Tax Summary Panel */}
@@ -184,7 +237,7 @@ export function CostsPage() {
   }
 
   if (tab === 'zakat') {
-    const zs = M.DATA.zakatSummary;
+    const zs = M.refreshZakatSummary();
     const rows = M.DATA.zakat.filter((z: any) => M.inRange(z.date, r));
 
     const summaryPairs: [string, string][] = [
@@ -201,7 +254,7 @@ export function CostsPage() {
       { key: 'period', label: 'Period' },
       { key: 'eligibleAssets', label: 'Eligible assets', a: 'r' as const, sum: false, cls: 'mono', render: (z: any) => M.fmt(z.eligibleAssets, numbers) },
       { key: 'zakatable', label: 'Zakatable', a: 'r' as const, sum: false, cls: 'mono', render: (z: any) => M.fmt(z.zakatable, numbers) },
-      { key: 'rate', label: 'Rate' },
+      { key: 'rate', label: 'Rate', a: 'r' as const, cls: 'mono', render: (z: any) => `${z.rate}%` },
       { key: 'calculated', label: 'Calculated', a: 'r' as const, sum: false, cls: 'mono', render: (z: any) => M.fmt(z.calculated, numbers) },
       { key: 'amount', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (z: any) => M.fmt(z.amount, numbers) },
       { key: 'date', label: 'Payment date', cls: 'mono', render: (z: any) => M.fmtDate(z.date) },
@@ -209,7 +262,11 @@ export function CostsPage() {
     ];
 
     return (
-      <PageShell title={meta.t} u={meta.u} p={meta.p}>
+      <PageShell title={meta.t} u={meta.u} p={meta.p} acts={
+          <button type="button" className="btn pri" onClick={() => openModal('zakat')}>
+            <Icon name="plus" /> Record Zakat
+          </button>
+        }>
         <SummaryKpis pairs={summaryPairs} />
         <div className="note" style={{ marginBottom: '14px' }}>
           <span className="ic">
@@ -218,9 +275,50 @@ export function CostsPage() {
           <div>
             <b>Confirm the zakatable base with your accountant.</b> Stock held for resale is generally
             zakatable; property held for rental income generally is not. Zakat is reported separately from
-            operating expenses, as the requirement document asks.
+            operating expenses.
           </div>
         </div>
+        <DataTable cols={cols} rows={rows} totals={true} />
+      </PageShell>
+    );
+  }
+
+  if (tab === 'charity') {
+    const rows = M.charityRows(r);
+    const fromSheets = rows.filter((x: any) => x.source === 'Deal cost sheet');
+
+    const summaryPairs: [string, string][] = [
+      ['Entries', M.fmtNum(rows.length)],
+      ['Total charity', M.fmt(rows.reduce((a: number, x: any) => a + x.amount, 0), numbers)],
+      ['From deal cost sheets', M.fmt(fromSheets.reduce((a: number, x: any) => a + x.amount, 0), numbers)],
+      ['From expense ledger', M.fmt(rows.reduce((a: number, x: any) => a + x.amount, 0) - fromSheets.reduce((a: number, x: any) => a + x.amount, 0), numbers)],
+    ];
+
+    const cols = [
+      { key: 'id', label: 'Reference' },
+      { key: 'source', label: 'Source' },
+      { key: 'detail', label: 'Detail' },
+      { key: 'party', label: 'Given to / project' },
+      { key: 'date', label: 'Date', cls: 'mono', render: (x: any) => M.fmtDate(x.date) },
+      { key: 'amount', label: 'Amount', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.amount, numbers) },
+    ];
+
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <button
+            type="button"
+            className="btn pri"
+            onClick={() => openModal('expense', { group: 'Other Expenses', category: 'Charity' })}
+          >
+            <Icon name="plus" /> Add charity
+          </button>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
         <DataTable cols={cols} rows={rows} totals={true} />
       </PageShell>
     );
@@ -248,6 +346,21 @@ export function CostsPage() {
     { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.outstanding, numbers) },
     { key: 'method', label: 'Method' },
     { key: 'status', label: 'Status', render: (e: any) => <Tag text={e.status} /> },
+    {
+      key: 'pay',
+      label: '',
+      render: (x: any) =>
+        x.outstanding > 0 ? (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => openModal('payment', { settle: 'exp:' + x.id })}
+            title="Record a payment against this balance"
+          >
+            Pay
+          </button>
+        ) : null,
+    },
   ];
 
   return (

@@ -50,7 +50,7 @@ export interface TableColumn<T = any> {
 }
 
 export interface ModalState {
-  id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice';
+  id: string;
   values: Record<string, any>;
   errors: Record<string, string>;
 }
@@ -178,8 +178,16 @@ export interface Invoice {
   buyerCompany?: string;
   buyerCnic?: string;
 
+  // Seller info
+  sellerName?: string;
+  sellerCompany?: string;
+  sellerCnic?: string;
+
   // Payment info
   paymentDate?: Date | string;
+  paymentMode?: string;
+  paymentRef?: string;
+  paymentTerms?: string;
   bankDetailsBuyer?: string;
   bankDetailsSeller?: string;
 
@@ -197,6 +205,8 @@ export interface Invoice {
   // Received from (buyer side)
   receivedFromName: string;
   receivedFromCnic?: string;
+
+  approvedByName?: string;
 
   notes?: string;
   manual?: boolean;

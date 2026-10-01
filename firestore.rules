@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Single-admin portal: only the one administrator account may read or write anything.
+// The UID below is the admin user (Azmat) as shown in
+// Firebase Console → Authentication → Users. Publish these rules
+// (Firebase Console → Firestore Database → Rules, or `firebase deploy --only firestore:rules`).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'W2GGkk6GPGSsEPSZEgfKa6nVmrH3';
+    }
+
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -33,8 +33,7 @@ export function MainRouter() {
               <Icon name="lock" />
             </span>
             <div>
-              Your role (<b>{role}</b>) does not have access to {meta.t.toLowerCase()}. Use the account menu to
-              sign in as another user.
+              Your role (<b>{role}</b>) does not have access to {meta.t.toLowerCase()}.
             </div>
           </div>
         </PageShell>

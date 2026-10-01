@@ -52,7 +52,8 @@ export function Modals() {
     }
   };
 
-  let isFirstInput = true;
+  // Focus lands on the first field of the form when it opens.
+  const firstKey = (F.fields.find((fd: any) => !fd.g) || {}).k;
 
   return (
     <div className="overlay" onClick={closeModal} onKeyDown={handleKeyDown}>
@@ -81,7 +82,7 @@ export function Modals() {
                 {grp.fields.map((fd) => {
                   const err = errors[fd.k];
                   const val = values[fd.k] == null ? '' : values[fd.k];
-                  const inputRef = isFirstInput ? (el: any) => { firstInputRef.current = el; isFirstInput = false; } : undefined;
+                  const inputRef = fd.k === firstKey ? (el: any) => { firstInputRef.current = el; } : undefined;
 
                   let ctl: React.ReactNode;
                   if (fd.type === 'select') {

@@ -11,11 +11,11 @@ import { MainRouter } from './MainRouter';
 import { Menus } from './Menus';
 import { Modals } from './Modals';
 import { TooltipToast } from './TooltipToast';
-import { syncFirestoreData } from '../lib/firestore-service';
+import { syncFirestoreData, onFirestoreSaveError } from '../lib/firestore-service';
 
 export function AppShell() {
   const { user: authUser, loading } = useAuth();
-  const { setUser, refreshData } = useApp();
+  const { setUser, refreshData, toast } = useApp();
 
   // Sync authenticated user into AppContext
   useEffect(() => {
@@ -33,30 +33,25 @@ export function AppShell() {
     return () => unsubscribe();
   }, [authUser, refreshData]);
 
+  // A record that fails to reach the database must be visible, not just logged.
+  useEffect(() => {
+    onFirestoreSaveError(toast);
+    return () => onFirestoreSaveError(null);
+  }, [toast]);
+
   if (loading) {
     return (
-      <div className="login-wrap">
-        <div style={{ textAlign: 'center', color: 'var(--mute)' }}>
-          <div
-            style={{
-              width: '28px',
-              height: '28px',
-              border: '3px solid var(--border)',
-              borderTopColor: 'var(--brand)',
-              borderRadius: '50%',
-              margin: '0 auto 14px',
-              animation: 'spin 0.8s linear infinite',
-            }}
-          />
-          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-          <div style={{ fontWeight: 600, color: 'var(--fg)', fontSize: '15px' }}>Meridian Estates</div>
-          <div style={{ fontSize: '12px', marginTop: '4px' }}>Loading session...</div>
+      <div className="login-wrap" role="status">
+        <div style={{ textAlign: 'center' }}>
+          <div className="spin" />
+          <b>Property CRM</b>
+          <span>Loading session…</span>
         </div>
       </div>
     );
   }
 
-  // Not logged in -> Show login / register screen
+  // Not logged in -> show the admin sign-in screen
   if (!authUser) {
     return <LoginPage />;
   }

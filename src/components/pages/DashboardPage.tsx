@@ -7,6 +7,7 @@ import { ChartGroupedBars, ChartDonut, ShareBar, RankedList } from '../Charts';
 import { PropArt, Icon } from '../Icons';
 import { PAGE_META, SC, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
+import { HomePage } from './HomePage';
 
 export function DashboardPage() {
   const {
@@ -23,6 +24,8 @@ export function DashboardPage() {
   } = useApp();
 
   const meta = PAGE_META[`dashboard/${tab}`] || { t: 'Dashboard' };
+
+  if (tab === 'home') return <HomePage />;
 
   if (tab === 'alerts') {
     const al = M.alerts().filter((a: any) => !denied(a.view));

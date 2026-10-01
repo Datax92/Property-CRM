@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import * as M from '../lib/re-data';
 import { NAV, PAGE_META } from '../lib/constants';
+import { ledgersReady } from '../lib/firestore-service';
 import type { User, Filters, ModalState, MenuState, DateRange } from '../lib/types';
 
 interface AppContextType {
@@ -51,7 +52,7 @@ interface AppContextType {
   setGrossBasis: (b: 'cogs' | 'doc') => void;
   openMenu: (id: string, x: number, y: number) => void;
   closeMenu: () => void;
-  openModal: (id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice') => void;
+  openModal: (id: string, preset?: Record<string, any>) => void;
   closeModal: () => void;
   setModalField: (key: string, value: any) => void;
   submitModal: () => void;
@@ -73,6 +74,64 @@ const AppContext = createContext<AppContextType | null>(null);
 
 const n = (v: any) => (v === '' || v == null || isNaN(+v) ? 0 : +v);
 const dstr = (d: Date | string) => (d instanceof Date ? M.dateInput(d) : d);
+
+/* Sale invoice: the company sells, the customer buys. Purchase invoice: the company buys
+   from a seller. Both carry the same blocks so the printed voucher can show buyer and
+   seller side by side. */
+function invoiceFields(kind: 'sale' | 'purchase') {
+  const sale = kind === 'sale';
+  return [
+    { g: 'Invoice' },
+    { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+    {
+      k: 'propertyId',
+      l: 'Property',
+      type: 'select',
+      opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+    },
+    { g: sale ? 'Buyer (customer)' : 'Buyer (company)' },
+    { k: 'buyerName', l: 'Buyer name', req: true, ph: 'Kamran Aziz', def: sale ? undefined : () => M.COMPANY },
+    { k: 'buyerCompany', l: 'Company', ph: 'Company name (optional)' },
+    { k: 'buyerCnic', l: sale ? 'Buyer CNIC' : 'Buyer CNIC / NTN', ph: '00000-0000000-0' },
+    { k: 'bankDetailsBuyer', l: 'Buyer bank details', ph: 'Bank name & account' },
+    { g: sale ? 'Seller (company)' : 'Seller (vendor)' },
+    { k: 'sellerName', l: 'Seller name', req: true, ph: 'Falcon Developers', def: sale ? () => M.COMPANY : undefined },
+    { k: 'sellerCompany', l: 'Company', ph: 'Company name (optional)' },
+    { k: 'sellerCnic', l: sale ? 'Seller CNIC / NTN' : 'Seller CNIC', ph: '00000-0000000-0' },
+    { k: 'bankDetailsSeller', l: 'Seller bank details', ph: 'Bank name & account' },
+    { g: 'Payment' },
+    { k: 'paymentMode', l: 'Payment mode', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
+    { k: 'paymentRef', l: 'Cheque / transfer reference', ph: 'Cheque no. or transaction ID' },
+    { k: 'paymentDate', l: 'Payment date', type: 'date' },
+    { k: 'paymentTerms', l: 'Payment terms', ph: 'e.g. Balance within 30 days of token', full: true },
+    { g: 'Amounts' },
+    { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
+    { k: 'tokenAmount', l: 'Token / advance (PKR)', type: 'money' },
+    { k: 'tokenDate', l: 'Token date', type: 'date' },
+    { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money', hint: 'Blank = total less token.' },
+    { k: 'transferDate', l: 'Transfer date', type: 'date' },
+    { g: 'Signatories' },
+    { k: 'receivedByName', l: 'Received by — name', req: true, ph: sale ? 'Company representative' : 'Seller / vendor name' },
+    { k: 'receivedByCnic', l: 'Received by — CNIC', ph: '00000-0000000-0' },
+    { k: 'receivedFromName', l: 'Received from — name', req: true, ph: sale ? 'Buyer / payer name' : 'Company representative' },
+    { k: 'receivedFromCnic', l: 'Received from — CNIC', ph: '00000-0000000-0' },
+    { k: 'approvedByName', l: 'Approved by', ph: 'Authorised signatory' },
+    { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
+  ];
+}
+const invoiceBalance = (v: any) =>
+  v.balanceAmount === '' || v.balanceAmount == null ? Math.max(0, n(v.totalAmount) - n(v.tokenAmount)) : n(v.balanceAmount);
+const invoiceCalc = (v: any) => [
+  ['Total amount', n(v.totalAmount)],
+  ['Token / advance', n(v.tokenAmount)],
+  ['Balance remaining', invoiceBalance(v), true],
+];
+const invoiceValidate = (v: any) => {
+  const e: Record<string, string> = {};
+  if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
+  if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
+  return e;
+};
 
 export const FORMS_DEF: Record<string, any> = {
   property: {
@@ -139,15 +198,15 @@ export const FORMS_DEF: Record<string, any> = {
         k: 'agentId',
         l: 'Agent',
         type: 'select',
-        req: true,
-        opts: () => M.DATA.agents.map((a: any) => [a.id, a.name + ' (' + a.rate + '%)']),
+        opts: () => [['', 'Direct sale — no agent'], ...M.DATA.agents.map((a: any) => [a.id, a.name + ' (' + a.rate + '%)'])],
+        hint: 'Add agents under Agents → Agent directory.',
       },
       { k: 'date', l: 'Sale date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { g: 'Money' },
       { k: 'sellingPrice', l: 'Selling price (PKR)', type: 'money', req: true, min: 1 },
       { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
-      { k: 'commissionPct', l: 'Commission %', type: 'number', hint: 'Blank uses the agent’s standard rate.' },
+      { k: 'commissionPct', l: 'Commission %', type: 'number', hint: 'Blank uses the agent’s standard rate. Ignored for a direct sale.' },
       { k: 'tax', l: 'Withholding tax', type: 'money', hint: 'Blank uses 1% of the selling price.' },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
     ],
@@ -155,7 +214,7 @@ export const FORMS_DEF: Record<string, any> = {
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
       const price = n(v.sellingPrice);
       const ag = M.DATA.agents.find((a: any) => a.id === v.agentId);
-      const rate = v.commissionPct === '' || v.commissionPct == null ? (ag ? ag.rate : 0) : n(v.commissionPct);
+      const rate = !ag ? 0 : v.commissionPct === '' || v.commissionPct == null ? ag.rate : n(v.commissionPct);
       const comm = Math.round((price * rate) / 100);
       const tax = v.tax === '' || v.tax == null ? Math.round(price * 0.01) : n(v.tax);
       const cost = p ? p.totalCost : 0;
@@ -171,6 +230,8 @@ export const FORMS_DEF: Record<string, any> = {
     },
     validate: (v: any) => {
       const e: Record<string, string> = {};
+      if (!M.DATA.properties.some((p: any) => p.status !== 'Sold'))
+        e.propertyId = 'No unsold property in the register — add the property purchase first.';
       if (n(v.received) > n(v.sellingPrice)) e.received = 'Received cannot exceed the selling price.';
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
       if (p && v.date && M.parseDate(v.date) < p.purchaseDate)
@@ -221,6 +282,15 @@ export const FORMS_DEF: Record<string, any> = {
     title: 'Record a payment',
     sub: 'A single money-in or money-out entry on the cash ledger (§26, §27).',
     fields: [
+      { g: 'What is this payment for?' },
+      {
+        k: 'settle',
+        l: 'Settle an open balance',
+        type: 'select',
+        full: true,
+        opts: () => [['', 'Not linked — general ledger entry'], ...M.openItems().map((o: any) => [o.key, o.label])],
+        hint: 'Pick a customer, seller, agent, bill or tax balance and it is reduced by this payment.',
+      },
       { g: 'Payment' },
       {
         k: 'dir',
@@ -247,9 +317,12 @@ export const FORMS_DEF: Record<string, any> = {
           'Agent Commission',
           'Employee Salaries',
           'Office Expenses',
+          'Employee Expenses',
+          'Property Expenses',
           'Bills',
           'Taxes',
           'Zakat',
+          'Charity',
           'Marketing Expenses',
           'Other Expenses',
         ],
@@ -264,58 +337,37 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'ref', l: 'Reference number', ph: 'Cheque or transfer reference' },
       { k: 'note', l: 'Description', ph: 'What this payment is for', full: true },
     ],
-    calc: (v: any) => [[v.dir === 'out' ? 'Money out' : 'Money in', n(v.amount), true]],
-    validate: () => ({}),
+    onChange: (key: string, value: any) => {
+      if (key !== 'settle') return null;
+      const item = M.openItems().find((o: any) => o.key === value);
+      // Linking a balance fills in who, which way and how much.
+      return item
+        ? { dir: item.dir, category: item.category, party: item.party, amount: String(item.outstanding), office: item.office || M.OFFICES[0] }
+        : null;
+    },
+    calc: (v: any) => {
+      const item = v.settle ? M.openItems().find((o: any) => o.key === v.settle) : null;
+      const rows: any[] = [[v.dir === 'out' ? 'Money out' : 'Money in', n(v.amount), !item]];
+      if (item) rows.push(['Balance left after this payment', Math.max(0, item.outstanding - n(v.amount)), true]);
+      return rows;
+    },
+    validate: (v: any) => {
+      const item = v.settle ? M.openItems().find((o: any) => o.key === v.settle) : null;
+      return item && n(v.amount) > item.outstanding
+        ? { amount: 'Only ' + M.fmt(item.outstanding, 'full') + ' is still open on this balance.' }
+        : {};
+    },
     submit: (v: any) => {
-      const t = M.addPayment(v);
+      const t = M.recordPayment(v);
       return { id: t.id, msg: 'Transaction ' + t.id + ' posted', go: 'admin/transactions' };
     },
   },
   saleInvoice: {
     title: 'Create sale invoice',
     sub: 'Invoice/receipt given to the buyer with all transaction details.',
-    fields: [
-      { g: 'Invoice' },
-      { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
-      {
-        k: 'propertyId',
-        l: 'Property',
-        type: 'select',
-        opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
-      },
-      { g: 'Buyer details' },
-      { k: 'buyerName', l: 'Buyer name', req: true, ph: 'Kamran Aziz' },
-      { k: 'buyerCompany', l: 'Company', ph: 'Company name (optional)' },
-      { k: 'buyerCnic', l: 'Buyer CNIC', ph: '00000-0000000-0' },
-      { g: 'Payment details' },
-      { k: 'paymentDate', l: 'Payment date', type: 'date' },
-      { k: 'bankDetailsBuyer', l: 'Buyer bank details', ph: 'Bank name & account' },
-      { k: 'bankDetailsSeller', l: 'Seller bank details', ph: 'Bank name & account' },
-      { g: 'Amounts' },
-      { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money' },
-      { k: 'tokenAmount', l: 'Token amount (PKR)', type: 'money' },
-      { k: 'tokenDate', l: 'Token date', type: 'date' },
-      { k: 'transferDate', l: 'Transfer date', type: 'date' },
-      { g: 'Received by (seller)' },
-      { k: 'receivedByName', l: 'Name', req: true, ph: 'Person receiving payment' },
-      { k: 'receivedByCnic', l: 'CNIC', ph: '00000-0000000-0' },
-      { g: 'Received from (buyer)' },
-      { k: 'receivedFromName', l: 'Name', req: true, ph: 'Person making payment' },
-      { k: 'receivedFromCnic', l: 'CNIC', ph: '00000-0000000-0' },
-      { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
-    ],
-    calc: (v: any) => [
-      ['Total amount', n(v.totalAmount)],
-      ['Token / advance', n(v.tokenAmount)],
-      ['Balance remaining', n(v.balanceAmount) || Math.max(0, n(v.totalAmount) - n(v.tokenAmount)), true],
-    ],
-    validate: (v: any) => {
-      const e: Record<string, string> = {};
-      if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
-      if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
-      return e;
-    },
+    fields: invoiceFields('sale'),
+    calc: invoiceCalc,
+    validate: invoiceValidate,
     submit: (v: any) => {
       const inv = M.addInvoice({ ...v, type: 'sale' });
       return { id: inv.id, msg: 'Sale invoice ' + inv.id + ' created', go: 'sales/saleInvoices' };
@@ -324,51 +376,150 @@ export const FORMS_DEF: Record<string, any> = {
   purchaseInvoice: {
     title: 'Create purchase invoice',
     sub: 'Invoice/receipt kept by the company for internal records.',
-    fields: [
-      { g: 'Invoice' },
-      { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
-      {
-        k: 'propertyId',
-        l: 'Property',
-        type: 'select',
-        opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
-      },
-      { g: 'Buyer details' },
-      { k: 'buyerName', l: 'Buyer name', req: true, ph: 'Kamran Aziz' },
-      { k: 'buyerCompany', l: 'Company', ph: 'Company name (optional)' },
-      { k: 'buyerCnic', l: 'Buyer CNIC', ph: '00000-0000000-0' },
-      { g: 'Payment details' },
-      { k: 'paymentDate', l: 'Payment date', type: 'date' },
-      { k: 'bankDetailsBuyer', l: 'Buyer bank details', ph: 'Bank name & account' },
-      { k: 'bankDetailsSeller', l: 'Seller bank details', ph: 'Bank name & account' },
-      { g: 'Amounts' },
-      { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money' },
-      { k: 'tokenAmount', l: 'Token amount (PKR)', type: 'money' },
-      { k: 'tokenDate', l: 'Token date', type: 'date' },
-      { k: 'transferDate', l: 'Transfer date', type: 'date' },
-      { g: 'Received by (company)' },
-      { k: 'receivedByName', l: 'Name', req: true, ph: 'Company representative' },
-      { k: 'receivedByCnic', l: 'CNIC', ph: '00000-0000000-0' },
-      { g: 'Received from (seller)' },
-      { k: 'receivedFromName', l: 'Name', req: true, ph: 'Seller / vendor name' },
-      { k: 'receivedFromCnic', l: 'CNIC', ph: '00000-0000000-0' },
-      { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
-    ],
-    calc: (v: any) => [
-      ['Total amount', n(v.totalAmount)],
-      ['Token / advance', n(v.tokenAmount)],
-      ['Balance remaining', n(v.balanceAmount) || Math.max(0, n(v.totalAmount) - n(v.tokenAmount)), true],
-    ],
-    validate: (v: any) => {
-      const e: Record<string, string> = {};
-      if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
-      if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
-      return e;
-    },
+    fields: invoiceFields('purchase'),
+    calc: invoiceCalc,
+    validate: invoiceValidate,
     submit: (v: any) => {
       const inv = M.addInvoice({ ...v, type: 'purchase' });
       return { id: inv.id, msg: 'Purchase invoice ' + inv.id + ' created', go: 'sales/purchaseInvoices' };
+    },
+  },
+  agent: {
+    title: 'Add an agent',
+    sub: 'Agents can then be picked when recording a sale, and earn commission at their standard rate.',
+    fields: [
+      { g: 'Agent' },
+      { k: 'name', l: 'Full name', req: true, ph: 'Ahmed Khan' },
+      { k: 'phone', l: 'Phone', ph: '03xx-xxxxxxx' },
+      { k: 'cnic', l: 'CNIC', ph: '00000-0000000-0' },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { k: 'rate', l: 'Standard commission %', type: 'number', def: '2', req: true },
+    ],
+    validate: (v: any) => (n(v.rate) < 0 || n(v.rate) > 20 ? { rate: 'Commission must be between 0 and 20%.' } : {}),
+    submit: (v: any) => {
+      const a = M.addAgent(v);
+      return { id: a.id, msg: 'Agent ' + a.name + ' added', go: 'agents/directory' };
+    },
+  },
+  tax: {
+    title: 'Add a tax entry',
+    sub: 'Advance tax, capital gains tax and other statutory charges. Anything paid posts to the cash ledger.',
+    fields: [
+      { g: 'Tax' },
+      { k: 'type', l: 'Tax type', type: 'select', opts: () => M.TAX_TYPES, req: true },
+      { k: 'authority', l: 'Authority', def: 'FBR', req: true },
+      {
+        k: 'propertyId',
+        l: 'Property (optional)',
+        type: 'select',
+        opts: () => [['', '— Not property specific —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+      },
+      { k: 'ref', l: 'Challan / reference', ph: 'CPR or challan number' },
+      { k: 'date', l: 'Tax date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'dueDate', l: 'Due date', type: 'date', def: () => dstr(M.TODAY), req: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Tax amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the tax amount.' },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+    ],
+    calc: (v: any) => [
+      ['Tax amount', n(v.amount)],
+      ['Paid', n(v.paid)],
+      ['Outstanding', Math.max(0, n(v.amount) - n(v.paid)), true],
+    ],
+    validate: (v: any) => (n(v.paid) > n(v.amount) ? { paid: 'Paid cannot exceed the tax amount.' } : {}),
+    submit: (v: any) => {
+      const t = M.addTax(v);
+      return { id: t.id, msg: 'Tax entry ' + t.id + ' recorded', go: 'costs/tax' };
+    },
+  },
+  zakat: {
+    title: 'Record Zakat',
+    sub: 'Zakat is 2.5% of zakatable assets. Record the assessment for a period and any amount paid.',
+    fields: [
+      { g: 'Assessment' },
+      { k: 'period', l: 'Period', req: true, def: () => 'FY ' + M.TODAY.getFullYear(), ph: 'FY 2026 or 1448 AH' },
+      { k: 'eligibleAssets', l: 'Eligible assets (PKR)', type: 'money', req: true, hint: 'Stock held for resale, cash and receivables.' },
+      { k: 'liabilities', l: 'Less: liabilities due', type: 'money' },
+      { k: 'rate', l: 'Rate %', type: 'number', def: '2.5', req: true },
+      { g: 'Payment' },
+      { k: 'amount', l: 'Zakat paid now (PKR)', type: 'money' },
+      { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'paidTo', l: 'Paid to', ph: 'Recipient or organisation' },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'ref', l: 'Reference', ph: 'Receipt or transfer reference' },
+    ],
+    calc: (v: any) => {
+      const base = Math.max(0, n(v.eligibleAssets) - n(v.liabilities));
+      const due = Math.round((base * (v.rate === '' ? 2.5 : n(v.rate))) / 100);
+      return [
+        ['Zakatable amount', base],
+        ['Zakat due for the period', due],
+        ['Paid now', n(v.amount)],
+        ['Remaining on this assessment', Math.max(0, due - n(v.amount)), true],
+      ];
+    },
+    validate: (v: any) => (n(v.liabilities) > n(v.eligibleAssets) ? { liabilities: 'Liabilities cannot exceed eligible assets.' } : {}),
+    submit: (v: any) => {
+      const z = M.addZakat(v);
+      return { id: z.id, msg: 'Zakat entry ' + z.id + ' recorded', go: 'costs/zakat' };
+    },
+  },
+  bill: {
+    title: 'Add a bill',
+    sub: 'Utility, rent and service bills with their due date. Anything paid posts to the cash ledger.',
+    fields: [
+      { g: 'Bill' },
+      { k: 'type', l: 'Bill type', type: 'select', opts: () => M.BILL_KINDS, req: true },
+      { k: 'vendor', l: 'Vendor', req: true, ph: 'LESCO' },
+      { k: 'number', l: 'Bill number', ph: 'Reference on the bill' },
+      { k: 'period', l: 'Billing period', ph: 'Sep 2026' },
+      { k: 'dueDate', l: 'Due date', type: 'date', def: () => dstr(M.TODAY), req: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Bill amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the bill amount.' },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+    ],
+    calc: (v: any) => [
+      ['Bill amount', n(v.amount)],
+      ['Paid', n(v.paid)],
+      ['Outstanding', Math.max(0, n(v.amount) - n(v.paid)), true],
+    ],
+    validate: (v: any) => (n(v.paid) > n(v.amount) ? { paid: 'Paid cannot exceed the bill amount.' } : {}),
+    submit: (v: any) => {
+      const b = M.addBill(v);
+      return { id: b.id, msg: 'Bill ' + b.id + ' recorded', go: 'costs/bills' };
+    },
+  },
+  salary: {
+    title: 'Add a salary payslip',
+    sub: 'One payslip per employee per month. A paid payslip posts to the cash ledger.',
+    fields: [
+      { g: 'Employee' },
+      { k: 'employee', l: 'Employee name', req: true, ph: 'Faisal Nadeem' },
+      { k: 'dept', l: 'Department', ph: 'Sales' },
+      { k: 'date', l: 'Pay date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { g: 'Pay' },
+      { k: 'basic', l: 'Basic salary (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'bonus', l: 'Bonus', type: 'money' },
+      { k: 'allowance', l: 'Allowance', type: 'money' },
+      { k: 'deduction', l: 'Deduction', type: 'money' },
+      { k: 'status', l: 'Status', type: 'select', opts: () => ['Paid', 'Pending'], def: 'Paid', req: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+    ],
+    calc: (v: any) => [
+      ['Basic + bonus + allowance', n(v.basic) + n(v.bonus) + n(v.allowance)],
+      ['Deduction', -n(v.deduction)],
+      ['Net pay', n(v.basic) + n(v.bonus) + n(v.allowance) - n(v.deduction), true],
+    ],
+    validate: (v: any) =>
+      n(v.deduction) > n(v.basic) + n(v.bonus) + n(v.allowance) ? { deduction: 'Deduction cannot exceed gross pay.' } : {},
+    submit: (v: any) => {
+      const s = M.addSalary(v);
+      return { id: s.id, msg: 'Payslip ' + s.id + ' recorded', go: 'costs/salaries' };
     },
   },
 };
@@ -385,7 +536,7 @@ function formDefaults(id: string) {
     } else if (fd.type === 'select') {
       const opts = fd.opts();
       const first = Array.isArray(opts[0]) ? opts[0][0] : opts[0];
-      v[fd.k] = String(first);
+      v[fd.k] = first == null ? '' : String(first);
     } else {
       v[fd.k] = '';
     }
@@ -396,7 +547,7 @@ function formDefaults(id: string) {
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User>(M.USERS[0] as unknown as User);
   const [page, setPage] = useState<string>('dashboard');
-  const [tab, setTab] = useState<string | null>('overview');
+  const [tab, setTab] = useState<string | null>('home');
   const [rangeKey, setRangeKey] = useState<string>('thisYear');
   const [custom, setCustomState] = useState<{ start: string; end: string }>({ start: '2026-01-01', end: '2026-09-01' });
   const [filters, setFilters] = useState<Filters>({ ...M.EMPTY_FILTERS });
@@ -468,7 +619,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (sec && !visibleTabs(sec).length) {
         targetPage = 'dashboard';
-        targetTab = 'overview';
+        targetTab = 'home';
       } else if (sec) {
         const tabs = visibleTabs(sec);
         const curTab = tabs.find((x: any) => x.id === targetTab);
@@ -533,7 +684,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMenu(null);
       if (!vis.length) {
         setPage('dashboard');
-        setTab('overview');
+        setTab('home');
         return;
       }
       setPage(p);
@@ -546,16 +697,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('hashchange', handleHash);
   }, [sectionOf, visibleTabs]);
 
-  const setUser = useCallback(
-    (u: User) => {
-      setUserState(u);
-      setFilters({ ...M.EMPTY_FILTERS });
-      setMenu(null);
-      goto('dashboard/overview');
-      toast(`Signed in as ${u.name} (${u.role})`);
-    },
-    [goto, toast]
-  );
+  // Syncing the signed-in user must not navigate: a reload or a shared link keeps its page.
+  const setUser = useCallback((u: User) => {
+    setUserState(u);
+    M.setActor(u.name);
+  }, []);
 
   const setCustom = useCallback((c: { start: string; end: string }) => {
     setCustomState(c);
@@ -598,8 +744,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
-  const openModal = useCallback((id: 'property' | 'sale' | 'expense' | 'payment' | 'saleInvoice' | 'purchaseInvoice') => {
-    setModal({ id, values: formDefaults(id), errors: {} });
+  const openModal = useCallback((id: string, preset?: Record<string, any>) => {
+    let values = formDefaults(id);
+    if (preset) {
+      const F = FORMS_DEF[id];
+      Object.keys(preset).forEach((key) => {
+        values = { ...values, [key]: preset[key], ...((F && F.onChange && F.onChange(key, preset[key], values)) || {}) };
+      });
+    }
+    setModal({ id, values, errors: {} });
     setMenu(null);
   }, []);
 
@@ -611,9 +764,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const nextErrors = { ...prev.errors };
       delete nextErrors[key];
       delete nextErrors._form;
+      // A form may fill in related fields when one changes (e.g. picking a balance to settle).
+      const F = FORMS_DEF[prev.id];
+      const patch = (F && F.onChange && F.onChange(key, value, prev.values)) || {};
+      Object.keys(patch).forEach((k) => delete nextErrors[k]);
       return {
         ...prev,
-        values: { ...prev.values, [key]: value },
+        values: { ...prev.values, [key]: value, ...patch },
         errors: nextErrors,
       };
     });
@@ -641,7 +798,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices'];
+    if (!ledgersReady()) {
+      setModal((prev) =>
+        prev ? { ...prev, errors: { _form: 'Your records are still loading from the server. Please try again in a moment.' } } : null
+      );
+      return;
+    }
+
+    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;

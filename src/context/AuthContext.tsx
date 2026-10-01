@@ -5,23 +5,19 @@ import {
   User as FirebaseUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signInWithPopup,
   signOut as fbSignOut,
   sendPasswordResetEmail,
-  updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
-import {
-  getFirebaseAuth,
-  getFirebaseFirestore,
-  googleProvider,
-  getActiveFirebaseConfig,
-  saveStoredFirebaseConfig,
-  FirebaseConfig,
-} from '../lib/firebase';
+import { getFirebaseAuth, getFirebaseFirestore, getActiveFirebaseConfig } from '../lib/firebase';
 import type { User } from '../lib/types';
 import * as M from '../lib/re-data';
+
+/* Single-admin sign-in.
+   There is no registration in the app: the one admin account is created by hand in
+   Firebase Console → Authentication → Users. Setting NEXT_PUBLIC_ADMIN_EMAIL locks the
+   portal to that address, so any other account in the project is signed straight out. */
+const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').trim().toLowerCase();
 
 interface AuthContextType {
   user: User | null;
@@ -29,20 +25,34 @@ interface AuthContextType {
   loading: boolean;
   isConfigured: boolean;
   signInWithEmail: (e: string, p: string) => Promise<void>;
-  signUpWithEmail: (
-    e: string,
-    p: string,
-    profile: { name: string; role: 'CEO' | 'Accountant' | 'Manager' | 'Agent'; title?: string; office?: string }
-  ) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (e: string) => Promise<void>;
-  updateFirebaseConfig: (config: FirebaseConfig) => void;
   error: string | null;
   clearError: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
+
+const NOT_ADMIN = 'This account is not authorised for this portal / یہ اکاؤنٹ اس پورٹل کے لیے مجاز نہیں ہے';
+
+/** Firebase error codes → a message the admin can act on (English / Urdu). */
+function authMessage(err: any): string {
+  switch (err?.code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+    case 'auth/invalid-email':
+      return 'Incorrect email or password / ای میل یا پاس ورڈ درست نہیں ہے';
+    case 'auth/user-disabled':
+      return 'This account has been disabled / یہ اکاؤنٹ غیر فعال ہے';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please try again later / بہت زیادہ کوششیں، کچھ دیر بعد کوشش کریں';
+    case 'auth/network-request-failed':
+      return 'No internet connection / انٹرنیٹ کنکشن دستیاب نہیں';
+    default:
+      return 'Sign-in failed. Please try again / سائن اِن نہیں ہو سکا، دوبارہ کوشش کریں';
+  }
+}
 
 function makeInitials(name: string): string {
   if (!name) return 'U';
@@ -58,7 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [configVersion, setConfigVersion] = useState<number>(0);
 
   const activeConfig = getActiveFirebaseConfig();
   const isConfigured = Boolean(activeConfig.apiKey && activeConfig.projectId);
@@ -80,33 +89,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const name = profileData.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User';
-    const role = (profileData.role as User['role']) || 'CEO';
-    const title = profileData.title || (role === 'CEO' ? 'Chief Executive' : role);
-    const office = profileData.office || M.OFFICES[0];
-    const initials = makeInitials(name);
-
+    // The profile document only supplies a display name, title and office. The role is not
+    // read from it: the one account that can sign in is the administrator.
+    const name = profileData.name || fbUser.displayName || 'Admin';
     const userObj: User = {
       id: profileData.id || fbUser.uid.slice(0, 8),
       name,
-      role,
-      title,
-      initials,
-      office,
-      agentId: profileData.agentId,
+      role: 'CEO',
+      title: profileData.title || 'Administrator',
+      initials: makeInitials(name),
+      office: profileData.office || M.OFFICES[0],
     };
 
-    // Save/persist to Firestore if not already saved
-    if (db && (!profileData.name || !profileData.role)) {
+    // First sign-in of a console-created account: store the profile so it can be edited there.
+    if (db && !profileData.name) {
       try {
         await setDoc(
           doc(db, 'users', fbUser.uid),
-          {
-            ...userObj,
-            uid: fbUser.uid,
-            email: fbUser.email,
-            createdAt: Timestamp.now(),
-          },
+          { ...userObj, uid: fbUser.uid, email: fbUser.email, createdAt: Timestamp.now() },
           { merge: true }
         );
       } catch (e) {
@@ -126,12 +126,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      setLoading(true);
+      if (fbUser && ADMIN_EMAIL && (fbUser.email || '').toLowerCase() !== ADMIN_EMAIL) {
+        setError(NOT_ADMIN);
+        await fbSignOut(auth);
+        return;
+      }
       if (fbUser) {
+        setLoading(true);
         setFirebaseUser(fbUser);
         try {
-          const profile = await loadUserProfile(fbUser);
-          setUser(profile);
+          setUser(await loadUserProfile(fbUser));
         } catch (err: any) {
           console.error('Failed to load profile:', err);
         }
@@ -143,98 +147,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [configVersion, loadUserProfile]);
+  }, [loadUserProfile]);
 
   const signInWithEmail = useCallback(async (email: string, pass: string) => {
     setError(null);
     const auth = getFirebaseAuth();
     if (!auth) {
-      throw new Error('Firebase Authentication is not configured yet. Please provide your Firebase project keys.');
+      const msg = 'Sign-in is not set up yet — the Firebase project keys are missing.';
+      setError(msg);
+      throw new Error(msg);
+    }
+    if (ADMIN_EMAIL && email.trim().toLowerCase() !== ADMIN_EMAIL) {
+      // Same wording as a wrong password, so the form does not reveal which address is the admin's.
+      const msg = authMessage({ code: 'auth/invalid-credential' });
+      setError(msg);
+      throw new Error(msg);
     }
     try {
       await signInWithEmailAndPassword(auth, email.trim(), pass);
     } catch (err: any) {
-      let msg = err.message || 'Login failed';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        msg = 'Invalid email or password. Please verify your credentials.';
-      } else if (err.code === 'auth/too-many-requests') {
-        msg = 'Too many failed attempts. Please try again later or reset password.';
-      }
-      setError(msg);
-      throw new Error(msg);
-    }
-  }, []);
-
-  const signUpWithEmail = useCallback(
-    async (
-      email: string,
-      pass: string,
-      profile: { name: string; role: 'CEO' | 'Accountant' | 'Manager' | 'Agent'; title?: string; office?: string }
-    ) => {
-      setError(null);
-      const auth = getFirebaseAuth();
-      const db = getFirebaseFirestore();
-      if (!auth) {
-        throw new Error('Firebase is not configured. Please connect your Firebase project.');
-      }
-
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-        await updateProfile(cred.user, { displayName: profile.name });
-
-        const name = profile.name.trim();
-        const role = profile.role || 'CEO';
-        const title = profile.title || (role === 'CEO' ? 'Chief Executive' : role);
-        const office = profile.office || M.OFFICES[0];
-        const initials = makeInitials(name);
-
-        const userObj: User = {
-          id: cred.user.uid.slice(0, 8),
-          name,
-          role,
-          title,
-          initials,
-          office,
-        };
-
-        if (db) {
-          await setDoc(doc(db, 'users', cred.user.uid), {
-            ...userObj,
-            uid: cred.user.uid,
-            email: cred.user.email,
-            createdAt: Timestamp.now(),
-          });
-        }
-
-        setUser(userObj);
-      } catch (err: any) {
-        let msg = err.message || 'Registration failed';
-        if (err.code === 'auth/email-already-in-use') {
-          msg = 'An account with this email already exists. Please sign in instead.';
-        } else if (err.code === 'auth/weak-password') {
-          msg = 'Password is too weak. Please use at least 6 characters.';
-        }
-        setError(msg);
-        throw new Error(msg);
-      }
-    },
-    []
-  );
-
-  const signInWithGoogle = useCallback(async () => {
-    setError(null);
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error('Firebase is not configured. Please configure your Firebase project.');
-    }
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') return;
-      let msg = err.message || 'Google sign in failed';
-      if (err.code === 'auth/unauthorized-domain') {
-        msg = 'This domain (localhost) is not authorized in Firebase Console > Authentication > Settings > Authorized domains.';
-      }
+      const msg = authMessage(err);
       setError(msg);
       throw new Error(msg);
     }
@@ -253,20 +185,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     setError(null);
     const auth = getFirebaseAuth();
-    if (!auth) throw new Error('Firebase is not configured.');
+    if (!auth) throw new Error('Sign-in is not set up yet.');
     try {
       await sendPasswordResetEmail(auth, email.trim());
     } catch (err: any) {
-      let msg = err.message;
-      if (err.code === 'auth/user-not-found') msg = 'No account found with this email.';
+      // An unknown address is not reported, so the form cannot be used to probe for accounts.
+      if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-email') return;
+      const msg = authMessage(err);
       setError(msg);
       throw new Error(msg);
     }
-  }, []);
-
-  const updateFirebaseConfig = useCallback((config: FirebaseConfig) => {
-    saveStoredFirebaseConfig(config);
-    setConfigVersion((v) => v + 1);
   }, []);
 
   return (
@@ -277,11 +205,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         isConfigured,
         signInWithEmail,
-        signUpWithEmail,
-        signInWithGoogle,
         signOut,
         resetPassword,
-        updateFirebaseConfig,
         error,
         clearError,
       }}
