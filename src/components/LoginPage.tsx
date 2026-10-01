@@ -2,26 +2,22 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import * as M from '../lib/re-data';
 import CursorGrid from './effects/CursorGrid';
-import { ShieldCheck, Users, User, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function LoginPage() {
-  const { signInWithEmail, signUpWithEmail, error, clearError } = useAuth();
+  const { signInWithEmail, error, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'subadmin' | 'user'>('admin');
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
     setLocalError(null);
-    setInfoMsg(null);
     setLoading(true);
 
     const trimmedEmail = email.trim();
@@ -32,19 +28,20 @@ export function LoginPage() {
     }
 
     try {
-      // Direct sign-in for the single person
       await signInWithEmail(trimmedEmail, password);
     } catch (err: any) {
-      // If user doesn't exist yet on fresh Firebase, seamlessly auto-provision as the single Admin
-      try {
-        await signUpWithEmail(trimmedEmail, password, {
-          name: 'Admin',
-          role: selectedRole === 'user' ? 'Agent' : selectedRole === 'subadmin' ? 'Manager' : 'CEO',
-          office: M.OFFICES[0],
-        });
-      } catch {
-        setLocalError(err.message || 'Invalid email or password / ای میل یا پاس ورڈ درست نہیں ہے');
+      const code = err?.code;
+      let msg = err.message || 'Invalid email or password / ای میل یا پاس ورڈ درست نہیں ہے';
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        msg = 'Incorrect email or password / ای میل یا پاس ورڈ درست نہیں ہے';
+      } else if (code === 'auth/too-many-requests') {
+        msg = 'Too many attempts. Please try again later / بہت زیادہ کوششیں، کچھ دیر بعد کوشش کریں';
       }
+      setLocalError(msg);
     } finally {
       setLoading(false);
     }
@@ -116,71 +113,24 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* Role Indicator Badge */}
+          {/* Single Admin Role Badge */}
           <div className="property-role-badge">
-            {selectedRole === 'admin' ? (
-              <ShieldCheck size={14} className="badge-icon" />
-            ) : selectedRole === 'subadmin' ? (
-              <Users size={14} className="badge-icon" />
-            ) : (
-              <User size={14} className="badge-icon" />
-            )}
-            <span>
-              {selectedRole === 'admin'
-                ? 'ADMIN SIGN-IN'
-                : selectedRole === 'subadmin'
-                ? 'SUB ADMIN SIGN-IN'
-                : 'USER SIGN-IN'}
-            </span>
+            <ShieldCheck size={14} className="badge-icon" />
+            <span>ADMIN SIGN-IN</span>
           </div>
 
           {/* Title & Bilingual Subtitle */}
           <h1 className="property-portal-title">Real Estate Management System</h1>
           <div className="property-portal-subtitles">
-            <p className="sub-en">Choose your role, then sign in</p>
-            <p className="sub-ur" dir="rtl">اپنا کردار منتخب کریں، پھر سائن ان کریں</p>
+            <p className="sub-en">Enter your credentials to access the portal</p>
+            <p className="sub-ur" dir="rtl">پورٹل تک رسائی کے لیے اپنی اسناد درج کریں</p>
           </div>
-        </div>
-
-        {/* Role Selector Pill */}
-        <div className="property-role-tabs">
-          <button
-            type="button"
-            className={`role-tab-pill ${selectedRole === 'admin' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('admin')}
-          >
-            <ShieldCheck size={15} />
-            <span>Admin</span>
-          </button>
-
-          <button
-            type="button"
-            className={`role-tab-pill ${selectedRole === 'subadmin' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('subadmin')}
-          >
-            <Users size={15} />
-            <span>Sub Admin</span>
-          </button>
-
-          <button
-            type="button"
-            className={`role-tab-pill ${selectedRole === 'user' ? 'active' : ''}`}
-            onClick={() => setSelectedRole('user')}
-          >
-            <User size={15} />
-            <span>User</span>
-          </button>
         </div>
 
         {/* Notifications if any */}
         {(localError || error) && (
           <div className="property-auth-alert error">
             {localError || error}
-          </div>
-        )}
-        {infoMsg && (
-          <div className="property-auth-alert info">
-            {infoMsg}
           </div>
         )}
 
@@ -242,23 +192,6 @@ export function LoginPage() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-
-        {/* Footer info */}
-        <div className="property-card-footer">
-          <p>
-            First time here?{' '}
-            <button
-              type="button"
-              className="property-footer-link"
-              onClick={() =>
-                setInfoMsg('Single Admin Mode: Enter your desired email & password above and click Sign in to directly access your CRM account.')
-              }
-            >
-              Create the account
-            </button>
-          </p>
-          <span className="property-footer-note">(verified by an emailed code)</span>
-        </div>
       </div>
     </div>
   );
