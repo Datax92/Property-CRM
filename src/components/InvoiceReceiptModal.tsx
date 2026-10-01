@@ -67,6 +67,18 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
   const serial = `${isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`;
   const sellerName = invoice.sellerName || (isSale ? M.COMPANY : '');
   const paid = invoice.tokenAmount || 0;
+  const settledInFull = (invoice.balanceAmount || 0) <= 0 && paid > 0;
+  // The other party to the payment: the buyer who paid us, or the seller we paid.
+  const partyName = isSale ? invoice.receivedFromName || invoice.buyerName : sellerName;
+  const partyCnic = isSale ? invoice.receivedFromCnic || invoice.buyerCnic : invoice.sellerCnic;
+  const purpose =
+    (settledInFull ? 'Full and final payment' : 'Token / advance payment') +
+    (invoice.propertyName ? ` against ${invoice.propertyName}` : ' against property');
+  const watermark = M.COMPANY.split(/\s+/)
+    .filter((w: string) => /^[A-Za-z]/.test(w))
+    .slice(0, 2)
+    .map((w: string) => w[0].toUpperCase())
+    .join('');
 
   const handlePrint = () => {
     // The page size has to match the paper: A4, or an 80 mm roll cut to the slip's length.
@@ -149,9 +161,13 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
         <div className="receipt-modal-scroll">
           {paper === 'a4' ? (
             <div className="printable-voucher">
+              <div className="vr-watermark" aria-hidden="true">
+                {watermark}
+              </div>
+
               {/* Company header & logo */}
-              <div className="voucher-header">
-                <div className="voucher-brand">
+              <div className="vr-head">
+                <div className="vr-brand">
                   <div className="voucher-logo">
                     <LogoMark />
                   </div>
@@ -163,25 +179,72 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
                     )}
                   </div>
                 </div>
-                <div className="voucher-doc-meta">
-                  <div className="voucher-badge">{title}</div>
-                  <div className="voucher-copy-type">{copy}</div>
-                  <div className="voucher-meta-row">
-                    <span>Serial No.</span>
-                    <b className="mono">{serial}</b>
-                  </div>
-                  <div className="voucher-meta-row">
-                    <span>Invoice Ref.</span>
-                    <b className="mono">{invoice.id}</b>
-                  </div>
-                  <div className="voucher-meta-row">
-                    <span>Date</span>
-                    <b>{dateOr(invoice.receiptDate)}</b>
-                  </div>
+                <div className="vr-title">
+                  <b>{isSale ? 'Receipt' : 'Payment Voucher'}</b>
+                  <span>{copy}</span>
+                </div>
+              </div>
+              <div className="vr-gold" />
+
+              {/* Serial number & date */}
+              <div className="vr-meta">
+                <div className="vr-no">
+                  <span>No.</span>
+                  <b>{serial}</b>
+                </div>
+                <div>
+                  <span>Invoice ref.</span>
+                  <b>{invoice.id}</b>
+                </div>
+                <div>
+                  <span>Date</span>
+                  <b>{dateOr(invoice.receiptDate)}</b>
                 </div>
               </div>
 
-              <div className="voucher-divider" />
+              {/* The receipt itself, worded as a receipt book is */}
+              <div className="vr-lines">
+                <p>
+                  <span>{isSale ? 'Received with thanks from' : 'Paid to'}</span>
+                  <b>{partyName || ' '}</b>
+                  <span>CNIC</span>
+                  <b className="fixed">{partyCnic || ' '}</b>
+                </p>
+                <p>
+                  <span>the sum of Rupees</span>
+                  <b>{inWords(paid)} Only</b>
+                </p>
+                <p>
+                  <span>on account of</span>
+                  <b>{purpose}</b>
+                </p>
+                <p>
+                  <span>by</span>
+                  <b className="fixed">{invoice.paymentMode || ' '}</b>
+                  <span>Cheque / Ref. No.</span>
+                  <b>{invoice.paymentRef || ' '}</b>
+                  <span>dated</span>
+                  <b className="fixed">{dateOr(invoice.paymentDate, dateOr(invoice.receiptDate))}</b>
+                </p>
+              </div>
+
+              <div className="vr-amount-row">
+                <div className="vr-amount">
+                  <span>PKR</span>
+                  <b>{M.fmtNum(paid)}/-</b>
+                </div>
+                <div className={`vr-seal ${settledInFull ? 'full' : ''}`}>{settledInFull ? 'Paid in full' : 'Part payment'}</div>
+                <div className="vr-facts">
+                  <div>
+                    <span>Payment terms</span>
+                    <b>{invoice.paymentTerms || '—'}</b>
+                  </div>
+                  <div>
+                    <span>Transfer date</span>
+                    <b>{dateOr(invoice.transferDate, 'To be scheduled')}</b>
+                  </div>
+                </div>
+              </div>
 
               {/* Buyer & seller, side by side */}
               <div className="voucher-grid-2">
@@ -195,34 +258,6 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
                 )}
               </div>
 
-              {/* Property, payment mode & terms */}
-              <div className="voucher-box voucher-facts">
-                <div>
-                  <span>Property</span>
-                  <b>{invoice.propertyName || '—'}</b>
-                </div>
-                <div>
-                  <span>Payment mode</span>
-                  <b>{invoice.paymentMode || '—'}</b>
-                </div>
-                <div>
-                  <span>Cheque / transfer ref.</span>
-                  <b className="mono">{invoice.paymentRef || '—'}</b>
-                </div>
-                <div>
-                  <span>Payment date</span>
-                  <b>{dateOr(invoice.paymentDate, dateOr(invoice.receiptDate))}</b>
-                </div>
-                <div>
-                  <span>Transfer date</span>
-                  <b>{dateOr(invoice.transferDate, 'To be scheduled')}</b>
-                </div>
-                <div className="wide">
-                  <span>Payment terms</span>
-                  <b>{invoice.paymentTerms || '—'}</b>
-                </div>
-              </div>
-
               {/* Token & balance breakdown */}
               <table className="voucher-table-main">
                 <thead>
@@ -234,7 +269,7 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Total agreed price</td>
+                    <td>Total agreed price{invoice.propertyName ? ` — ${invoice.propertyName}` : ''}</td>
                     <td>—</td>
                     <td className="r mono">{money(invoice.totalAmount)}</td>
                   </tr>
@@ -249,15 +284,11 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
                   </tr>
                 </tbody>
               </table>
-              <div className="voucher-words">
-                <span>Amount {isSale ? 'received' : 'paid'} in words</span>
-                <b>Rupees {inWords(paid)} Only</b>
-              </div>
 
               <div className="voucher-notes">
                 <b>Terms &amp; acknowledgement</b>
                 <ol>
-                  <li>This voucher is an official receipt of the payment noted above.</li>
+                  <li>This is an official receipt of the payment noted above.</li>
                   <li>Payments by cheque, pay order or online transfer are subject to bank realisation.</li>
                   <li>Transfer of title or possession depends on full clearance of the balance due.</li>
                 </ol>
@@ -293,8 +324,8 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
               </div>
 
               <div className="voucher-footer">
-                <span>Computer-generated voucher · valid with signature and company stamp</span>
-                <span>Printed {M.fmtDate(new Date())}</span>
+                <span>Thank you for your business</span>
+                <span>Computer-generated · valid with signature and company stamp · Printed {M.fmtDate(new Date())}</span>
               </div>
             </div>
           ) : (

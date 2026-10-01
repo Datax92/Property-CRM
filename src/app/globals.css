@@ -1132,85 +1132,134 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .receipt-modal-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .receipt-modal-scroll { padding: 18px; overflow-x: auto; }
 
-/* ---- A4 voucher ---- */
+/* ---- A4 receipt, styled after a printed receipt book ---- */
 .printable-voucher {
+  --vr-ink: #0B5C46;
+  --vr-dark: #08432F;
+  --vr-gold: #C8962E;
+  --vr-wash: #F2F8F5;
+  --vr-rule: #C9DDD4;
+  position: relative;
+  overflow: hidden;
   width: 100%;
   min-width: 640px;
   margin: 0 auto;
-  padding: 32px 36px;
+  padding: 0 0 14px;
   background: #fff;
   color: #1a1a1a;
   font-family: var(--body);
   font-size: 12px;
   line-height: 1.45;
+  border: 1.5px solid var(--vr-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
+.printable-voucher > *:not(.vr-watermark) { position: relative; }
 .printable-voucher .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-.voucher-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 14px; }
-.voucher-brand { display: flex; align-items: center; gap: 12px; }
-.voucher-logo { flex: 0 0 46px; width: 46px; height: 46px; border-radius: 10px; background: #08432F; display: grid; place-items: center; }
-.voucher-logo svg { width: 38px; height: 38px; }
-.voucher-brand h2 { margin: 0; font-size: 19px; font-weight: 700; color: #111; letter-spacing: -0.02em; }
-.voucher-brand span { display: block; font-size: 10.5px; color: #555; }
-
-.voucher-doc-meta { text-align: right; flex: 0 0 auto; }
-.voucher-badge {
-  display: inline-block; padding: 4px 10px; border-radius: 4px;
-  background: #111; color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+.vr-watermark {
+  position: absolute; left: 50%; top: 54%; transform: translate(-50%, -50%) rotate(-22deg);
+  font-family: var(--display); font-size: 300px; font-weight: 700; letter-spacing: -0.04em; line-height: 1;
+  color: var(--vr-ink); opacity: 0.045; pointer-events: none; user-select: none;
 }
-.voucher-copy-type { margin: 4px 0 6px; font-size: 9.5px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.06em; }
-.voucher-meta-row { display: flex; justify-content: flex-end; gap: 8px; font-size: 11.5px; color: #444; }
-.voucher-meta-row span { color: #666; }
-.voucher-meta-row b { min-width: 86px; text-align: right; color: #111; }
 
-.voucher-divider { height: 2px; background: #111; margin-bottom: 16px; }
+.vr-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: 18px 28px 16px; color: #fff;
+  background: linear-gradient(120deg, var(--vr-ink) 0%, var(--vr-dark) 100%);
+}
+.vr-brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.voucher-logo {
+  flex: 0 0 52px; width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.voucher-logo svg { width: 42px; height: 42px; }
+.vr-brand h2 { margin: 0; font-size: 21px; font-weight: 700; color: #fff; letter-spacing: -0.02em; }
+.vr-brand span { display: block; font-size: 10.5px; color: #BFE0D3; }
+.vr-title { flex: 0 0 auto; text-align: right; }
+.vr-title b {
+  display: block; font-family: var(--display); font-size: 25px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.14em; text-transform: uppercase; color: #fff;
+}
+.vr-title span {
+  display: inline-block; margin-top: 7px; padding: 2px 9px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 99px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #E6F3EE;
+}
+.vr-gold { height: 4px; background: linear-gradient(90deg, var(--vr-gold), #E9C46A 50%, var(--vr-gold)); }
 
-.voucher-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.voucher-box { border: 1px solid #cfcfcf; border-radius: 6px; padding: 10px 12px; }
+.vr-meta {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  padding: 12px 28px 10px; border-bottom: 1px solid var(--vr-rule);
+}
+.vr-meta span { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #6B7B74; }
+.vr-meta b { font-size: 12.5px; font-weight: 600; color: #111; }
+.vr-meta > div:last-child { text-align: right; }
+/* The serial is printed in red, as a numbering machine stamps a receipt book. */
+.vr-no b { font-family: var(--mono); font-size: 19px; font-weight: 700; letter-spacing: 0.06em; color: #C0392B; }
+
+.vr-lines { padding: 14px 28px 4px; }
+.vr-lines p { display: flex; align-items: baseline; gap: 8px; margin: 0 0 9px; }
+.vr-lines span { flex: 0 0 auto; font-size: 11.5px; font-style: italic; color: #4A5A53; }
+.vr-lines b {
+  flex: 1 1 0; min-width: 0; min-height: 20px; padding: 0 6px 1px; border-bottom: 1px dotted #555;
+  font-size: 13.5px; font-weight: 600; color: #0B2B21; overflow-wrap: anywhere;
+}
+.vr-lines b.fixed { flex: 0 0 auto; min-width: 118px; }
+
+.vr-amount-row { display: flex; align-items: center; gap: 18px; padding: 4px 28px 14px; }
+.vr-amount {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; padding: 7px 16px;
+  border: 2px solid var(--vr-ink); border-radius: 6px; background: var(--vr-wash);
+}
+.vr-amount span { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--vr-ink); }
+.vr-amount b { font-family: var(--mono); font-size: 21px; font-weight: 700; letter-spacing: -0.01em; color: #0B2B21; }
+.vr-seal {
+  flex: 0 0 auto; padding: 5px 12px; border: 2px double #B4610A; border-radius: 6px; transform: rotate(-6deg);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #B4610A; opacity: 0.85;
+}
+.vr-seal.full { border-color: #0C7A3E; color: #0C7A3E; }
+.vr-facts { flex: 1 1 0; min-width: 0; display: grid; grid-template-columns: 1.6fr 1fr; gap: 4px 14px; }
+.vr-facts span { display: block; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7B74; }
+.vr-facts b { display: block; font-size: 11.5px; font-weight: 600; color: #111; overflow-wrap: anywhere; }
+
+.voucher-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 28px 12px; }
+.voucher-box { border: 1px solid var(--vr-rule); border-radius: 6px; overflow: hidden; background: #fff; }
 .voucher-box-title {
-  margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #e2e2e2;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333;
+  padding: 5px 12px; background: var(--vr-wash); border-bottom: 1px solid var(--vr-rule);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vr-ink);
 }
-.voucher-table-mini { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.voucher-table-mini td { padding: 2.5px 0; vertical-align: top; overflow-wrap: anywhere; }
-.voucher-table-mini td:first-child { width: 34%; color: #666; }
+.voucher-table-mini { width: calc(100% - 24px); margin: 6px 12px 7px; border-collapse: collapse; font-size: 11.5px; }
+.voucher-table-mini td { padding: 2px 0; vertical-align: top; overflow-wrap: anywhere; }
+.voucher-table-mini td:first-child { width: 34%; color: #6B7B74; }
 
-.voucher-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 14px; margin-bottom: 14px; }
-.voucher-facts > div { min-width: 0; }
-.voucher-facts .wide { grid-column: 1 / -1; }
-.voucher-facts span { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #666; }
-.voucher-facts b { display: block; font-size: 12px; font-weight: 600; color: #111; overflow-wrap: anywhere; }
-
-.voucher-table-main { width: 100%; border-collapse: collapse; font-size: 12.5px; border: 1px solid #cfcfcf; }
+.voucher-table-main { width: calc(100% - 56px); margin: 0 28px; border-collapse: collapse; font-size: 12.5px; border: 1px solid var(--vr-rule); }
 .voucher-table-main th {
-  padding: 7px 10px; text-align: left; background: #f0f0f0; color: #222; border-bottom: 1px solid #cfcfcf;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 6px 10px; text-align: left; background: var(--vr-ink); color: #fff;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
 }
-.voucher-table-main td { padding: 8px 10px; border-bottom: 1px solid #e6e6e6; color: #222; }
+.voucher-table-main td { padding: 7px 10px; border-bottom: 1px solid #E3ECE8; color: #222; }
 .voucher-table-main .r { text-align: right; white-space: nowrap; }
-.voucher-tot-row td { background: #f6f6f6; border-top: 2px solid #111; border-bottom: 0; font-size: 14px; font-weight: 800; color: #111; }
+.voucher-tot-row td { background: var(--vr-wash); border-top: 2px solid var(--vr-ink); border-bottom: 0; font-size: 14px; font-weight: 800; color: #0B2B21; }
 
-.voucher-words { display: flex; gap: 8px; align-items: baseline; margin: 8px 0 14px; font-size: 11.5px; }
-.voucher-words span { flex: 0 0 auto; color: #666; }
-.voucher-words b { font-weight: 600; color: #111; border-bottom: 1px dotted #999; flex: 1; }
+.voucher-notes { margin: 12px 28px 14px; padding: 7px 12px; border-left: 3px solid var(--vr-gold); background: #FBF8F0; font-size: 10px; color: #444; }
+.voucher-notes ol { margin: 2px 0 0; padding-left: 16px; }
+.voucher-notes p { margin: 4px 0 0; }
 
-.voucher-notes { margin-bottom: 18px; padding: 9px 12px; border: 1px dashed #bbb; border-radius: 6px; font-size: 10.5px; color: #444; }
-.voucher-notes ol { margin: 3px 0 0; padding-left: 16px; }
-.voucher-notes p { margin: 5px 0 0; }
-
-.voucher-signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; break-inside: avoid; }
-.sig-box { border: 1px solid #cfcfcf; border-radius: 6px; padding: 8px 10px 9px; text-align: center; }
-.sig-space { height: 64px; border-bottom: 1px solid #222; margin-bottom: 6px; display: grid; place-items: center; }
+.voucher-signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 0 28px 12px; break-inside: avoid; }
+.sig-box { border: 1px solid var(--vr-rule); border-radius: 6px; padding: 6px 10px 8px; text-align: center; background: #fff; }
+.sig-space { height: 56px; border-bottom: 1px solid #222; margin-bottom: 5px; display: grid; place-items: center; }
 .stamp-box {
-  width: 92px; height: 50px; border: 1px dashed #aaa; border-radius: 6px; display: grid; place-items: center;
-  font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #999;
+  width: 92px; height: 46px; border: 1px dashed #9DB5AB; border-radius: 6px; display: grid; place-items: center;
+  font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #9DB5AB;
 }
-.sig-label { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #333; }
+.sig-label { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vr-ink); }
 .sig-name { min-height: 17px; font-size: 11.5px; font-weight: 600; color: #111; overflow-wrap: anywhere; }
-.sig-title { font-size: 10px; color: #666; }
+.sig-title { font-size: 10px; color: #6B7B74; }
 
-.voucher-footer { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #ddd; font-size: 9.5px; color: #777; }
+.voucher-footer {
+  display: flex; justify-content: space-between; gap: 12px; margin: 0 28px; padding-top: 8px;
+  border-top: 1px solid var(--vr-rule); font-size: 9.5px; color: #6B7B74;
+}
+.voucher-footer span:first-child { font-weight: 700; font-style: italic; color: var(--vr-ink); }
 
 /* ---- 80 mm thermal slip (72 mm printable width) ---- */
 .thermal-slip {
@@ -1252,7 +1301,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   }
   body.receipt-open .receipt-modal-actions { display: none !important; }
   body.receipt-open .receipt-modal-scroll { padding: 0 !important; overflow: visible !important; }
-  body.receipt-open .printable-voucher { min-width: 0; padding: 0; box-shadow: none; }
+  body.receipt-open .printable-voucher { min-width: 0; box-shadow: none; }
   body.receipt-open .thermal-slip { margin: 0; box-shadow: none; }
   body.receipt-open .printable-voucher,
   body.receipt-open .thermal-slip {
