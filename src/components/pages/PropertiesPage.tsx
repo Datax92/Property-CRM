@@ -83,7 +83,7 @@ export function PropertiesPage() {
         }
       >
         <SummaryKpis pairs={summaryPairs} />
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="properties" />
       </PageShell>
     );
   }
@@ -275,7 +275,7 @@ export function PropertiesPage() {
           to net profit.
         </div>
       </div>
-      <DataTable cols={cols} rows={rows} totals={true} />
+      <DataTable cols={cols} rows={rows} totals={true} attach="properties" />
     </PageShell>
   );
 }

@@ -58,7 +58,7 @@ export function CostsPage() {
           </button>
         }>
         <SummaryKpis pairs={summaryPairs} />
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="salaries" />
       </PageShell>
     );
   }
@@ -127,7 +127,7 @@ export function CostsPage() {
             </div>
           </div>
         )}
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="bills" />
       </PageShell>
     );
   }
@@ -231,7 +231,7 @@ export function CostsPage() {
             profit bridge. The fiscal year closes in <b>June</b> — all tracking below follows July→June.
           </div>
         </div>
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="taxes" />
       </PageShell>
     );
   }
@@ -278,7 +278,7 @@ export function CostsPage() {
             operating expenses.
           </div>
         </div>
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="zakat" />
       </PageShell>
     );
   }
@@ -375,7 +375,7 @@ export function CostsPage() {
       }
     >
       <SummaryKpis pairs={summaryPairs} />
-      <DataTable cols={cols} rows={rows} totals={true} />
+      <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
     </PageShell>
   );
 }

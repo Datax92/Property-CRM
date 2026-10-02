@@ -7,6 +7,7 @@ import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
+import { AttachmentsField } from '../Attachments';
 import type { CostSheet } from '../../lib/types';
 
 export function TradingPage() {
@@ -165,7 +166,7 @@ export function TradingPage() {
       >
         <SummaryKpis pairs={summaryPairs} />
         <div style={{ marginTop: '14px' }}>
-          <DataTable cols={cols} rows={rows} totals={true} />
+          <DataTable cols={cols} rows={rows} totals={true} attach="costSheets" />
         </div>
       </PageShell>
     );
@@ -957,6 +958,11 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
                 ))}
               </select>
               <span className="hint">Saving updates this property’s cost and value.</span>
+            </div>
+            <div className="fld full">
+              <label>Attachments</label>
+              <AttachmentsField value={form.attachments || []} onChange={(next) => updateField('attachments', next)} />
+              <span className="hint">Deeds, transfer letters, receipts. Stored with the sheet when you press Save.</span>
             </div>
           </div>
         </div>

@@ -23,6 +23,7 @@ interface AppContextType {
   grossBasis: 'cogs' | 'doc';
   menu: MenuState | null;
   modal: ModalState | null;
+  attach: { coll: string; id: string } | null;
   fresh: string[];
   dataVersion: number;
   tip: { html: string; x: number; y: number; visible: boolean };
@@ -54,6 +55,8 @@ interface AppContextType {
   closeMenu: () => void;
   openModal: (id: string, preset?: Record<string, any>) => void;
   closeModal: () => void;
+  openAttachments: (coll: string, id: string) => void;
+  closeAttachments: () => void;
   setModalField: (key: string, value: any) => void;
   submitModal: () => void;
   voidPayment: (id: string) => void;
@@ -117,6 +120,7 @@ function invoiceFields(kind: 'sale' | 'purchase') {
     { k: 'receivedFromCnic', l: 'Received from — CNIC', ph: '00000-0000000-0' },
     { k: 'approvedByName', l: 'Approved by', ph: 'Authorised signatory' },
     { k: 'notes', l: 'Notes', ph: 'Optional notes', full: true },
+    { k: 'attachments', l: 'Attachments', type: 'files', full: true },
   ];
 }
 const invoiceBalance = (v: any) =>
@@ -159,6 +163,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
       { k: 'currentValue', l: 'Current market value', type: 'money', hint: 'Defaults to the purchase price.' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => {
       const total = n(v.price) + n(v.registration) + n(v.legal) + n(v.development) + n(v.otherCost);
@@ -209,6 +214,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'commissionPct', l: 'Commission %', type: 'number', hint: 'Blank uses the agent’s standard rate. Ignored for a direct sale.' },
       { k: 'tax', l: 'Withholding tax', type: 'money', hint: 'Blank uses 1% of the selling price.' },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => {
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
@@ -266,6 +272,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the amount.' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
       { k: 'note', l: 'Note', ph: 'Optional description', full: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
       ['Amount', n(v.amount)],
@@ -336,6 +343,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { k: 'ref', l: 'Reference number', ph: 'Cheque or transfer reference' },
       { k: 'note', l: 'Description', ph: 'What this payment is for', full: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     onChange: (key: string, value: any) => {
       if (key !== 'settle') return null;
@@ -394,6 +402,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'cnic', l: 'CNIC', ph: '00000-0000000-0' },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { k: 'rate', l: 'Standard commission %', type: 'number', def: '2', req: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     validate: (v: any) => (n(v.rate) < 0 || n(v.rate) > 20 ? { rate: 'Commission must be between 0 and 20%.' } : {}),
     submit: (v: any) => {
@@ -422,6 +431,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Tax amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the tax amount.' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
       ['Tax amount', n(v.amount)],
@@ -449,6 +459,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'paidTo', l: 'Paid to', ph: 'Recipient or organisation' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
       { k: 'ref', l: 'Reference', ph: 'Receipt or transfer reference' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => {
       const base = Math.max(0, n(v.eligibleAssets) - n(v.liabilities));
@@ -481,6 +492,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Bill amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the bill amount.' },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
       ['Bill amount', n(v.amount)],
@@ -509,6 +521,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'deduction', l: 'Deduction', type: 'money' },
       { k: 'status', l: 'Status', type: 'select', opts: () => ['Paid', 'Pending'], def: 'Paid', req: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
       ['Basic + bonus + allowance', n(v.basic) + n(v.bonus) + n(v.allowance)],
@@ -533,6 +546,8 @@ function formDefaults(id: string) {
     const def = typeof fd.def === 'function' ? fd.def() : fd.def;
     if (def !== undefined) {
       v[fd.k] = def;
+    } else if (fd.type === 'files') {
+      v[fd.k] = [];
     } else if (fd.type === 'select') {
       const opts = fd.opts();
       const first = Array.isArray(opts[0]) ? opts[0][0] : opts[0];
@@ -560,6 +575,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [grossBasis, setGrossBasis] = useState<'cogs' | 'doc'>('cogs');
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [attach, setAttach] = useState<{ coll: string; id: string } | null>(null);
   const [fresh, setFresh] = useState<string[]>([]);
   const [dataVersion, setDataVersion] = useState<number>(0);
   const [tip, setTip] = useState<{ html: string; x: number; y: number; visible: boolean }>({
@@ -762,6 +778,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const closeModal = useCallback(() => setModal(null), []);
 
+  const openAttachments = useCallback((coll: string, id: string) => {
+    setAttach({ coll, id });
+    setMenu(null);
+  }, []);
+  const closeAttachments = useCallback(() => setAttach(null), []);
+
   const setModalField = useCallback((key: string, value: any) => {
     setModal((prev) => {
       if (!prev) return null;
@@ -878,9 +900,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let cols: string[] = [];
     let rows: string[][] = [];
     if (tbl) {
-      cols = Array.from(tbl.querySelectorAll('thead th')).map((th) => th.textContent?.replace(/[↑↓]/g, '').trim() || '');
+      cols = Array.from(tbl.querySelectorAll('thead th:not([data-noexport])')).map((th) => th.textContent?.replace(/[↑↓]/g, '').trim() || '');
       rows = Array.from(tbl.querySelectorAll('tbody tr')).map((tr) =>
-        Array.from(tr.children).map((td) => td.textContent?.trim() || '')
+        Array.from(tr.children).filter((td) => !td.hasAttribute('data-noexport')).map((td) => td.textContent?.trim() || '')
       );
     } else {
       const k = M.computeKPIs(range, effectiveFilters);
@@ -953,9 +975,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let cols: string[] = [];
     let rows: string[][] = [];
     if (tbl) {
-      cols = Array.from(tbl.querySelectorAll('thead th')).map((th) => th.textContent?.replace(/[↑↓]/g, '').trim() || '');
+      cols = Array.from(tbl.querySelectorAll('thead th:not([data-noexport])')).map((th) => th.textContent?.replace(/[↑↓]/g, '').trim() || '');
       rows = Array.from(tbl.querySelectorAll('tbody tr')).map((tr) =>
-        Array.from(tr.children).map((td) => td.textContent?.trim() || '')
+        Array.from(tr.children).filter((td) => !td.hasAttribute('data-noexport')).map((td) => td.textContent?.trim() || '')
       );
     }
 
@@ -1005,6 +1027,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         grossBasis,
         menu,
         modal,
+        attach,
         fresh,
         dataVersion,
         tip,
@@ -1032,6 +1055,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         closeMenu,
         openModal,
         closeModal,
+        openAttachments,
+        closeAttachments,
         setModalField,
         submitModal,
         voidPayment,

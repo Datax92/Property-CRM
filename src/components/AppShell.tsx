@@ -8,6 +8,7 @@ import { Navbar } from './Navbar';
 import { MainRouter } from './MainRouter';
 import { Menus } from './Menus';
 import { Modals } from './Modals';
+import { AttachmentsModal } from './Attachments';
 import { TooltipToast } from './TooltipToast';
 import { syncFirestoreData, onFirestoreSaveError, onFirestoreReadError } from '../lib/firestore-service';
 
@@ -94,6 +95,7 @@ export function AppShell() {
       <div id="layer">
         <Menus />
         <Modals />
+        <AttachmentsModal />
       </div>
 
       <TooltipToast />

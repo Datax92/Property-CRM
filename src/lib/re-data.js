@@ -674,7 +674,7 @@ export function addProperty(v) {
     extras: { registration: +v.registration || 0, legal: +v.legal || 0, development: +v.development || 0, other: +v.otherCost || 0 },
     paid: +v.paid || 0, status: v.status, office: v.office,
     currentValue: +v.currentValue || +v.price,
-    manual: true,
+    manual: true, attachments: v.attachments || [],
   });
   DATA.properties.push(p);
   saveRecordToFirestore('properties', p.id, p);
@@ -707,7 +707,7 @@ export function addSale(v) {
     netProfit: price - p.totalCost - commission - saleTax - other,
     payStatus: received >= price ? 'Paid' : dueDate < TODAY ? 'Overdue' : received > 0 ? 'Partially Paid' : 'Unpaid',
     saleStatus: received >= price ? 'Completed' : 'In Payment',
-    office: p.office, manual: true,
+    office: p.office, manual: true, attachments: v.attachments || [],
   };
   DATA.sales.push(s);
   p.status = 'Sold';
@@ -738,7 +738,7 @@ export function addExpense(v) {
     id: nextId(DATA.expenses, 'EX-', 4), group: v.group, category: v.category,
     date: parseDate(v.date), amount, paid, outstanding: Math.max(0, amount - paid),
     vendor: v.vendor, office: v.office, method: v.method,
-    note: v.note || v.category, manual: true,
+    note: v.note || v.category, manual: true, attachments: v.attachments || [],
     status: paid >= amount ? 'Paid' : paid === 0 ? 'Unpaid' : 'Partially Paid',
   };
   DATA.expenses.push(e);
@@ -760,7 +760,7 @@ export function addPayment(v) {
     note: v.note || v.category, office: v.office || OFFICES[0],
     createdBy: v.createdBy || ACTOR, approvedBy: v.approvedBy || ACTOR,
     settleKey: v.settleKey || null,
-    status: 'Posted', manual: true,
+    status: 'Posted', manual: true, attachments: v.attachments || [],
   };
   DATA.payments.push(t);
   DATA.payments.sort((a, b) => b.date - a.date);
@@ -838,7 +838,7 @@ export function addInvoice(v) {
     approvedByName: v.approvedByName || '',
 
     notes: v.notes || '',
-    manual: true,
+    manual: true, attachments: v.attachments || [],
   };
   DATA.invoices.push(inv);
   saveRecordToFirestore('invoices', inv.id, inv);
@@ -892,7 +892,7 @@ const dueState = (amount, paid, dueDate) =>
 export function addAgent(v) {
   const a = {
     id: nextId(DATA.agents, 'AG-', 3), name: v.name, phone: v.phone || '', cnic: v.cnic || '',
-    office: v.office || OFFICES[0], rate: v.rate === '' || v.rate == null ? 2 : +v.rate, manual: true,
+    office: v.office || OFFICES[0], rate: v.rate === '' || v.rate == null ? 2 : +v.rate, manual: true, attachments: v.attachments || [],
   };
   DATA.agents.push(a);
   saveRecordToFirestore('agents', a.id, a);
@@ -910,7 +910,7 @@ export function addTax(v) {
     propertyId: prop ? prop.id : null, property: prop ? prop.name : '—',
     authority: v.authority || 'FBR', date: parseDate(v.date), dueDate,
     amount, paid, outstanding: amount - paid, status: dueState(amount, paid, dueDate),
-    office: v.office || OFFICES[0], manual: true,
+    office: v.office || OFFICES[0], manual: true, attachments: v.attachments || [],
   };
   DATA.taxes.push(t);
   saveRecordToFirestore('taxes', t.id, t);
@@ -929,7 +929,7 @@ export function addZakat(v) {
   const z = {
     id: nextId(DATA.zakat, 'ZK-', 4), period: v.period, eligibleAssets, zakatable, rate,
     calculated: Math.round((zakatable * rate) / 100), amount: Math.round(+v.amount || 0),
-    date: parseDate(v.date), ref: v.ref || '—', manual: true,
+    date: parseDate(v.date), ref: v.ref || '—', manual: true, attachments: v.attachments || [],
   };
   DATA.zakat.push(z);
   saveRecordToFirestore('zakat', z.id, z);
@@ -968,7 +968,7 @@ export function addBill(v) {
     id: nextId(DATA.bills, 'BL-', 4), type: v.type, vendor: v.vendor, number: v.number || '—',
     period: v.period || MONTHS[dueDate.getMonth()] + ' ' + dueDate.getFullYear(), dueDate,
     amount, paid, outstanding: amount - paid, status: dueState(amount, paid, dueDate),
-    office: v.office || OFFICES[0], manual: true,
+    office: v.office || OFFICES[0], manual: true, attachments: v.attachments || [],
   };
   DATA.bills.push(b);
   saveRecordToFirestore('bills', b.id, b);
@@ -987,7 +987,7 @@ export function addSalary(v) {
     id: nextId(DATA.salaries, 'SL-', 4), employee: v.employee, dept: v.dept || '—',
     monthLabel: v.monthLabel || MONTHS[date.getMonth()] + ' ' + date.getFullYear(),
     basic, bonus, allowance, deduction, net: basic + bonus + allowance - deduction,
-    date, status: v.status === 'Pending' ? 'Pending' : 'Paid', office: v.office || OFFICES[0], manual: true,
+    date, status: v.status === 'Pending' ? 'Pending' : 'Paid', office: v.office || OFFICES[0], manual: true, attachments: v.attachments || [],
   };
   DATA.salaries.push(sl);
   saveRecordToFirestore('salaries', sl.id, sl);
@@ -996,6 +996,15 @@ export function addSalary(v) {
     office: sl.office, method: v.method, note: 'Salary — ' + sl.monthLabel, settleKey: 'sal:' + sl.id,
   });
   return sl;
+}
+
+/** Replace the image attachments of a saved record (any ledger). */
+export function setAttachments(coll, id, list) {
+  const x = (DATA[coll] || []).find((r) => r.id === id);
+  if (!x) return null;
+  x.attachments = list;
+  saveRecordToFirestore(coll, id, x);
+  return x;
 }
 
 /* ====================================================================

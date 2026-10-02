@@ -431,6 +431,45 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .pcard .meta .b .v { font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
 .pcard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 
+/* attachments */
+.att { display: flex; flex-direction: column; gap: 6px; }
+.att-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.att-item {
+  position: relative; display: flex; flex-direction: column; min-width: 0; padding: 4px 4px 5px;
+  border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card);
+  transition: box-shadow .15s, border-color .15s; animation: o-rise .28s var(--ease) both;
+}
+.att-item:hover { border-color: var(--brand-2); box-shadow: var(--sh-1); }
+.att-item img { display: block; width: 100%; height: 78px; object-fit: cover; border-radius: 3px; background: var(--paper-2); }
+.att-doc {
+  display: grid; place-items: center; width: 100%; height: 78px; border-radius: 3px;
+  background: var(--brand-wash); color: var(--brand); font-size: 15px; font-weight: 700; letter-spacing: .04em;
+}
+.att-name { margin-top: 4px; font-size: 12px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-size { font-size: 11px; color: var(--ink-3); }
+.att-x {
+  position: absolute; top: 7px; right: 7px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(17,24,39,.7); color: #fff; opacity: 0; transition: opacity .15s, background .15s;
+}
+.att-item:hover .att-x, .att-x:focus-visible { opacity: 1; }
+.att-x:hover { background: var(--bad); }
+.att-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 116px;
+  border: 1px dashed #B9BDC6; border-radius: 4px; color: var(--ink-2); font-size: 13px; font-weight: 500;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.att-add:hover:not([disabled]) { border-color: var(--brand-2); color: var(--brand-2); background: #F1F8F8; }
+.att-add[disabled] { opacity: .6; cursor: not-allowed; }
+.att-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--rule-2); border-top-color: var(--brand-2); animation: spin .8s linear infinite; }
+.att .bad { font-size: 12px; color: var(--bad); font-weight: 500; }
+.attbtn {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; border-radius: 4px;
+  color: var(--ink-3); font-size: 12px; transition: background .15s, color .15s;
+}
+.attbtn:hover { background: #E7E9ED; color: var(--ink); }
+.attbtn.has { color: var(--brand-2); }
+.attbtn b { font-weight: 600; }
+
 /* notification: slides in from the top right */
 .toast {
   position: fixed; right: 16px; top: calc(var(--nav-h) + 12px); z-index: 99; max-width: min(380px, calc(100vw - 32px));

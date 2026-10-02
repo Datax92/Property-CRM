@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { useApp, FORMS_DEF } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
+import { AttachmentsField } from './Attachments';
 
 const dstr = (d: Date | string) => (d instanceof Date ? M.dateInput(d) : d);
 
@@ -85,7 +86,9 @@ export function Modals() {
                   const inputRef = fd.k === firstKey ? (el: any) => { firstInputRef.current = el; } : undefined;
 
                   let ctl: React.ReactNode;
-                  if (fd.type === 'select') {
+                  if (fd.type === 'files') {
+                    ctl = <AttachmentsField value={values[fd.k] || []} onChange={(next) => setModalField(fd.k, next)} />;
+                  } else if (fd.type === 'select') {
                     const rawOpts = fd.opts();
                     const opts = rawOpts.map((o: any) => (Array.isArray(o) ? o : [o, o]));
                     ctl = (

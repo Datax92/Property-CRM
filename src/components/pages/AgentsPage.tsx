@@ -56,7 +56,7 @@ export function AgentsPage() {
     return (
       <PageShell title={meta.t} u={meta.u} p={meta.p}>
         <SummaryKpis pairs={summaryPairs} />
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="commissions" />
       </PageShell>
     );
   }
@@ -113,7 +113,7 @@ export function AgentsPage() {
           <p>Add your agents here. They can then be picked when recording a sale and earn commission on it.</p>
         </div>
       ) : (
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="agents" />
       )}
     </PageShell>
   );

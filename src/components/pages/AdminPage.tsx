@@ -190,7 +190,7 @@ export function AdminPage() {
       }
     >
       <SummaryKpis pairs={summaryPairs} />
-      <DataTable cols={cols} rows={rows} totals={true} />
+      <DataTable cols={cols} rows={rows} totals={true} attach="payments" />
     </PageShell>
   );
 }

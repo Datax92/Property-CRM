@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
 import type { TableColumn } from '../lib/types';
+import { AttachButton } from './Attachments';
 
 /** Runs a figure up to its value over a moment, so a changed number is noticed. */
 function useCountUp(target: number) {
@@ -277,10 +278,13 @@ export function DataTable<T extends { id?: string }>({
   cols,
   rows,
   totals = false,
+  attach,
 }: {
   cols: TableColumn<T>[];
   rows: T[];
   totals?: boolean;
+  /** Ledger these rows belong to: adds a paperclip column for their attachments. */
+  attach?: string;
 }) {
   const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers } = useApp();
 
@@ -351,6 +355,11 @@ export function DataTable<T extends { id?: string }>({
                     </button>
                   </th>
                 ))}
+                {attach && (
+                  <th data-noexport="1" data-noprint="1">
+                    Files
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -366,6 +375,11 @@ export function DataTable<T extends { id?: string }>({
                         </td>
                       );
                     })}
+                    {attach && (
+                      <td data-noexport="1" data-noprint="1">
+                        {r.id ? <AttachButton coll={attach} id={r.id} /> : null}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -383,6 +397,7 @@ export function DataTable<T extends { id?: string }>({
                       </td>
                     );
                   })}
+                  {attach && <td data-noexport="1" data-noprint="1" />}
                 </tr>
               </tfoot>
             )}

@@ -117,7 +117,7 @@ export function SalesPage() {
             />
           </div>
         </div>
-        <DataTable cols={cols} rows={rows} totals={true} />
+        <DataTable cols={cols} rows={rows} totals={true} attach="sales" />
       </PageShell>
     );
   }
@@ -194,7 +194,7 @@ export function SalesPage() {
             </p>
           </div>
         ) : (
-          <DataTable cols={invCols} rows={invRows} totals={true} />
+          <DataTable cols={invCols} rows={invRows} totals={true} attach="invoices" />
         )}
         <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
       </PageShell>
@@ -277,7 +277,7 @@ export function SalesPage() {
       }
     >
       <SummaryKpis pairs={summaryPairs} />
-      <DataTable cols={cols} rows={rows} totals={true} />
+      <DataTable cols={cols} rows={rows} totals={true} attach="sales" />
       <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
     </PageShell>
   );
