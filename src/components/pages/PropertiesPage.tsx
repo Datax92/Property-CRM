@@ -128,7 +128,16 @@ export function PropertiesPage() {
     ];
 
     return (
-      <PageShell title={meta.t} u={meta.u} p={meta.p}>
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <button type="button" className="btn pri" onClick={() => openModal('project')}>
+            <Icon name="plus" /> Add project
+          </button>
+        }
+      >
         <SummaryKpis pairs={summaryPairs} />
         <DataTable cols={cols} rows={rows} totals={true} />
       </PageShell>

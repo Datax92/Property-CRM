@@ -12,6 +12,7 @@ import { getFirebaseAuth, getFirebaseFirestore } from './firebase';
 import * as M from './re-data';
 
 const COLLECTIONS = [
+  'projects',
   'agents',
   'properties',
   'sales',

@@ -55,6 +55,8 @@ export interface ModalState {
   errors: Record<string, string>;
   /** Set when the form is correcting a saved record rather than creating one. */
   editId?: string;
+  /** Set when the form is creating a mirror (an editable copy) of this invoice. */
+  mirrorOf?: string;
 }
 
 export interface MenuState {

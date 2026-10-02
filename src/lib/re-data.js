@@ -27,7 +27,9 @@ const round = (n) => Math.round(n);
 
 export const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-export const PROJECTS = [
+// The starting list of societies. Projects added in the app are stored in the database
+// and joined on to it, so PROJECTS is always the full list.
+const BUILTIN_PROJECTS = [
   { id: 'PRJ-01', name: 'DHA Phase 6', city: 'Lahore' },
   { id: 'PRJ-02', name: 'Bahria Orchard', city: 'Lahore' },
   { id: 'PRJ-03', name: 'Gulberg Greens', city: 'Islamabad' },
@@ -35,6 +37,7 @@ export const PROJECTS = [
   { id: 'PRJ-05', name: 'Askari XI', city: 'Lahore' },
   { id: 'PRJ-06', name: 'Blue World City', city: 'Islamabad' },
 ];
+export const PROJECTS = BUILTIN_PROJECTS.slice();
 export const OFFICES = ['Head Office — Lahore','DHA Branch — Lahore','Islamabad Branch','Karachi Branch','Multan Branch'];
 export const TYPES = ['Residential Plot','Commercial Plot','House','Apartment','Farmhouse','Shop'];
 export const STATUSES = ['Available','Reserved','Under Process','Sold'];
@@ -89,8 +92,9 @@ function buildData() {
   const audit = [];
   const costSheets = [];
   const invoices = [];
+  const projects = [];
 
-  return { agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices };
+  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices };
 }
 
 
@@ -839,13 +843,16 @@ function invoiceBody(v) {
 
 export function addInvoice(v) {
   const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+  // A mirror is a separate invoice started as a copy of another one; it keeps a link to its source.
+  const source = v.mirrorOf ? DATA.invoices.find((i) => i.id === v.mirrorOf) : null;
   const inv = {
     id: nextId(DATA.invoices, 'INV-', 5),
     srNo: DATA.invoices.filter((i) => i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
     type: v.type, // 'sale' or 'purchase'
     ...invoiceBody(v),
     propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
-    saleId: v.saleId || null,
+    saleId: v.saleId || (source ? source.saleId : null) || null,
+    mirrorOf: source ? source.id : null,
     manual: true,
   };
   DATA.invoices.push(inv);
@@ -860,7 +867,8 @@ export function addInvoice(v) {
     entity: inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice',
     prevAmount: null,
     newAmount: inv.totalAmount,
-    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.type === 'sale' ? inv.buyerName : inv.sellerName || inv.buyerName}`,
+    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.type === 'sale' ? inv.buyerName : inv.sellerName || inv.buyerName}` +
+      (inv.mirrorOf ? ` (mirror of ${inv.mirrorOf})` : ''),
     manual: true,
   };
   DATA.audit.unshift(au);
@@ -905,6 +913,25 @@ export function addAgent(v) {
   DATA.agents.push(a);
   saveRecordToFirestore('agents', a.id, a);
   return a;
+}
+
+/** Rebuild PROJECTS in place (every screen holds the same array) from the saved projects. */
+function syncProjects(rows) {
+  const added = rows.filter((p) => p && p.name && !BUILTIN_PROJECTS.some((b) => b.id === p.id));
+  added.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  PROJECTS.length = 0;
+  PROJECTS.push(...BUILTIN_PROJECTS, ...added);
+}
+
+export function addProject(v) {
+  const name = String(v.name || '').trim();
+  if (!name) throw new Error('Enter the project name.');
+  if (PROJECTS.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
+  const p = { id: nextId(PROJECTS, 'PRJ-', 2), name, city: String(v.city || '').trim() || '—', manual: true };
+  DATA.projects.push(p);
+  syncProjects(DATA.projects);
+  saveRecordToFirestore('projects', p.id, p);
+  return p;
 }
 
 export const TAX_TYPES = ['Advance Tax §236K', 'Advance Tax §236C', 'Capital Gains Tax', 'Withholding Tax', 'Income Tax', 'Property Tax', 'Other'];
@@ -1332,6 +1359,7 @@ export function normalizeLedger(name, rows) {
   if (name === 'sales') rows.forEach((s) => { if (s.outstanding > 0 && isDate(s.dueDate)) s.payStatus = s.dueDate < TODAY ? 'Overdue' : s.received > 0 ? 'Partially Paid' : 'Unpaid'; });
   if (name === 'bills' || name === 'taxes') rows.forEach((x) => { x.status = dueState(x.amount, x.paid, x.dueDate); });
   if (name === 'commissions') rows.forEach((c) => { if (c.outstanding > 0 && isDate(c.date) && c.date < addDays(TODAY, -30)) c.status = 'Overdue'; });
+  if (name === 'projects') syncProjects(rows);
   if (name === 'payments') rows.sort((a, b) => b.date - a.date);
   if (name === 'audit' || name === 'costSheets') rows.sort((a, b) => String(b.id).localeCompare(String(a.id)));
   return rows;

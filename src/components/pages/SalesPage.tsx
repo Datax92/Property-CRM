@@ -11,7 +11,7 @@ import { InvoiceReceiptModal } from '../InvoiceReceiptModal';
 import type { Invoice } from '../../lib/types';
 
 export function SalesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
@@ -136,7 +136,20 @@ export function SalesPage() {
     ];
 
     const invCols = [
-      { key: 'id', label: 'Invoice #' },
+      {
+        key: 'id',
+        label: 'Invoice #',
+        render: (i: any) => (
+          <>
+            {i.id}
+            {i.mirrorOf && (
+              <span className="tag mute" style={{ marginLeft: '6px' }} title={`Created as a copy of ${i.mirrorOf}`}>
+                Mirror of {i.mirrorOf}
+              </span>
+            )}
+          </>
+        ),
+      },
       { key: 'srNo', label: 'Sr No.' },
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },
@@ -165,6 +178,21 @@ export function SalesPage() {
           title="Open the printable receipt / voucher (A4 or thermal)"
         >
           <Icon name="print" size={12} /> Print Receipt
+        </button>
+      ),
+    } as any);
+    invCols.splice(1, 0, {
+      key: 'mirror',
+      label: 'Mirror',
+      render: (i: any) => (
+        <button
+          type="button"
+          className="btn sm"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => openMirror(i.id)}
+          title="Make an editable copy of this invoice, saved as a new invoice"
+        >
+          Mirror
         </button>
       ),
     } as any);

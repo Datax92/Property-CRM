@@ -20,13 +20,13 @@ export function Modals() {
 
   if (!modal) return null;
 
-  const { id, values, errors, editId } = modal;
+  const { id, values, errors, editId, mirrorOf } = modal;
   const F = FORMS_DEF[id];
   if (!F) return null;
 
   // Editing a saved record: amounts already posted to the cash ledger are not on the form.
   const fields = editId ? F.fields.filter((fd: any) => !fd.addOnly) : F.fields;
-  const title = editId ? `${F.editTitle} · ${editId}` : F.title;
+  const title = editId ? `${F.editTitle} · ${editId}` : mirrorOf ? `Mirror invoice · copy of ${mirrorOf}` : F.title;
 
   // Group fields into fieldsets
   const groups: { name: string; fields: any[] }[] = [];
@@ -75,6 +75,8 @@ export function Modals() {
             <p>
               {editId
                 ? 'The change is saved to this record and logged in the audit trail. Amounts already paid or received are changed by recording or voiding a payment.'
+                : mirrorOf
+                ? `A copy of ${mirrorOf}, saved as a new invoice with its own number. Change anything you need before saving; ${mirrorOf} itself is not touched.`
                 : F.sub}
             </p>
           </div>

@@ -55,6 +55,7 @@ interface AppContextType {
   closeMenu: () => void;
   openModal: (id: string, preset?: Record<string, any>) => void;
   openEdit: (coll: string, id: string) => void;
+  openMirror: (invoiceId: string) => void;
   closeModal: () => void;
   openAttachments: (coll: string, id: string) => void;
   closeAttachments: () => void;
@@ -150,7 +151,7 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Property' },
       { k: 'name', l: 'Property name / title', req: true, ph: 'House A-126' },
       { k: 'type', l: 'Property type', type: 'select', opts: () => M.TYPES, req: true },
-      { k: 'projectId', l: 'Project / society', type: 'select', opts: () => M.PROJECTS.map((p: any) => [p.id, p.name]), req: true },
+      { k: 'projectId', l: 'Project / society', type: 'select', opts: () => M.PROJECTS.map((p: any) => [p.id, p.name]), req: true, hint: 'Add a society under Properties → Projects.' },
       { k: 'size', l: 'Size', ph: '10 Marla', req: true },
       { k: 'block', l: 'Block', ph: 'Block C' },
       { k: 'unit', l: 'Plot / unit number', ph: '126' },
@@ -391,9 +392,9 @@ export const FORMS_DEF: Record<string, any> = {
     fields: invoiceFields('sale'),
     calc: invoiceCalc,
     validate: invoiceValidate,
-    submit: (v: any) => {
-      const inv = M.addInvoice({ ...v, type: 'sale' });
-      return { id: inv.id, msg: 'Sale invoice ' + inv.id + ' created', go: 'sales/saleInvoices' };
+    submit: (v: any, mirrorOf?: string) => {
+      const inv = M.addInvoice({ ...v, type: 'sale', mirrorOf });
+      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/saleInvoices' };
     },
   },
   purchaseInvoice: {
@@ -405,9 +406,27 @@ export const FORMS_DEF: Record<string, any> = {
     fields: invoiceFields('purchase'),
     calc: invoiceCalc,
     validate: invoiceValidate,
+    submit: (v: any, mirrorOf?: string) => {
+      const inv = M.addInvoice({ ...v, type: 'purchase', mirrorOf });
+      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/purchaseInvoices' };
+    },
+  },
+  project: {
+    title: 'Add a project',
+    sub: 'A project or society. It can then be picked on a property, in the filters and on a cost sheet.',
+    fields: [
+      { g: 'Project' },
+      { k: 'name', l: 'Project / society name', req: true, ph: 'Faisal Hills' },
+      { k: 'city', l: 'City', req: true, ph: 'Islamabad' },
+    ],
+    validate: (v: any) =>
+      M.PROJECTS.some((p: any) => p.name.toLowerCase() === String(v.name || '').trim().toLowerCase())
+        ? { name: 'A project with this name already exists.' }
+        : {},
     submit: (v: any) => {
-      const inv = M.addInvoice({ ...v, type: 'purchase' });
-      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + ' created', go: 'sales/purchaseInvoices' };
+      const p = M.addProject(v);
+      // Rows of the projects page are keyed by name, so that is what gets highlighted.
+      return { id: p.name, msg: 'Project ' + p.name + ' added', go: 'properties/projects' };
     },
   },
   agent: {
@@ -836,6 +855,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMenu(null);
   }, []);
 
+  /** Start a new invoice as a copy of an existing one; nothing is saved until the form is. */
+  const openMirror = useCallback((invoiceId: string) => {
+    const rec = M.DATA.invoices.find((x: any) => x.id === invoiceId);
+    const id = rec ? editFormFor('invoices', rec) : null;
+    if (!id) return;
+    setModal({ id, values: { ...editValues(id, rec), attachments: [] }, errors: {}, mirrorOf: invoiceId });
+    setMenu(null);
+  }, []);
+
   const closeModal = useCallback(() => setModal(null), []);
 
   const openAttachments = useCallback((coll: string, id: string) => {
@@ -864,7 +892,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const submitModal = useCallback(() => {
     if (!modal) return;
-    const { id, values, editId } = modal;
+    const { id, values, editId, mirrorOf } = modal;
     const F = FORMS_DEF[id];
     if (!F) return;
 
@@ -922,7 +950,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toast(editId + ' updated');
         return;
       }
-      const res = F.submit(values);
+      const res = F.submit(values, mirrorOf);
       const created = LEDGERS.flatMap((key) => (M.DATA as any)[key].slice(before[key]).map((x: any) => x.id));
       setFresh((prev) => [res.id, ...created, ...prev].slice(0, 24));
       setModal(null);
@@ -1132,6 +1160,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         closeMenu,
         openModal,
         openEdit,
+        openMirror,
         closeModal,
         openAttachments,
         closeAttachments,
