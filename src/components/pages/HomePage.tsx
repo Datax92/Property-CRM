@@ -2,9 +2,8 @@
 
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { PeriodControl } from '../Shared';
 import { AppIcon } from '../AppIcons';
-import { Icon } from '../Icons';
+import DotField from '../effects/DotField';
 import * as M from '../../lib/re-data';
 
 interface Tile {
@@ -18,9 +17,9 @@ interface Tile {
   before?: () => void;
 }
 
-/** Home: one large icon per area of the business, each showing its headline figure. */
+/** Home: one large icon per area of the business, on an interactive dot backdrop. */
 export function HomePage() {
-  const { user, effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, openModal, openCostSheet, setRangeKey } = useApp();
+  const { effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, setRangeKey } = useApp();
 
   const k = M.computeKPIs(r, f);
   // Same profit basis as the dashboard and the P&L, so the three never disagree.
@@ -81,43 +80,19 @@ export function HomePage() {
 
   return (
     <div className="page o-home">
-      <div className="rolestrip">
-        <div className="ini">{user.initials}</div>
-        <div>
-          <div className="t">Welcome, {user.name}</div>
-          <div className="s">Figures below are for the selected period. Tap any icon to open it.</div>
-        </div>
-        <span className="spacer" />
-        <div className="acts" data-noprint="1">
-          <PeriodControl />
-        </div>
-      </div>
+      <DotField />
 
-      <div className="quickrow" data-noprint="1">
-        <span className="kicker">Quick entry</span>
-        <button type="button" className="btn" onClick={() => openModal('property')}>
-          <Icon name="plus" /> Property purchase
+      {alerts.length > 0 && (
+        <button type="button" className="home-alert" data-noprint="1" onClick={() => goto('dashboard/alerts')}>
+          <b>
+            {M.fmtNum(alerts.length)} {alerts.length === 1 ? 'item needs' : 'items need'} attention.
+          </b>{' '}
+          {alerts[0].title}: {alerts[0].detail}
         </button>
-        <button type="button" className="btn" onClick={() => openModal('sale')}>
-          <Icon name="plus" /> Sale
-        </button>
-        <button type="button" className="btn" onClick={() => openModal('saleInvoice')}>
-          <Icon name="plus" /> Sale invoice
-        </button>
-        <button type="button" className="btn" onClick={() => openModal('purchaseInvoice')}>
-          <Icon name="plus" /> Purchase invoice
-        </button>
-        <button type="button" className="btn" onClick={() => openModal('expense')}>
-          <Icon name="plus" /> Expense
-        </button>
-        <button type="button" className="btn" onClick={() => openModal('payment')}>
-          <Icon name="plus" /> Payment
-        </button>
-        <button type="button" className="btn" onClick={() => openCostSheet('new')}>
-          <Icon name="calculator" /> Cost sheet
-        </button>
-      </div>
+      )}
 
+      {/* Only the icons: new records are under + in the top bar, and each icon's
+          headline figure for the period is on its tooltip. */}
       <nav className="launch" aria-label="All sections">
         {tiles
           .filter((t) => !denied(t.need))
@@ -126,6 +101,7 @@ export function HomePage() {
               key={t.label}
               type="button"
               className="tile"
+              title={t.value ? `${t.label} — ${t.value}` : t.label}
               style={{ '--i': i } as React.CSSProperties}
               onClick={() => {
                 if (t.before) t.before();
@@ -136,24 +112,9 @@ export function HomePage() {
                 <AppIcon name={t.icon} />
               </span>
               <span className="tile-l">{t.label}</span>
-              {t.value && <span className={`tile-v ${t.tone || ''}`}>{t.value}</span>}
             </button>
           ))}
       </nav>
-
-      {alerts.length > 0 && (
-        <button type="button" className="note" style={{ marginTop: '14px', width: '100%', textAlign: 'left' }} onClick={() => goto('dashboard/alerts')}>
-          <span className="ic">
-            <Icon name="warn" />
-          </span>
-          <span>
-            <b>
-              {M.fmtNum(alerts.length)} {alerts.length === 1 ? 'item needs' : 'items need'} attention.
-            </b>{' '}
-            {alerts[0].title}: {alerts[0].detail}
-          </span>
-        </button>
-      )}
     </div>
   );
 }

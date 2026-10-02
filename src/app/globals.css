@@ -484,33 +484,36 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 
 /* home: app icons on a soft backdrop */
 #main.home {
-  background:
-    radial-gradient(900px 520px at 12% 0%, rgba(113,75,103,.16), transparent 62%),
-    radial-gradient(820px 520px at 92% 8%, rgba(1,126,132,.14), transparent 60%),
-    linear-gradient(180deg, #F4EFF3 0%, #EEF1F5 55%, #EAF2F2 100%);
+  position: relative;
+  background: radial-gradient(ellipse 62% 70% at 50% 46%, #E9EBEE 0%, #F1F2F4 55%, #F9FAFB 100%);
 }
-.page.o-home { max-width: 1040px; margin: 0 auto; padding-top: 22px; }
-.quickrow { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.quickrow .kicker { margin-right: 4px; }
-.quickrow .btn { background: rgba(255,255,255,.8); border-color: rgba(17,24,39,.08); }
-.quickrow .btn:hover { background: #fff; border-color: var(--brand-edge); color: var(--brand); }
-.launch { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 4px; padding: 12px 0; }
+/* the dot grid fills the whole home area, behind the icons */
+.dotfield { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.dotfield canvas { display: block; width: 100%; height: 100%; }
+.page.o-home { max-width: 880px; margin: 0 auto; padding-top: 34px; }
+.o-home > :not(.dotfield) { position: relative; z-index: 1; }
+.home-alert {
+  display: block; width: 100%; margin-bottom: 14px; padding: 12px 18px; text-align: left;
+  border-radius: 6px; border-left: 3px solid #E8C98B; background: #FCEFD9; color: #5B4A2A;
+  font-size: 14px; line-height: 1.45; transition: background .15s;
+  animation: o-rise .3s var(--ease) both;
+}
+.home-alert:hover { background: #FAE8C8; }
+.launch { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 22px 8px; padding: 18px 0; }
 .tile {
-  display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0;
-  padding: 12px 6px 10px; border-radius: 8px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; min-width: 0;
+  padding: 6px 4px; border-radius: 8px; text-align: center;
   animation: o-app .42s var(--ease) both; animation-delay: calc(var(--i, 0) * 18ms);
 }
 .tile-ic {
-  display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 8px;
-  border-radius: 14px; background: #fff;
-  box-shadow: 0 1px 2px rgba(17,24,39,.08), 0 6px 14px -6px rgba(17,24,39,.22);
+  display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 10px;
+  border-radius: 10px; background: #fff; border: 1px solid rgba(17,24,39,.07);
+  box-shadow: 0 1px 2px rgba(17,24,39,.06), 0 4px 10px -6px rgba(17,24,39,.18);
   transition: transform .2s var(--ease), box-shadow .2s;
 }
 .tile:hover .tile-ic { transform: translateY(-4px) scale(1.04); box-shadow: 0 2px 4px rgba(17,24,39,.08), 0 16px 26px -10px rgba(17,24,39,.34); }
 .tile:active .tile-ic { transform: scale(.96); }
 .tile-l { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.25; }
-.tile-v { max-width: 100%; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile-v.pos { color: var(--good); } .tile-v.neg { color: var(--bad); }
 @media (max-width: 1180px) { .launch { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
   .launch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -525,7 +528,6 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card);
   animation: o-rise .3s var(--ease) both;
 }
-.o-home .rolestrip { margin-top: 0; background: rgba(255,255,255,.72); border-color: rgba(17,24,39,.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .rolestrip .ini { width: 36px; height: 36px; border-radius: 4px; display: grid; place-items: center; background: var(--brand); color: #fff; font-size: 13px; font-weight: 700; flex: 0 0 36px; }
 .rolestrip .t { font-size: 15px; font-weight: 600; }
 .rolestrip .s { font-size: 13px; color: var(--ink-2); }
