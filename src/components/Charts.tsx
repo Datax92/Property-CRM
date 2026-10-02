@@ -291,13 +291,9 @@ export function ChartWaterfall({ steps }: { steps: any[] }) {
     PB = 58;
   const iw = W - PL - PR,
     ih = H - PT - PB;
-  let run = 0;
-  const pts = steps.map((s) => {
-    const from = s.total ? 0 : run,
-      to = s.total ? s.v : run + s.v;
-    run = s.total ? s.v : run + s.v;
-    return { ...s, from, to };
-  });
+  // Every bar stands on the axis. A cost step is drawn at its size, in the cost colour,
+  // rather than hanging from the bar before it.
+  const pts = steps.map((s) => ({ ...s, from: 0, to: s.total ? s.v : Math.abs(s.v) }));
   const hi = Math.max(...pts.map((p) => Math.max(p.from, p.to)), 0);
   const lo = Math.min(...pts.map((p) => Math.min(p.from, p.to)), 0);
   const max = niceMax(hi),
@@ -334,16 +330,6 @@ export function ChartWaterfall({ steps }: { steps: any[] }) {
 
           return (
             <React.Fragment key={i}>
-              {i < pts.length - 1 && (
-                <line
-                  x1={(cx + barW / 2).toFixed(1)}
-                  x2={(PL + bw * (i + 1) + bw / 2 - barW / 2).toFixed(1)}
-                  y1={y(p.to).toFixed(1)}
-                  y2={y(p.to).toFixed(1)}
-                  stroke="var(--rule-2)"
-                  strokeWidth="1"
-                />
-              )}
               <rect
                 x={(cx - barW / 2).toFixed(1)}
                 y={yTop.toFixed(1)}
