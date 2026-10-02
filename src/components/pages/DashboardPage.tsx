@@ -79,33 +79,8 @@ export function DashboardPage() {
   const k = cmp.cur;
   const d = cmp.d;
 
-  const basisView = (targetK: any) => {
-    if (targetK.scoped) {
-      return {
-        cost: targetK.costOfSales,
-        gross: targetK.grossProfit,
-        op: targetK.operatingProfit,
-        net: targetK.netProfit,
-        costLabel: 'cost of the units sold',
-        doc: false,
-      };
-    }
-    const isCogs = grossBasis === 'cogs';
-    const cost = isCogs ? targetK.costOfSales : targetK.purchaseCost;
-    const gross = targetK.salesRevenue - cost;
-    const op = gross - targetK.operatingCosts;
-    return {
-      cost,
-      gross,
-      op,
-      net: op - targetK.tax - targetK.zakat,
-      costLabel: isCogs ? 'cost of the units sold' : 'period purchase spend',
-      doc: !isCogs,
-    };
-  };
-
-  const bv = basisView(k);
-  const bvPrev = basisView(cmp.prev);
+  const bv = M.basisView(k, grossBasis);
+  const bvPrev = M.basisView(cmp.prev, grossBasis);
   const cash = M.cashLedger(r, f);
 
   const roleBlurb = () => {
@@ -133,6 +108,7 @@ export function DashboardPage() {
       'Property Expenses': 'costs/expenses',
       Tax: 'costs/tax',
       Zakat: 'costs/zakat',
+      'Selling costs on sales': 'sales/register',
     };
     return map[label] || 'costs/expenses';
   };
@@ -448,7 +424,7 @@ export function DashboardPage() {
           full: m.full,
           purchase: m.k.purchaseCost,
           sales: m.k.salesRevenue,
-          net: m.k.netProfit,
+          net: M.basisView(m.k, grossBasis).net,
           expenses: m.k.totalExpenses,
         }));
         const al = M.alerts().filter((a: any) => !denied(a.view));

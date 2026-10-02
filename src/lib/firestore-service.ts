@@ -8,7 +8,7 @@ import {
   QuerySnapshot,
   DocumentData,
 } from 'firebase/firestore';
-import { getFirebaseFirestore } from './firebase';
+import { getFirebaseAuth, getFirebaseFirestore } from './firebase';
 import * as M from './re-data';
 
 const COLLECTIONS = [
@@ -123,6 +123,40 @@ export async function deleteRecordFromFirestore(collName: CollectionName, id: st
   }
 }
 
+// A refused read leaves every ledger empty, which looks exactly like a new, unused
+// portal — and anything entered on top of it is never stored. The shell subscribes
+// here and keeps the reason on screen until the ledgers load.
+let readError: string | null = null;
+let readErrorHandler: ((message: string | null) => void) | null = null;
+export function onFirestoreReadError(handler: ((message: string | null) => void) | null) {
+  readErrorHandler = handler;
+  if (handler) handler(readError);
+}
+export function ledgerError(): string | null {
+  return readError;
+}
+
+function setReadError(message: string | null) {
+  if (readError === message) return;
+  readError = message;
+  if (readErrorHandler) readErrorHandler(message);
+}
+
+function readErrorMessage(err: any): string {
+  const code = err && err.code ? String(err.code) : '';
+  if (code === 'permission-denied') {
+    const uid = getFirebaseAuth()?.currentUser?.uid;
+    return (
+      'The database refused this account, so records cannot be loaded and new entries will NOT be saved. ' +
+      'The published Firestore rules must allow ' + (uid ? 'user ID ' + uid : 'this user') + '.'
+    );
+  }
+  if (code === 'not-found' || code === 'failed-precondition') {
+    return 'The Firestore database for this project has not been created yet, so records cannot be loaded and new entries will NOT be saved.';
+  }
+  return 'Records could not be loaded from the database' + (code ? ' (' + code + ')' : '') + '. New entries will NOT be saved until this is fixed.';
+}
+
 let activeUnsubscribers: (() => void)[] = [];
 
 // New record IDs are numbered from what is already loaded, so nothing may be
@@ -143,6 +177,7 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
   activeUnsubscribers.forEach((unsub) => unsub());
   activeUnsubscribers = [];
   loaded.clear();
+  setReadError(null);
 
   COLLECTIONS.forEach((colName) => {
     try {
@@ -167,6 +202,7 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
         },
         (error) => {
           console.warn(`Firestore listener warning for ${colName}:`, error.message);
+          setReadError(readErrorMessage(error));
           loaded.add(colName);
           onUpdate();
         }
@@ -181,5 +217,6 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
     activeUnsubscribers.forEach((u) => u());
     activeUnsubscribers = [];
     loaded.clear();
+    setReadError(null);
   };
 }

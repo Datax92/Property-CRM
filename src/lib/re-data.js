@@ -118,7 +118,8 @@ export function fmtParts(n, mode) {
     return { sign, num: Math.round(a).toString(), unit: "" };
   }
   // default: crore / lakh
-  if (a >= 1e7) { const v = a / 1e7; return { sign, num: trimZeros(v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)), unit: "Cr" }; }
+  // 99.5 lakh and above is shown in crore, so it never rounds up to "100 Lakh".
+  if (a >= 9.95e6) { const v = a / 1e7; return { sign, num: trimZeros(v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)), unit: "Cr" }; }
   if (a >= 1e5) { const v = a / 1e5; return { sign, num: trimZeros(v >= 10 ? v.toFixed(0) : v.toFixed(1)), unit: "Lakh" }; }
   return { sign, num: Math.round(a).toLocaleString("en-US"), unit: "" };
 }
@@ -182,8 +183,8 @@ export function rangeFor(key, custom) {
     case 'thisYear': return wrap(new Date(y, 0, 1), t, 'FY ' + y);
     case 'lastYear': return wrap(new Date(y - 1, 0, 1), new Date(y - 1, 11, 31), 'FY ' + (y - 1));
     case 'custom': {
-      const s = custom && custom.start ? new Date(custom.start) : new Date(y, 0, 1);
-      const e = custom && custom.end ? new Date(custom.end) : t;
+      const s = custom && custom.start ? parseDate(custom.start) : new Date(y, 0, 1);
+      const e = custom && custom.end ? parseDate(custom.end) : t;
       return wrap(s, e, fmtDate(s) + ' → ' + fmtDate(e));
     }
     default: return wrap(new Date(y, 0, 1), t, 'FY ' + y);
@@ -290,7 +291,10 @@ export function computeKPIs(r, f) {
   // appropriation of profit, not an operating expense. Keeping the three stages apart is what
   // lets the waterfall show Gross → Operating → Net without double counting.
   const operatingCosts = commission + salaries + officeExp + marketing + propertyExp + employeeExp + bills + other;
-  const totalExpenses = operatingCosts + tax + zakat;
+  // Withholding tax and other selling costs typed on a sale are real costs of that sale. They are
+  // part of each sale's own net profit, so the company figures must carry them too — otherwise
+  // the P&L shows more profit than the sales it is made of.
+  const totalExpenses = operatingCosts + directCosts + tax + zakat;
   // In a narrowed scope only directly attributable costs are subtracted (a scope-level contribution);
   // company overheads are not allocated to a single agent or project.
   const netProfit = scoped ? grossProfit - commission - directCosts : grossProfit - totalExpenses;
@@ -329,8 +333,8 @@ export function computeKPIs(r, f) {
     grossProfitDoc: salesRevenue - purchaseCost,
     grossProfitCOGS: salesRevenue - costOfSales,
     costBasis: scoped ? costOfSales : purchaseCost,
-    operatingCosts, operatingProfit: grossProfit - operatingCosts,
-    profitBeforeZakat: grossProfit - operatingCosts - tax,
+    operatingCosts, operatingProfit: grossProfit - operatingCosts - directCosts,
+    profitBeforeZakat: grossProfit - operatingCosts - directCosts - tax,
     commission, commissionPaid, commissionOut,
     officeExp, marketing, propertyExp, employeeExp, other, salaries, salariesPaid,
     bills, billsPaid, billsOut, billsOverdueCount: billsOverdue.length,
@@ -345,6 +349,23 @@ export function computeKPIs(r, f) {
     ],
     grossMargin: pctOf(grossProfit, salesRevenue), netMargin: pctOf(netProfit, salesRevenue),
     scoped,
+  };
+}
+
+/* One profit ladder for every screen. "cogs" matches revenue with the cost of the properties
+   actually sold; "doc" follows the requirement document (revenue − purchases made in the period).
+   A narrowed scope (one agent, project, type or property) is always on the cost-of-units-sold
+   basis and carries only its own direct costs, never company overheads. */
+export function basisView(k, basis) {
+  const doc = !k.scoped && basis === 'doc';
+  const cost = doc ? k.purchaseCost : k.costOfSales;
+  const gross = k.salesRevenue - cost;
+  const op = k.scoped ? gross - k.commission - k.directCosts : gross - k.operatingCosts - k.directCosts;
+  const net = k.scoped ? op : op - k.tax - k.zakat;
+  return {
+    cost, gross, op, net, doc,
+    grossMargin: pctOf(gross, k.salesRevenue), netMargin: pctOf(net, k.salesRevenue),
+    costLabel: doc ? 'period purchase spend' : 'cost of the units sold',
   };
 }
 
@@ -375,6 +396,7 @@ export function expenseBreakdown(k) {
     ['Agent Commission', k.commission, 300], ['Marketing', k.marketing, 45],
     ['Bills', k.bills, 100], ['Property Expenses', k.propertyExp, 200],
     ['Tax', k.tax, 20], ['Zakat', k.zakat, 130], ['Other', k.other + k.employeeExp, 340],
+    ['Selling costs on sales', k.directCosts, 280],
   ].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
 }
 
@@ -683,7 +705,7 @@ export function addSale(v) {
     netRevenue: price - commission - saleTax - other,
     propertyCost: p.totalCost, grossProfit: price - p.totalCost,
     netProfit: price - p.totalCost - commission - saleTax - other,
-    payStatus: received >= price ? 'Paid' : dueDate < TODAY ? 'Overdue' : 'Partially Paid',
+    payStatus: received >= price ? 'Paid' : dueDate < TODAY ? 'Overdue' : received > 0 ? 'Partially Paid' : 'Unpaid',
     saleStatus: received >= price ? 'Completed' : 'In Payment',
     office: p.office, manual: true,
   };
@@ -913,7 +935,7 @@ export function addZakat(v) {
   saveRecordToFirestore('zakat', z.id, z);
   if (z.amount > 0) addPayment({
     date: v.date, dir: 'out', category: 'Zakat', amount: z.amount, party: v.paidTo || 'Zakat recipients',
-    method: v.method, note: 'Zakat — ' + z.period,
+    method: v.method, note: 'Zakat — ' + z.period, settleKey: 'zakat:' + z.id,
   });
   refreshZakatSummary();
   return z;
@@ -1023,6 +1045,12 @@ export function applySettlement(key, amount, date) {
     const s = find(DATA.salaries); if (!s) return null;
     s.status = amount > 0 ? 'Paid' : 'Pending';
     saveRecordToFirestore('salaries', s.id, s); return s;
+  }
+  if (kind === 'zakat') {
+    // Only reached when a Zakat payment is voided: the amount comes back off the entry.
+    const z = find(DATA.zakat); if (!z) return null;
+    z.amount = Math.max(0, (z.amount || 0) + amount);
+    saveRecordToFirestore('zakat', z.id, z); refreshZakatSummary(); return z;
   }
   const map = { comm: ['commissions', DATA.commissions], bill: ['bills', DATA.bills], tax: ['taxes', DATA.taxes], exp: ['expenses', DATA.expenses] }[kind];
   if (!map) return null;
@@ -1259,7 +1287,8 @@ export function computeSensitivityMatrix(cs) {
   ];
   return multipliers.map((m) => {
     const sPrice = Math.round(basePrice * m.factor);
-    const updated = calculateCostSheet({ ...cs, sellingPrice: sPrice });
+    // A computed sheet carries grossSalePrice, which wins over sellingPrice — set both.
+    const updated = calculateCostSheet({ ...cs, grossSalePrice: sPrice, sellingPrice: sPrice });
     return {
       label: m.label,
       factor: m.factor,

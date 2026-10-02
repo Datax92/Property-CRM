@@ -1,10 +1,43 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
 import type { TableColumn } from '../lib/types';
+
+/** Runs a figure up to its value over a moment, so a changed number is noticed. */
+function useCountUp(target: number) {
+  const [val, setVal] = useState(target);
+  const from = useRef(0);
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !isFinite(target)) {
+      from.current = target;
+      setVal(target);
+      return;
+    }
+    const start = from.current;
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 550);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(start + (target - start) * eased);
+      if (p < 1) raf = requestAnimationFrame(step);
+      else from.current = target;
+    };
+    raf = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(raf);
+      from.current = target;
+    };
+  }, [target]);
+  return val;
+}
+
+function CountFig({ n }: { n: number }) {
+  return <Fig n={useCountUp(n)} />;
+}
 
 export function Fig({ n, cls = '' }: { n: number; cls?: string }) {
   const { numbers } = useApp();
@@ -88,7 +121,7 @@ export function KpiCard({
     <>
       {hasStrip && <i className="strip" />}
       <span className="k">{k}</span>
-      <span className={`v ${tone}`}>{raw != null ? <FigText str={raw} /> : <Fig n={v || 0} />}</span>
+      <span className={`v ${tone}`}>{raw != null ? <FigText str={raw} /> : <CountFig n={v || 0} />}</span>
       {((d !== undefined && d !== null && isFinite(d)) || f) && (
         <span className="f">
           {d !== undefined && d !== null && isFinite(d) && (
@@ -356,19 +389,20 @@ export function DataTable<T extends { id?: string }>({
           </table>
         </div>
       </div>
-      {data.length > cap ? (
-        <div style={{ marginTop: '11px' }} data-noprint="1">
-          <button className="btn" onClick={toggleShowAll}>
-            Show all {M.fmtNum(data.length)} rows
+      <div className="pager" data-noprint="1">
+        <span>
+          1-{M.fmtNum(shown.length)} / {M.fmtNum(data.length)}
+        </span>
+        {data.length > cap ? (
+          <button className="btn sm" onClick={toggleShowAll}>
+            Show all
           </button>
-        </div>
-      ) : showAll && data.length > 12 ? (
-        <div style={{ marginTop: '11px' }} data-noprint="1">
-          <button className="btn" onClick={toggleShowAll}>
+        ) : showAll && data.length > 12 ? (
+          <button className="btn sm" onClick={toggleShowAll}>
             Show fewer
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </>
   );
 }
@@ -393,19 +427,21 @@ export function PageShell({
   return (
     <div className="page">
       <PrintHead title={title} />
-      <div className="phead">
-        <div>
-          <h1>{title}</h1>
-          {u && <span className="u">{u}</span>}
-          {p && <p>{p}</p>}
-        </div>
+      <div className="phead cp">
         {acts && (
           <div className="acts" data-noprint="1">
             {acts}
           </div>
         )}
+        <div className="ptitle">
+          <h1>
+            {title}
+            {u && <span className="u">{u}</span>}
+          </h1>
+          {p && <p>{p}</p>}
+        </div>
+        {tools && <Toolbar {...toolProps} />}
       </div>
-      {tools && <Toolbar {...toolProps} />}
       {children}
     </div>
   );

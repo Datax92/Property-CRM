@@ -20,16 +20,18 @@ interface Tile {
 
 /** Home: one large icon per area of the business, each showing its headline figure. */
 export function HomePage() {
-  const { user, effectiveFilters: f, range: r, numbers, goto, denied, openModal, openCostSheet, setRangeKey } = useApp();
+  const { user, effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, openModal, openCostSheet, setRangeKey } = useApp();
 
   const k = M.computeKPIs(r, f);
+  // Same profit basis as the dashboard and the P&L, so the three never disagree.
+  const bv = M.basisView(k, grossBasis);
   const cash = M.cashLedger(r, f);
   const sheets: any[] = M.DATA.costSheets;
   const landed = sheets.reduce((a, s) => a + (s.totalLandedCost || 0), 0);
   const sheetSales = sheets.reduce((a, s) => a + (s.grossSalePrice || s.sellingPrice || 0), 0);
   const sheetGross = sheets.reduce((a, s) => a + (s.grossProfit || 0), 0);
   // Gross margin comes from the deal cost sheets; before any exist, from the sales ledger.
-  const grossPct = sheetSales > 0 ? M.pctOf(sheetGross, sheetSales) : k.grossMargin;
+  const grossPct = sheetSales > 0 ? M.pctOf(sheetGross, sheetSales) : bv.grossMargin;
   const charity = M.charityRows(r).reduce((a: number, x: any) => a + x.amount, 0);
   const invoices = (kind: string) => M.DATA.invoices.filter((i: any) => i.type === kind).length;
   const projects = M.projectSummary(r, f).filter((p: any) => p.total > 0).length;
@@ -42,7 +44,7 @@ export function HomePage() {
 
   const tiles: Tile[] = [
     { icon: 'dashboard', label: 'Dashboard', value: 'Graphs & comparison', go: 'dashboard/overview' },
-    { icon: 'pnl', label: 'Profit / Loss', value: money(k.netProfit), tone: sign(k.netProfit), go: 'finance/pnl', need: 'pnl' },
+    { icon: 'pnl', label: 'Profit / Loss', value: money(bv.net), tone: sign(bv.net), go: 'finance/pnl', need: 'pnl' },
     { icon: 'sales', label: 'Total Sales', value: money(k.salesRevenue), go: 'sales/register' },
     { icon: 'purchase', label: 'Total Purchase', value: money(k.purchaseCost), go: 'properties/purchases', need: 'purchases' },
     { icon: 'cash', label: 'Cash in Hand', value: money(cash.closing), tone: sign(cash.closing), go: 'finance/cashflow', need: 'cashflow' },
@@ -58,7 +60,7 @@ export function HomePage() {
     { icon: 'landed', label: 'Purchase Price Landed', value: money(landed), go: 'trading/sheets' },
     { icon: 'value', label: 'Current Value / Sale', value: money(sheetSales || k.portfolioValue), go: 'trading/calculator' },
     { icon: 'gross', label: 'Gross Margin', value: pct(grossPct), tone: sign(grossPct), go: 'trading/analytics' },
-    { icon: 'net', label: 'Net Margin %', value: pct(k.netMargin), tone: sign(k.netMargin), go: 'finance/profit', need: 'profit' },
+    { icon: 'net', label: 'Net Margin %', value: pct(bv.netMargin), tone: sign(bv.netMargin), go: 'finance/profit', need: 'profit' },
     { icon: 'admin', label: 'Admin', value: 'Transactions & audit', go: 'admin/transactions', need: 'transactions' },
     { icon: 'finance', label: 'Finance', value: money(k.payable) + ' payable', go: 'finance/payables', need: 'payables' },
 
@@ -78,7 +80,7 @@ export function HomePage() {
   ];
 
   return (
-    <div className="page">
+    <div className="page o-home">
       <div className="rolestrip">
         <div className="ini">{user.initials}</div>
         <div>
@@ -119,11 +121,12 @@ export function HomePage() {
       <nav className="launch" aria-label="All sections">
         {tiles
           .filter((t) => !denied(t.need))
-          .map((t) => (
+          .map((t, i) => (
             <button
               key={t.label}
               type="button"
               className="tile"
+              style={{ '--i': i } as React.CSSProperties}
               onClick={() => {
                 if (t.before) t.before();
                 goto(t.go);

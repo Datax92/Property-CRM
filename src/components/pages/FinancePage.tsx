@@ -33,10 +33,10 @@ export function FinancePage() {
             full: w.full,
             purchase: w.k.purchaseCost,
             sales: w.k.salesRevenue,
-            gross: w.k.grossProfit,
+            gross: M.basisView(w.k, grossBasis).gross,
             commission: w.k.commission,
             expenses: w.k.totalExpenses,
-            net: w.k.netProfit,
+            net: M.basisView(w.k, grossBasis).net,
           }))
         : period === 'yearly'
         ? [M.TODAY.getFullYear() - 1, M.TODAY.getFullYear()].map((y: number) => {
@@ -46,10 +46,10 @@ export function FinancePage() {
               full: 'FY ' + y,
               purchase: kk.purchaseCost,
               sales: kk.salesRevenue,
-              gross: kk.grossProfit,
+              gross: M.basisView(kk, grossBasis).gross,
               commission: kk.commission,
               expenses: kk.totalExpenses,
-              net: kk.netProfit,
+              net: M.basisView(kk, grossBasis).net,
             };
           })
         : M.monthlySeries(M.TODAY.getFullYear(), f).map((m: any) => ({
@@ -57,10 +57,10 @@ export function FinancePage() {
             full: m.full,
             purchase: m.k.purchaseCost,
             sales: m.k.salesRevenue,
-            gross: m.k.grossProfit,
+            gross: M.basisView(m.k, grossBasis).gross,
             commission: m.k.commission,
             expenses: m.k.totalExpenses,
-            net: m.k.netProfit,
+            net: M.basisView(m.k, grossBasis).net,
           }));
 
     const cols = [
@@ -255,17 +255,7 @@ export function FinancePage() {
 
   // P&L tab (default)
   const k = M.computeKPIs(r, f);
-  const isCogs = grossBasis === 'cogs';
-  const bv = {
-    cost: isCogs ? k.costOfSales : k.purchaseCost,
-    gross: isCogs ? k.grossProfit : k.salesRevenue - k.purchaseCost,
-    op: isCogs ? k.operatingProfit : k.salesRevenue - k.purchaseCost - k.operatingCosts,
-    net: isCogs
-      ? k.netProfit
-      : k.salesRevenue - k.purchaseCost - k.operatingCosts - k.tax - k.zakat,
-    costLabel: isCogs ? 'cost of the units sold' : 'period purchase spend',
-    doc: !isCogs,
-  };
+  const bv = M.basisView(k, grossBasis);
 
   const L = (label: string, v: number | null, kind?: string) => ({ label, v, kind });
   const pnlRows = [
@@ -281,36 +271,54 @@ export function FinancePage() {
         ]
       : [L('Cost of properties sold', -bv.cost)]),
     L('Gross profit', bv.gross, 't'),
-    L('OPERATING EXPENSES', null, 'h'),
-    L('Agent commission', -k.commission),
-    L('Salaries', -k.salaries),
-    L('Office expenses', -k.officeExp),
-    L('Marketing', -k.marketing),
-    L('Bills', -k.bills),
-    L('Property expenses', -k.propertyExp),
-    L('Employee expenses', -k.employeeExp),
-    L('Other expenses', -k.other),
-    L('Operating profit', bv.op, 't'),
-    L('OTHER FINANCIAL OBLIGATIONS', null, 'h'),
-    L('Tax', -k.tax),
-    L('Zakat', -k.zakat),
-    L('NET PROFIT', bv.net, 'g'),
+    ...(k.scoped
+      ? [
+          L('DIRECT COSTS OF THESE SALES', null, 'h'),
+          L('Agent commission', -k.commission),
+          L('Withholding tax & selling costs on sales', -k.directCosts),
+          L('NET CONTRIBUTION', bv.net, 'g'),
+        ]
+      : [
+          L('OPERATING EXPENSES', null, 'h'),
+          L('Agent commission', -k.commission),
+          L('Withholding tax & selling costs on sales', -k.directCosts),
+          L('Salaries', -k.salaries),
+          L('Office expenses', -k.officeExp),
+          L('Marketing', -k.marketing),
+          L('Bills', -k.bills),
+          L('Property expenses', -k.propertyExp),
+          L('Employee expenses', -k.employeeExp),
+          L('Other expenses', -k.other),
+          L('Operating profit', bv.op, 't'),
+          L('OTHER FINANCIAL OBLIGATIONS', null, 'h'),
+          L('Tax', -k.tax),
+          L('Zakat', -k.zakat),
+          L('NET PROFIT', bv.net, 'g'),
+        ]),
   ];
 
-  const wf = [
-    { k: 'Selling revenue', v: k.salesRevenue, total: true },
-    { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
-    { k: 'Gross profit', v: bv.gross, total: true },
-    {
-      k: 'Operating costs',
-      v: -k.operatingCosts,
-      why: 'Commission, salaries, office, marketing, property, bills, other',
-    },
-    { k: 'Operating profit', v: bv.op, total: true },
-    { k: 'Tax', v: -k.tax },
-    { k: 'Zakat', v: -k.zakat, why: 'Kept separate from operating expenses' },
-    { k: 'Net profit', v: bv.net, total: true },
-  ];
+  const wf = k.scoped
+    ? [
+        { k: 'Selling revenue', v: k.salesRevenue, total: true },
+        { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
+        { k: 'Gross profit', v: bv.gross, total: true },
+        { k: 'Direct costs', v: -(k.commission + k.directCosts), why: 'Commission, withholding tax and selling costs on these sales' },
+        { k: 'Net contribution', v: bv.net, total: true },
+      ]
+    : [
+        { k: 'Selling revenue', v: k.salesRevenue, total: true },
+        { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
+        { k: 'Gross profit', v: bv.gross, total: true },
+        {
+          k: 'Operating costs',
+          v: -(k.operatingCosts + k.directCosts),
+          why: 'Commission, selling costs on sales, salaries, office, marketing, property, bills, other',
+        },
+        { k: 'Operating profit', v: bv.op, total: true },
+        { k: 'Tax', v: -k.tax },
+        { k: 'Zakat', v: -k.zakat, why: 'Kept separate from operating expenses' },
+        { k: 'Net profit', v: bv.net, total: true },
+      ];
 
   return (
     <PageShell title={meta.t} u={meta.u} p={meta.p} toolProps={{ search: false }}>
@@ -385,9 +393,12 @@ export function FinancePage() {
           <Icon name="info" />
         </span>
         <div>
-          Cost of sales is measured as the <b>{bv.costLabel}</b>. Zakat sits below the operating line,
-          separate from operating expenses. Withholding tax on individual sales is already inside net sale
-          revenue and is not repeated here.
+          Cost of sales is measured as the <b>{bv.costLabel}</b>.{' '}
+          {k.scoped
+            ? 'With an agent, project, type or property filter on, only the costs of those sales are shown; company overheads, tax and Zakat are not allocated.'
+            : 'Zakat sits below the operating line, separate from operating expenses.'}{' '}
+          Withholding tax and other selling costs entered on a sale are deducted here — do not also record
+          the same amount in the Tax register, or it will be counted twice.
         </div>
       </div>
     </PageShell>

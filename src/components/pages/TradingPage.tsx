@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, PrintHead } from '../Shared';
-import { ledgersReady } from '../../lib/firestore-service';
+import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
@@ -820,6 +820,10 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
       toast('Your records are still loading — please try again in a moment');
       return;
     }
+    if (ledgerError()) {
+      toast('Not saved — the database is not reachable (see the notice at the top)');
+      return;
+    }
     const saved = M.saveCostSheet(liveCostSheet);
     setForm(saved);
     setActiveCostSheetId(saved.id);
@@ -833,7 +837,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
   };
 
   return (
-    <div className="page" style={{ paddingTop: '8px' }}>
+    <div className="page">
       {/* SCREEN VIEW (INTERACTIVE FORM) */}
       <div className="cost-sheet-screen-only">
         <PrintHead title="Property Business Cost Sheet" />
@@ -872,20 +876,8 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
             </button>
             <button
               type="button"
-              className="btn pri"
-              style={{
-                height: '30px',
-                padding: '0 11px',
-                fontSize: '12px',
-                fontWeight: 700,
-                background: '#047857',
-                borderColor: '#059669',
-                color: '#ffffff',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
+              className="btn"
+              style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
               onClick={() => setShowPrintModal(true)}
               title="Open and print official Cost Sheet statement"
             >
@@ -1298,7 +1290,7 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
                   />
                 </td>
               </tr>
-              <tr style={{ background: 'rgba(18, 166, 124, 0.08)', borderBottom: '1px solid var(--rule-2)' }}>
+              <tr style={{ background: 'var(--good-wash)', borderBottom: '1px solid var(--rule-2)' }}>
                 <td style={{ padding: '8px' }}></td>
                 <td style={{ padding: '8px', fontWeight: 700, color: 'var(--good)' }}>
                   GROSS SALE PRICE (incl. CGT)

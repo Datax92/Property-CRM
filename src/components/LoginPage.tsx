@@ -68,7 +68,7 @@ export function LoginPage() {
     <div className="property-login-viewport">
       {/* Interactive Cursor Grid Background from CRM */}
       <CursorGrid
-        color="#2a8b79"
+        color="#714B67"
         cellSize={65}
         radius={180}
         gridOpacity={0.045}
@@ -95,8 +95,8 @@ export function LoginPage() {
             >
               <defs>
                 <linearGradient id="propTealGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#22c55e" />
-                  <stop offset="100%" stopColor="#0f766e" />
+                  <stop offset="0%" stopColor="#8F6A86" />
+                  <stop offset="100%" stopColor="#5F3F57" />
                 </linearGradient>
               </defs>
               {/* Roof architecture line */}

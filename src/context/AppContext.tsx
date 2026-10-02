@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as M from '../lib/re-data';
 import { NAV, PAGE_META } from '../lib/constants';
-import { ledgersReady } from '../lib/firestore-service';
+import { ledgersReady, ledgerError } from '../lib/firestore-service';
 import type { User, Filters, ModalState, MenuState, DateRange } from '../lib/types';
 
 interface AppContextType {
@@ -603,9 +603,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const range: DateRange = useMemo(() => M.rangeFor(rangeKey, custom), [rangeKey, custom]);
 
+  // One timer for the toast: a later message (e.g. "Not saved") must get its full time on
+  // screen, not be hidden by the timer of the message it replaced.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toast = useCallback((msg: string) => {
     setToastMsg({ text: msg, visible: true });
-    setTimeout(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => {
       setToastMsg((prev) => ({ ...prev, visible: false }));
     }, 2600);
   }, []);
@@ -802,6 +806,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setModal((prev) =>
         prev ? { ...prev, errors: { _form: 'Your records are still loading from the server. Please try again in a moment.' } } : null
       );
+      return;
+    }
+
+    // An entry made while the database is unreachable would show on screen and vanish on reload.
+    const dbDown = ledgerError();
+    if (dbDown) {
+      setModal((prev) => (prev ? { ...prev, errors: { _form: dbDown } } : null));
       return;
     }
 

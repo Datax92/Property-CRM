@@ -161,14 +161,14 @@ export function Modals() {
         </div>
 
         <div className="modal-f">
-          <span className="vs">Fields marked * are required.</span>
-          <span className="spacer" />
-          <button type="button" className="btn" onClick={closeModal}>
-            Cancel
-          </button>
           <button type="button" className="btn pri" onClick={submitModal}>
             <Icon name="ok" /> Save
           </button>
+          <button type="button" className="btn" onClick={closeModal}>
+            Discard
+          </button>
+          <span className="spacer" />
+          <span className="vs">Fields marked * are required.</span>
         </div>
       </div>
     </div>
