@@ -1,11 +1,17 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, editFormFor } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
 import type { TableColumn } from '../lib/types';
 import { AttachButton } from './Attachments';
+
+const Pencil = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11.2 2.6l2.2 2.2-7.6 7.6-2.9.7.7-2.9 7.6-7.6z" />
+  </svg>
+);
 
 /** Runs a figure up to its value over a moment, so a changed number is noticed. */
 function useCountUp(target: number) {
@@ -286,7 +292,9 @@ export function DataTable<T extends { id?: string }>({
   /** Ledger these rows belong to: adds a paperclip column for their attachments. */
   attach?: string;
 }) {
-  const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers } = useApp();
+  const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit } = useApp();
+  // Ledgers with an entry form can have their rows corrected.
+  const editable = !!attach && !!editFormFor(attach);
 
   const q = query.trim().toLowerCase();
   let data = rows;
@@ -355,6 +363,7 @@ export function DataTable<T extends { id?: string }>({
                     </button>
                   </th>
                 ))}
+                {editable && <th data-noexport="1" data-noprint="1" aria-label="Edit" />}
                 {attach && (
                   <th data-noexport="1" data-noprint="1">
                     Files
@@ -375,6 +384,15 @@ export function DataTable<T extends { id?: string }>({
                         </td>
                       );
                     })}
+                    {editable && (
+                      <td data-noexport="1" data-noprint="1">
+                        {r.id ? (
+                          <button type="button" className="btn sm" title={`Edit ${r.id}`} onClick={() => openEdit(attach, r.id as string)}>
+                            <Pencil /> Edit
+                          </button>
+                        ) : null}
+                      </td>
+                    )}
                     {attach && (
                       <td data-noexport="1" data-noprint="1">
                         {r.id ? <AttachButton coll={attach} id={r.id} /> : null}
@@ -397,6 +415,7 @@ export function DataTable<T extends { id?: string }>({
                       </td>
                     );
                   })}
+                  {editable && <td data-noexport="1" data-noprint="1" />}
                   {attach && <td data-noexport="1" data-noprint="1" />}
                 </tr>
               </tfoot>

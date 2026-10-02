@@ -16,19 +16,23 @@ export function Modals() {
     if (modal && firstInputRef.current) {
       firstInputRef.current.focus();
     }
-  }, [modal?.id]);
+  }, [modal?.id, modal?.editId]);
 
   if (!modal) return null;
 
-  const { id, values, errors } = modal;
+  const { id, values, errors, editId } = modal;
   const F = FORMS_DEF[id];
   if (!F) return null;
+
+  // Editing a saved record: amounts already posted to the cash ledger are not on the form.
+  const fields = editId ? F.fields.filter((fd: any) => !fd.addOnly) : F.fields;
+  const title = editId ? `${F.editTitle} · ${editId}` : F.title;
 
   // Group fields into fieldsets
   const groups: { name: string; fields: any[] }[] = [];
   let currentGroup = { name: '', fields: [] as any[] };
 
-  F.fields.forEach((fd: any) => {
+  fields.forEach((fd: any) => {
     if (fd.g) {
       if (currentGroup.fields.length) {
         groups.push(currentGroup);
@@ -54,7 +58,7 @@ export function Modals() {
   };
 
   // Focus lands on the first field of the form when it opens.
-  const firstKey = (F.fields.find((fd: any) => !fd.g) || {}).k;
+  const firstKey = (fields.find((fd: any) => !fd.g) || {}).k;
 
   return (
     <div className="overlay" onClick={closeModal} onKeyDown={handleKeyDown}>
@@ -62,13 +66,17 @@ export function Modals() {
         className="modal"
         role="dialog"
         aria-modal="true"
-        aria-label={F.title}
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-h">
           <div>
-            <h2>{F.title}</h2>
-            <p>{F.sub}</p>
+            <h2>{title}</h2>
+            <p>
+              {editId
+                ? 'The change is saved to this record and logged in the audit trail. Amounts already paid or received are changed by recording or voiding a payment.'
+                : F.sub}
+            </p>
           </div>
           <button type="button" className="x" onClick={closeModal} aria-label="Close">
             <Icon name="x" />

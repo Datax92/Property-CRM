@@ -53,6 +53,8 @@ export interface ModalState {
   id: string;
   values: Record<string, any>;
   errors: Record<string, string>;
+  /** Set when the form is correcting a saved record rather than creating one. */
+  editId?: string;
 }
 
 export interface MenuState {

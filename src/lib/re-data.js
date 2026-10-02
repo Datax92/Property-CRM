@@ -1,4 +1,4 @@
-import { saveRecordToFirestore } from './firestore-service';
+import { saveRecordToFirestore, deleteRecordFromFirestore } from './firestore-service';
 
 // Real Estate Management System — Reporting Module
 // In-memory ledgers (mirrored to Firestore) + all financial aggregation logic.
@@ -797,18 +797,13 @@ export function voidPayment(id, user) {
    INVOICES — Sale Invoice (given to buyer) & Purchase Invoice (kept by company)
    ==================================================================== */
 
-export function addInvoice(v) {
-  const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+/** The fields of an invoice that come straight from its form (shared by create and edit). */
+function invoiceBody(v) {
   const total = Math.round(+v.totalAmount || 0);
   const token = Math.round(+v.tokenAmount || 0);
-  const inv = {
-    id: nextId(DATA.invoices, 'INV-', 5),
-    srNo: DATA.invoices.filter((i) => i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
-    type: v.type, // 'sale' or 'purchase'
+  return {
     receiptDate: parseDate(v.receiptDate || TODAY),
     propertyId: v.propertyId || null,
-    propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
-    saleId: v.saleId || null,
 
     buyerName: v.buyerName || '',
     buyerCompany: v.buyerCompany || '',
@@ -838,7 +833,20 @@ export function addInvoice(v) {
     approvedByName: v.approvedByName || '',
 
     notes: v.notes || '',
-    manual: true, attachments: v.attachments || [],
+    attachments: v.attachments || [],
+  };
+}
+
+export function addInvoice(v) {
+  const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+  const inv = {
+    id: nextId(DATA.invoices, 'INV-', 5),
+    srNo: DATA.invoices.filter((i) => i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
+    type: v.type, // 'sale' or 'purchase'
+    ...invoiceBody(v),
+    propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
+    saleId: v.saleId || null,
+    manual: true,
   };
   DATA.invoices.push(inv);
   saveRecordToFirestore('invoices', inv.id, inv);
@@ -1083,6 +1091,237 @@ export function recordPayment(v) {
     : v);
   if (item) applySettlement(item.key, t.amount, t.date);
   return t;
+}
+
+/* ====================================================================
+   EDITING — correct a saved record. Money that has already moved is not
+   edited here: it sits on the cash ledger and is changed by recording or
+   voiding a payment (§31), so an edit may never leave a record showing
+   less than what has been paid against it. Every edit is logged.
+   ==================================================================== */
+const mustFind = (arr, id, what) => {
+  const x = arr.find((r) => r.id === id);
+  if (!x) throw new Error(what + ' ' + id + ' was not found.');
+  return x;
+};
+const alreadyPaid = (paid, what) =>
+  new Error(fmt(paid, 'full') + ' has already been paid — ' + what + ' cannot be less. Void the payment first.');
+
+function logEdit(id, entity, prevAmount, newAmount) {
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: id, action: 'Edited',
+    user: ACTOR, entity, prevAmount, newAmount, note: entity + ' ' + id + ' edited', manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+}
+
+function recomputeSale(s) {
+  s.outstanding = Math.max(0, s.sellingPrice - s.received);
+  s.netRevenue = s.sellingPrice - s.commission - s.tax - s.otherExpenses;
+  s.grossProfit = s.sellingPrice - s.propertyCost;
+  s.netProfit = s.grossProfit - s.commission - s.tax - s.otherExpenses;
+  s.payStatus = s.received >= s.sellingPrice ? 'Paid' : s.dueDate < TODAY ? 'Overdue' : s.received > 0 ? 'Partially Paid' : 'Unpaid';
+  s.saleStatus = s.received >= s.sellingPrice ? 'Completed' : 'In Payment';
+  return s;
+}
+
+/** A renamed property or agent is shown by name on other ledgers; carry the new name over. */
+function rename(coll, match, field, name) {
+  DATA[coll].filter((x) => match(x) && x[field] !== name).forEach((x) => {
+    x[field] = name;
+    saveRecordToFirestore(coll, x.id, x);
+  });
+}
+
+export function updateProperty(id, v) {
+  const p = mustFind(DATA.properties, id, 'Property');
+  const extras = { registration: +v.registration || 0, legal: +v.legal || 0, development: +v.development || 0, other: +v.otherCost || 0 };
+  const total = +v.price + extras.registration + extras.legal + extras.development + extras.other;
+  if (p.paid > total) throw alreadyPaid(p.paid, 'the total cost');
+  const sale = DATA.sales.find((s) => s.propertyId === id);
+  const purchaseDate = parseDate(v.purchaseDate);
+  if (sale && purchaseDate > sale.date) throw new Error('Purchase date is after the property was sold (' + fmtDate(sale.date) + ').');
+  const project = PROJECTS.find((x) => x.id === v.projectId);
+  const prev = p.totalCost;
+  Object.assign(p, {
+    name: v.name, type: v.type, size: v.size, block: v.block || '—', unit: v.unit || '—',
+    seller: v.seller, purchaseDate, price: +v.price, extras, office: v.office,
+    currentValue: +v.currentValue || +v.price, attachments: v.attachments || p.attachments || [],
+    // A property with a sale on the register stays sold whatever the form says.
+    status: sale ? 'Sold' : v.status,
+  });
+  if (project) Object.assign(p, { projectId: project.id, project: project.name, location: project.city });
+  recomputeProperty(p);
+  saveRecordToFirestore('properties', p.id, p);
+  if (sale) {
+    sale.property = p.name;
+    sale.propertyCost = p.totalCost;
+    saveRecordToFirestore('sales', sale.id, recomputeSale(sale));
+  }
+  rename('commissions', (c) => c.propertyId === id, 'property', p.name);
+  rename('taxes', (t) => t.propertyId === id, 'property', p.name);
+  logEdit(p.id, 'Property', prev, p.totalCost);
+  return p;
+}
+
+export function updateSale(id, v) {
+  const s = mustFind(DATA.sales, id, 'Sale');
+  const p = DATA.properties.find((x) => x.id === s.propertyId);
+  const agent = DATA.agents.find((a) => a.id === v.agentId) || null;
+  const price = +v.sellingPrice;
+  if (s.received > price) throw new Error(fmt(s.received, 'full') + ' has already been received — the selling price cannot be less. Void the receipt first.');
+  const pctRate = !agent ? 0 : v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
+  const commission = Math.round((price * pctRate) / 100);
+  const cm = DATA.commissions.find((c) => c.propertyId === s.propertyId && c.txnType === 'Sale');
+  if (cm && cm.paid > 0 && (!agent || agent.id !== cm.agentId))
+    throw new Error(fmt(cm.paid, 'full') + ' commission has already been paid to ' + cm.agent + ' — void that payment before changing the agent.');
+  if (cm && cm.paid > commission) throw alreadyPaid(cm.paid, 'the commission');
+  const date = parseDate(v.date);
+  const prev = s.sellingPrice;
+  Object.assign(s, {
+    buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date,
+    sellingPrice: price, dueDate: addDays(date, 60), commissionPct: pctRate, commission,
+    tax: v.tax === '' || v.tax == null ? Math.round(price * 0.01) : Math.round(+v.tax),
+    otherExpenses: +v.otherExpenses || 0, attachments: v.attachments || s.attachments || [],
+  });
+  if (p) s.propertyCost = p.totalCost;
+  recomputeSale(s);
+  saveRecordToFirestore('sales', s.id, s);
+
+  // The commission entry follows the sale: changed, created, or removed for a direct sale.
+  if (agent && commission > 0) {
+    const paid = cm ? cm.paid : 0;
+    const next = {
+      agentId: agent.id, agent: agent.name, counterparty: s.buyer, date, pct: pctRate,
+      amount: commission, paid, outstanding: commission - paid, status: settled(commission, paid),
+    };
+    const entry = cm ? Object.assign(cm, next) : {
+      id: nextId(DATA.commissions, 'CM-', 4), propertyId: s.propertyId, property: s.property,
+      txnType: 'Sale', paidDate: '—', office: s.office, manual: true, ...next,
+    };
+    if (!cm) DATA.commissions.push(entry);
+    saveRecordToFirestore('commissions', entry.id, entry);
+  } else if (cm) {
+    DATA.commissions.splice(DATA.commissions.indexOf(cm), 1);
+    deleteRecordFromFirestore('commissions', cm.id);
+  }
+  logEdit(s.id, 'Sale', prev, s.sellingPrice);
+  return s;
+}
+
+export function updateExpense(id, v) {
+  const e = mustFind(DATA.expenses, id, 'Expense');
+  const amount = +v.amount;
+  if (e.paid > amount) throw alreadyPaid(e.paid, 'the amount');
+  const prev = e.amount;
+  Object.assign(e, {
+    group: v.group, category: v.category, date: parseDate(v.date), amount, outstanding: amount - e.paid,
+    vendor: v.vendor, office: v.office, note: v.note || v.category, status: settled(amount, e.paid),
+    attachments: v.attachments || e.attachments || [],
+  });
+  saveRecordToFirestore('expenses', e.id, e);
+  logEdit(e.id, 'Expense', prev, e.amount);
+  return e;
+}
+
+export function updateAgent(id, v) {
+  const a = mustFind(DATA.agents, id, 'Agent');
+  const prev = a.rate;
+  Object.assign(a, {
+    name: v.name, phone: v.phone || '', cnic: v.cnic || '', office: v.office || a.office,
+    rate: v.rate === '' || v.rate == null ? 2 : +v.rate, attachments: v.attachments || a.attachments || [],
+  });
+  saveRecordToFirestore('agents', a.id, a);
+  // The standard rate applies to future sales; sales already recorded keep the rate they were made at.
+  rename('sales', (s) => s.agentId === id, 'agent', a.name);
+  rename('commissions', (c) => c.agentId === id, 'agent', a.name);
+  logEdit(a.id, 'Agent', prev, a.rate);
+  return a;
+}
+
+export function updateTax(id, v) {
+  const t = mustFind(DATA.taxes, id, 'Tax entry');
+  const amount = Math.round(+v.amount || 0);
+  if (t.paid > amount) throw alreadyPaid(t.paid, 'the tax amount');
+  const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
+  const dueDate = v.dueDate ? parseDate(v.dueDate) : parseDate(v.date);
+  const prev = t.amount;
+  Object.assign(t, {
+    type: v.type, ref: v.ref || '—', propertyId: prop ? prop.id : null, property: prop ? prop.name : '—',
+    authority: v.authority || 'FBR', date: parseDate(v.date), dueDate, amount, outstanding: amount - t.paid,
+    status: dueState(amount, t.paid, dueDate), office: v.office || t.office, attachments: v.attachments || t.attachments || [],
+  });
+  saveRecordToFirestore('taxes', t.id, t);
+  logEdit(t.id, 'Tax entry', prev, t.amount);
+  return t;
+}
+
+export function updateZakat(id, v) {
+  const z = mustFind(DATA.zakat, id, 'Zakat entry');
+  const eligibleAssets = Math.round(+v.eligibleAssets || 0);
+  const zakatable = Math.max(0, eligibleAssets - Math.round(+v.liabilities || 0));
+  const rate = v.rate === '' || v.rate == null ? 2.5 : +v.rate;
+  const prev = z.calculated;
+  Object.assign(z, {
+    period: v.period, eligibleAssets, zakatable, rate, calculated: Math.round((zakatable * rate) / 100),
+    date: parseDate(v.date), ref: v.ref || '—', attachments: v.attachments || z.attachments || [],
+  });
+  saveRecordToFirestore('zakat', z.id, z);
+  refreshZakatSummary();
+  logEdit(z.id, 'Zakat', prev, z.calculated);
+  return z;
+}
+
+export function updateBill(id, v) {
+  const b = mustFind(DATA.bills, id, 'Bill');
+  const amount = Math.round(+v.amount || 0);
+  if (b.paid > amount) throw alreadyPaid(b.paid, 'the bill amount');
+  const dueDate = parseDate(v.dueDate);
+  const prev = b.amount;
+  Object.assign(b, {
+    type: v.type, vendor: v.vendor, number: v.number || '—',
+    period: v.period || MONTHS[dueDate.getMonth()] + ' ' + dueDate.getFullYear(), dueDate,
+    amount, outstanding: amount - b.paid, status: dueState(amount, b.paid, dueDate),
+    office: v.office || b.office, attachments: v.attachments || b.attachments || [],
+  });
+  saveRecordToFirestore('bills', b.id, b);
+  logEdit(b.id, 'Bill', prev, b.amount);
+  return b;
+}
+
+export function updateSalary(id, v) {
+  const sl = mustFind(DATA.salaries, id, 'Payslip');
+  const basic = Math.round(+v.basic || 0), bonus = Math.round(+v.bonus || 0);
+  const allowance = Math.round(+v.allowance || 0), deduction = Math.round(+v.deduction || 0);
+  const net = basic + bonus + allowance - deduction;
+  // A paid payslip has its net pay on the cash ledger; the two must not drift apart.
+  if (sl.status === 'Paid' && net !== sl.net)
+    throw new Error('This payslip is already paid (' + fmt(sl.net, 'full') + '). Void its payment before changing the pay.');
+  const date = parseDate(v.date);
+  const prev = sl.net;
+  Object.assign(sl, {
+    employee: v.employee, dept: v.dept || '—', monthLabel: MONTHS[date.getMonth()] + ' ' + date.getFullYear(),
+    basic, bonus, allowance, deduction, net, date, office: v.office || sl.office,
+    attachments: v.attachments || sl.attachments || [],
+  });
+  saveRecordToFirestore('salaries', sl.id, sl);
+  logEdit(sl.id, 'Payslip', prev, sl.net);
+  return sl;
+}
+
+export function updateInvoice(id, v) {
+  const inv = mustFind(DATA.invoices, id, 'Invoice');
+  const prev = inv.totalAmount;
+  const moved = (v.propertyId || null) !== (inv.propertyId || null);
+  Object.assign(inv, invoiceBody({ ...v, attachments: v.attachments || inv.attachments }));
+  if (moved) {
+    const prop = inv.propertyId ? DATA.properties.find((p) => p.id === inv.propertyId) : null;
+    inv.propertyName = prop ? prop.name + ' · ' + prop.project : '';
+  }
+  saveRecordToFirestore('invoices', inv.id, inv);
+  logEdit(inv.id, inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice', prev, inv.totalAmount);
+  return inv;
 }
 
 /* Statuses that depend on today's date ("Overdue") and day counts go stale in

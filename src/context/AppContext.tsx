@@ -54,6 +54,7 @@ interface AppContextType {
   openMenu: (id: string, x: number, y: number) => void;
   closeMenu: () => void;
   openModal: (id: string, preset?: Record<string, any>) => void;
+  openEdit: (coll: string, id: string) => void;
   closeModal: () => void;
   openAttachments: (coll: string, id: string) => void;
   closeAttachments: () => void;
@@ -140,6 +141,10 @@ const invoiceValidate = (v: any) => {
 export const FORMS_DEF: Record<string, any> = {
   property: {
     title: 'Add a property',
+    editTitle: 'Edit property',
+    coll: 'properties',
+    load: (p: any) => ({ registration: p.extras.registration, legal: p.extras.legal, development: p.extras.development, otherCost: p.extras.other }),
+    update: (id: string, v: any) => M.updateProperty(id, v),
     sub: 'Records a purchase. Acquisition costs are added to the price to give total cost (§6).',
     fields: [
       { g: 'Property' },
@@ -160,8 +165,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'development', l: 'Development charges', type: 'money' },
       { k: 'otherCost', l: 'Other purchase costs', type: 'money' },
       { g: 'Payment & valuation' },
-      { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'currentValue', l: 'Current market value', type: 'money', hint: 'Defaults to the purchase price.' },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -188,6 +193,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   sale: {
     title: 'Record a sale',
+    editTitle: 'Edit sale',
+    coll: 'sales',
+    update: (id: string, v: any) => M.updateSale(id, v),
     sub: 'Creates the sale, the agent commission entry and the receipt (§7, §10, §26).',
     fields: [
       { g: 'Sale' },
@@ -196,6 +204,7 @@ export const FORMS_DEF: Record<string, any> = {
         l: 'Property',
         type: 'select',
         req: true,
+        addOnly: true,
         opts: () => M.DATA.properties.filter((p: any) => p.status !== 'Sold').map((p: any) => [p.id, p.name + ' · ' + p.project]),
       },
       { k: 'buyer', l: 'Buyer', req: true, ph: 'Kamran Aziz' },
@@ -209,8 +218,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'date', l: 'Sale date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { g: 'Money' },
       { k: 'sellingPrice', l: 'Selling price (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
+      { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true, addOnly: true },
       { k: 'commissionPct', l: 'Commission %', type: 'number', hint: 'Blank uses the agent’s standard rate. Ignored for a direct sale.' },
       { k: 'tax', l: 'Withholding tax', type: 'money', hint: 'Blank uses 1% of the selling price.' },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
@@ -234,9 +243,9 @@ export const FORMS_DEF: Record<string, any> = {
         ['Net profit on this sale', price - cost - comm - tax - n(v.otherExpenses), true],
       ];
     },
-    validate: (v: any) => {
+    validate: (v: any, editId?: string) => {
       const e: Record<string, string> = {};
-      if (!M.DATA.properties.some((p: any) => p.status !== 'Sold'))
+      if (!editId && !M.DATA.properties.some((p: any) => p.status !== 'Sold'))
         e.propertyId = 'No unsold property in the register — add the property purchase first.';
       if (n(v.received) > n(v.sellingPrice)) e.received = 'Received cannot exceed the selling price.';
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
@@ -253,6 +262,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   expense: {
     title: 'Add an expense',
+    editTitle: 'Edit expense',
+    coll: 'expenses',
+    update: (id: string, v: any) => M.updateExpense(id, v),
     sub: 'Posts to the expense ledger and, if paid, to the cash ledger (§13).',
     fields: [
       { g: 'Expense' },
@@ -269,8 +281,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { g: 'Amount' },
       { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the amount.' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the amount.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'note', l: 'Note', ph: 'Optional description', full: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -372,6 +384,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   saleInvoice: {
     title: 'Create sale invoice',
+    editTitle: 'Edit sale invoice',
+    coll: 'invoices',
+    update: (id: string, v: any) => M.updateInvoice(id, v),
     sub: 'Invoice/receipt given to the buyer with all transaction details.',
     fields: invoiceFields('sale'),
     calc: invoiceCalc,
@@ -383,6 +398,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   purchaseInvoice: {
     title: 'Create purchase invoice',
+    editTitle: 'Edit purchase invoice',
+    coll: 'invoices',
+    update: (id: string, v: any) => M.updateInvoice(id, v),
     sub: 'Invoice/receipt kept by the company for internal records.',
     fields: invoiceFields('purchase'),
     calc: invoiceCalc,
@@ -394,6 +412,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   agent: {
     title: 'Add an agent',
+    editTitle: 'Edit agent',
+    coll: 'agents',
+    update: (id: string, v: any) => M.updateAgent(id, v),
     sub: 'Agents can then be picked when recording a sale, and earn commission at their standard rate.',
     fields: [
       { g: 'Agent' },
@@ -412,6 +433,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   tax: {
     title: 'Add a tax entry',
+    editTitle: 'Edit tax entry',
+    coll: 'taxes',
+    update: (id: string, v: any) => M.updateTax(id, v),
     sub: 'Advance tax, capital gains tax and other statutory charges. Anything paid posts to the cash ledger.',
     fields: [
       { g: 'Tax' },
@@ -429,8 +453,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { g: 'Amount' },
       { k: 'amount', l: 'Tax amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the tax amount.' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the tax amount.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
@@ -446,6 +470,10 @@ export const FORMS_DEF: Record<string, any> = {
   },
   zakat: {
     title: 'Record Zakat',
+    editTitle: 'Edit Zakat entry',
+    coll: 'zakat',
+    load: (z: any) => ({ liabilities: Math.max(0, (z.eligibleAssets || 0) - (z.zakatable || 0)) }),
+    update: (id: string, v: any) => M.updateZakat(id, v),
     sub: 'Zakat is 2.5% of zakatable assets. Record the assessment for a period and any amount paid.',
     fields: [
       { g: 'Assessment' },
@@ -454,10 +482,10 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'liabilities', l: 'Less: liabilities due', type: 'money' },
       { k: 'rate', l: 'Rate %', type: 'number', def: '2.5', req: true },
       { g: 'Payment' },
-      { k: 'amount', l: 'Zakat paid now (PKR)', type: 'money' },
+      { k: 'amount', l: 'Zakat paid now (PKR)', type: 'money', addOnly: true },
       { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
-      { k: 'paidTo', l: 'Paid to', ph: 'Recipient or organisation' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'paidTo', l: 'Paid to', ph: 'Recipient or organisation', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'ref', l: 'Reference', ph: 'Receipt or transfer reference' },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -479,6 +507,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   bill: {
     title: 'Add a bill',
+    editTitle: 'Edit bill',
+    coll: 'bills',
+    update: (id: string, v: any) => M.updateBill(id, v),
     sub: 'Utility, rent and service bills with their due date. Anything paid posts to the cash ledger.',
     fields: [
       { g: 'Bill' },
@@ -490,8 +521,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { g: 'Amount' },
       { k: 'amount', l: 'Bill amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the bill amount.' },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the bill amount.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
@@ -507,6 +538,9 @@ export const FORMS_DEF: Record<string, any> = {
   },
   salary: {
     title: 'Add a salary payslip',
+    editTitle: 'Edit payslip',
+    coll: 'salaries',
+    update: (id: string, v: any) => M.updateSalary(id, v),
     sub: 'One payslip per employee per month. A paid payslip posts to the cash ledger.',
     fields: [
       { g: 'Employee' },
@@ -519,8 +553,8 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'bonus', l: 'Bonus', type: 'money' },
       { k: 'allowance', l: 'Allowance', type: 'money' },
       { k: 'deduction', l: 'Deduction', type: 'money' },
-      { k: 'status', l: 'Status', type: 'select', opts: () => ['Paid', 'Pending'], def: 'Paid', req: true },
-      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer' },
+      { k: 'status', l: 'Status', type: 'select', opts: () => ['Paid', 'Pending'], def: 'Paid', req: true, addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
@@ -557,6 +591,24 @@ function formDefaults(id: string) {
     }
   });
   return v;
+}
+
+/** The form that edits a saved record of this ledger, if it has one. */
+export function editFormFor(coll: string, rec?: any): string | null {
+  if (coll === 'invoices') return rec && rec.type === 'purchase' ? 'purchaseInvoice' : 'saleInvoice';
+  return Object.keys(FORMS_DEF).find((k) => FORMS_DEF[k].coll === coll && FORMS_DEF[k].update) || null;
+}
+
+/** Form values for a saved record: each field takes the stored value of the same name. */
+function editValues(id: string, rec: any) {
+  const F = FORMS_DEF[id];
+  const v = formDefaults(id);
+  F.fields.forEach((fd: any) => {
+    if (fd.g) return;
+    const x = rec[fd.k];
+    if (x != null) v[fd.k] = x instanceof Date ? M.dateInput(x) : x;
+  });
+  return { ...v, ...(F.load ? F.load(rec) : {}) };
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -776,6 +828,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMenu(null);
   }, []);
 
+  const openEdit = useCallback((coll: string, recId: string) => {
+    const rec = ((M.DATA as any)[coll] || []).find((x: any) => x.id === recId);
+    const id = rec ? editFormFor(coll, rec) : null;
+    if (!id) return;
+    setModal({ id, values: editValues(id, rec), errors: {}, editId: recId });
+    setMenu(null);
+  }, []);
+
   const closeModal = useCallback(() => setModal(null), []);
 
   const openAttachments = useCallback((coll: string, id: string) => {
@@ -804,20 +864,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const submitModal = useCallback(() => {
     if (!modal) return;
-    const { id, values } = modal;
+    const { id, values, editId } = modal;
     const F = FORMS_DEF[id];
     if (!F) return;
 
+    // Fields that only apply when the record is first created are not shown on an edit.
+    const hidden = (fd: any) => !!editId && fd.addOnly;
     const errors: Record<string, string> = {};
     F.fields.forEach((fd: any) => {
-      if (fd.g) return;
+      if (fd.g || hidden(fd)) return;
       const v = values[fd.k];
       if (fd.req && (v === '' || v == null)) errors[fd.k] = 'Required.';
       else if (fd.min != null && v !== '' && n(v) < fd.min) errors[fd.k] = 'Must be at least ' + fd.min + '.';
       else if (fd.maxToday && v && M.parseDate(v) > M.TODAY)
         errors[fd.k] = 'Cannot be a future date (today is ' + M.fmtDate(M.TODAY) + ').';
     });
-    Object.assign(errors, F.validate(values));
+    Object.assign(errors, F.validate(values, editId));
+    // An error on a field that is not on screen would otherwise block the save silently.
+    F.fields.forEach((fd: any) => {
+      if (fd.g || !hidden(fd) || !errors[fd.k]) return;
+      errors._form = (errors._form ? errors._form + ' ' : '') + errors[fd.k] + ' That amount is already on the cash ledger — void the payment to change it.';
+      delete errors[fd.k];
+    });
 
     if (Object.keys(errors).length) {
       setModal((prev) => (prev ? { ...prev, errors } : null));
@@ -845,6 +913,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
+      if (editId) {
+        // An edit stays on the page it was made from.
+        F.update(editId, values);
+        setFresh((prev) => [editId, ...prev.filter((x) => x !== editId)].slice(0, 24));
+        setModal(null);
+        setDataVersion((v) => v + 1);
+        toast(editId + ' updated');
+        return;
+      }
       const res = F.submit(values);
       const created = LEDGERS.flatMap((key) => (M.DATA as any)[key].slice(before[key]).map((x: any) => x.id));
       setFresh((prev) => [res.id, ...created, ...prev].slice(0, 24));
@@ -1054,6 +1131,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         openMenu,
         closeMenu,
         openModal,
+        openEdit,
         closeModal,
         openAttachments,
         closeAttachments,
