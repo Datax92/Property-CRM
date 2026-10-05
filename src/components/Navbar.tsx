@@ -3,6 +3,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Icon } from './Icons';
+import { BrandMark } from './Brand';
 import { NAV, PAGE_META } from '../lib/constants';
 import * as M from '../lib/re-data';
 
@@ -15,7 +16,7 @@ export function Navbar() {
   // The home screen is reached with the apps button, so it is not repeated as a menu.
   const tabs = sec ? visibleTabs(sec).filter((t: any) => !(sec.id === 'dashboard' && t.id === 'home')) : [];
   const brand = isHome
-    ? M.COMPANY.replace(/\s*\(Pvt\)\s*Ltd\.?$/i, '')
+    ? M.COMPANY_SHORT
     : sec
     ? sec.label
     : (PAGE_META[page] || { t: '' }).t;
@@ -36,6 +37,9 @@ export function Navbar() {
         </svg>
       </button>
 
+      <button type="button" className="o-nav-logo" title={M.COMPANY} aria-label="Home" onClick={() => goto('dashboard/home')}>
+        <BrandMark size={24} />
+      </button>
       <button
         type="button"
         className="o-nav-brand"

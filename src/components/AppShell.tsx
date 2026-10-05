@@ -11,6 +11,8 @@ import { Modals } from './Modals';
 import { AttachmentsModal } from './Attachments';
 import { TooltipToast } from './TooltipToast';
 import { syncFirestoreData, onFirestoreSaveError, onFirestoreReadError } from '../lib/firestore-service';
+import { BrandMark } from './Brand';
+import * as M from '../lib/re-data';
 
 export function AppShell() {
   const { user: authUser, loading } = useAuth();
@@ -66,7 +68,8 @@ export function AppShell() {
       <div className="login-wrap" role="status">
         <div style={{ textAlign: 'center' }}>
           <div className="spin" />
-          <b>Property CRM</b>
+          <BrandMark size={56} className="login-wrap-logo" />
+          <b>{M.COMPANY_SHORT}</b>
           <span>Loading session…</span>
         </div>
       </div>

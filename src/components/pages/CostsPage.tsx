@@ -8,7 +8,7 @@ import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function CostsPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, numbers } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, openCostSheet, numbers } = useApp();
 
   const meta = PAGE_META[`costs/${tab}`] || { t: 'Costs' };
 
@@ -252,6 +252,7 @@ export function CostsPage() {
     const cols = [
       { key: 'id', label: 'ID' },
       { key: 'period', label: 'Period' },
+      { key: 'property', label: 'Deal', render: (z: any) => z.property || '—' },
       { key: 'eligibleAssets', label: 'Eligible assets', a: 'r' as const, sum: false, cls: 'mono', render: (z: any) => M.fmt(z.eligibleAssets, numbers) },
       { key: 'zakatable', label: 'Zakatable', a: 'r' as const, sum: false, cls: 'mono', render: (z: any) => M.fmt(z.zakatable, numbers) },
       { key: 'rate', label: 'Rate', a: 'r' as const, cls: 'mono', render: (z: any) => `${z.rate}%` },
@@ -325,11 +326,16 @@ export function CostsPage() {
   }
 
   // Expenses tab (default)
-  const rows = M.DATA.expenses.filter((e: any) => M.inRange(e.date, r) && (f.office === 'all' || e.office === f.office));
+  // Assets are bought to keep, not spent: they are listed under Finance → Assets instead.
+  const rows = M.DATA.expenses.filter(
+    (e: any) => e.group !== 'Assets' && M.inRange(e.date, r) && (f.office === 'all' || e.office === f.office)
+  );
+  const sumOf = (pred: (e: any) => boolean) => rows.filter(pred).reduce((a: number, e: any) => a + e.amount, 0);
 
   const summaryPairs: [string, string][] = [
     ['Entries', M.fmtNum(rows.length)],
-    ['Total', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+    ['Business expenses', M.fmt(sumOf((e) => e.group !== 'Personal Expenses'), numbers)],
+    ['Personal expenses', M.fmt(sumOf((e) => e.group === 'Personal Expenses'), numbers)],
     ['Paid', M.fmt(rows.reduce((a: number, e: any) => a + e.paid, 0), numbers)],
     ['Unpaid', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
   ];
@@ -338,6 +344,18 @@ export function CostsPage() {
     { key: 'id', label: 'ID' },
     { key: 'group', label: 'Category' },
     { key: 'category', label: 'Sub-category' },
+    {
+      key: 'property',
+      label: 'Deal',
+      render: (e: any) =>
+        e.propertyId ? (
+          <button type="button" className="linkbtn" onClick={() => openCostSheet(e.propertyId)} title="Open this deal’s cost sheet">
+            {e.property || e.propertyId}
+          </button>
+        ) : (
+          '—'
+        ),
+    },
     { key: 'vendor', label: 'Vendor' },
     { key: 'office', label: 'Office' },
     { key: 'date', label: 'Date', cls: 'mono', render: (e: any) => M.fmtDate(e.date) },

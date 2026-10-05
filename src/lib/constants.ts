@@ -9,6 +9,7 @@ export const NAV: NavSection[] = [
     group: 'Main',
     tabs: [
       { id: 'home', label: 'Home' },
+      { id: 'tasks', label: 'Daily tasks' },
       { id: 'overview', label: 'Graphs & comparison' },
       { id: 'alerts', label: 'Alerts' },
     ],
@@ -34,7 +35,7 @@ export const NAV: NavSection[] = [
     group: 'Operations',
     tabs: [
       { id: 'sheets', label: 'Cost sheet register' },
-      { id: 'calculator', label: 'Deal calculator' },
+      { id: 'calculator', label: 'Cost sheet' },
       { id: 'analytics', label: 'Trading analytics' },
     ],
   },
@@ -46,6 +47,7 @@ export const NAV: NavSection[] = [
     group: 'Operations',
     tabs: [
       { id: 'register', label: 'Sales register' },
+      { id: 'proformaInvoices', label: 'Proforma invoices' },
       { id: 'saleInvoices', label: 'Sale invoices' },
       { id: 'purchaseInvoices', label: 'Purchase invoices' },
       { id: 'receivables', label: 'Receivables', need: 'receivables' },
@@ -73,6 +75,7 @@ export const NAV: NavSection[] = [
       { id: 'profit', label: 'Profit tracking', need: 'profit' },
       { id: 'cashflow', label: 'Cash flow', need: 'cashflow' },
       { id: 'payables', label: 'Payables', need: 'payables' },
+      { id: 'assets', label: 'Assets', need: 'pnl' },
     ],
   },
   {
@@ -106,6 +109,7 @@ export const NAV: NavSection[] = [
 
 export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = {
   'dashboard/home': { t: 'Home', u: 'ہوم' },
+  'dashboard/tasks': { t: 'Daily tasks', u: 'روزانہ کام', p: 'What needs doing today. Tick a task when it is done.' },
   'dashboard/overview': { t: 'Dashboard', u: 'ڈیش بورڈ' },
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost, what it is worth today, and the difference.' },
@@ -113,9 +117,10 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, after acquisition costs, commission, tax and selling costs.' },
   'properties/projects': { t: 'Projects', u: 'منصوبے', p: 'Every project / society: stock held, what it cost, what it is worth, and what has been sold.' },
   'trading/sheets': { t: 'Cost sheet register', u: 'لاگت رجسٹر', p: 'Complete trading ledger: acquisition cost basis, sale realization, brokerage, statutory taxes, and net margins.' },
-  'trading/calculator': { t: 'Deal cost calculator', u: 'لاگت کیلکولیٹر', p: 'Interactive trade modeller: link buy-sell pricing, holding carrying costs, commission splits, FBR taxes, break-even exit, and sensitivity.' },
+  'trading/calculator': { t: 'Cost sheet', u: 'لاگت شیٹ', p: 'One deal: purchase price, selling costs, gross profit and net margin, read from the records.' },
   'trading/analytics': { t: 'Trading analytics', u: 'تجزیہ منافع', p: 'Portfolio-level trading velocity, capital turnover, tax-to-profit ratios, and realized margin breakdown.' },
   'sales/register': { t: 'Sales register', u: 'فروخت رجسٹر', p: 'Every sale with buyer, agent, amount received and amount outstanding.' },
+  'sales/proformaInvoices': { t: 'Proforma invoices', u: 'پروفارما انوائس', p: 'Quotations given to buyers before a sale. A proforma is not a receipt and moves no money.' },
   'sales/saleInvoices': { t: 'Sale invoices', u: 'فروخت رسید', p: 'Invoices given to buyers — receipt of sale with all transaction details.' },
   'sales/purchaseInvoices': { t: 'Purchase invoices', u: 'خرید رسید', p: 'Invoices kept by the company — internal purchase receipts for record keeping.' },
   'sales/receivables': { t: 'Accounts receivable', u: 'واجب الوصول', p: 'What customers still owe, and how far past due each balance is.' },
@@ -125,7 +130,8 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'finance/profit': { t: 'Profit tracking', u: 'منافع', p: 'Purchases, sales, gross profit, expenses and net profit by week, month or year.' },
   'finance/cashflow': { t: 'Cash flow', u: 'نقدی بہاؤ', p: 'Money received and paid, with opening and closing balance.' },
   'finance/payables': { t: 'Accounts payable', u: 'واجب الادا', p: 'What the company owes sellers, agents, staff, vendors and the tax authority.' },
-  'costs/expenses': { t: 'Expenses', u: 'اخراجات', p: 'Operating expenses by category and vendor, with anything still unpaid.' },
+  'finance/assets': { t: 'Assets', u: 'اثاثے', p: 'Things the company bought to keep — furniture, computers, vehicles. Recorded as assets, so they are not charged against profit.' },
+  'costs/expenses': { t: 'Expenses', u: 'اخراجات', p: 'Office, personal and other expenses by category and vendor, with anything still unpaid. Assets are kept under Finance → Assets.' },
   'costs/salaries': { t: 'Employee salaries', u: 'تنخواہیں', p: 'Basic, bonus, allowance and deductions per employee.' },
   'costs/bills': { t: 'Bills', u: 'بل', p: 'Recurring and one-off bills, their due dates and anything overdue.' },
   'costs/tax': { t: 'Tax', u: 'ٹیکس', p: 'All tax obligations, split between transaction withholding tax and corporate income tax.' },

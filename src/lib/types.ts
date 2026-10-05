@@ -166,12 +166,14 @@ export interface CostSheet {
   buyer?: string;
   notes?: string;
   manual?: boolean;
+  /** Extra lines carried by the engine (sale-side costs, record sources, flags). */
+  [key: string]: any;
 }
 
 export interface Invoice {
   id: string;
   srNo: number;
-  type: 'sale' | 'purchase'; // sale = given to buyer, purchase = kept by company
+  type: 'sale' | 'purchase' | 'proforma'; // sale = given to buyer, purchase = kept by company, proforma = quotation
   receiptDate: Date | string;
   propertyId?: string;
   propertyName?: string;
@@ -214,4 +216,6 @@ export interface Invoice {
 
   notes?: string;
   manual?: boolean;
+  /** Set when this invoice was created as a copy of another one. */
+  mirrorOf?: string | null;
 }

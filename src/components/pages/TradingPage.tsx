@@ -2,33 +2,92 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, PrintHead } from '../Shared';
+import { PageShell, SummaryKpis, DataTable } from '../Shared';
 import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
-import { PAGE_META } from '../../lib/constants';
+import { BrandBanner, BrandFooter } from '../Brand';
+import { PrintNow } from '../PrintNow';
 import * as M from '../../lib/re-data';
 import { AttachmentsField } from '../Attachments';
 import type { CostSheet } from '../../lib/types';
 
-export function TradingPage() {
-  const {
-    tab,
-    effectiveFilters: f,
-    numbers,
-    activeCostSheetId,
-    openCostSheet,
-  } = useApp();
+/* ---------------------------------------------------------------------------
+   The lines of a cost sheet, in order. The screen and the printout both read
+   this list, so the two can never disagree about what a sheet contains.
+   --------------------------------------------------------------------------- */
+type LineKind = 'base' | 'section' | 'item' | 'total' | 'result';
+interface Line {
+  kind: LineKind;
+  label: string;
+  no?: string;
+  basis?: string;
+  /** The amount field this line edits. */
+  k?: string;
+  /** A computed line. */
+  value?: (cs: CostSheet) => number;
+  /** A quick-fill rate offered beside the input: [label, amount for this sheet]. */
+  rate?: (cs: CostSheet) => [string, number];
+}
 
-  const meta = PAGE_META[`trading/${tab}`] || { t: 'Cost Sheet' };
+const LINES: Line[] = [
+  { kind: 'base', label: 'Net buy cost', basis: 'Price paid for the property', k: 'netBuyCost' },
+  { kind: 'section', no: '1', label: 'Society / govt transfer cost' },
+  { kind: 'item', no: '1.1', label: 'NDC & verification fee', k: 'ndcFee' },
+  { kind: 'item', no: '1.2', label: 'Provincial stamp duty', basis: '1% of buy cost', k: 'stampDuty', rate: (cs) => ['1%', Math.round(cs.netBuyCost * 0.01)] },
+  { kind: 'item', no: '1.3', label: 'Capital value tax (CVT)', basis: '1% of buy cost', k: 'cvt', rate: (cs) => ['1%', Math.round(cs.netBuyCost * 0.01)] },
+  { kind: 'item', no: '1.4', label: 'CDA / RDA transfer fee', k: 'cdaRdaTransferFee' },
+  { kind: 'item', no: '1.5', label: 'Society transfer & society expenses', k: 'societyTransferFee' },
+  { kind: 'item', no: '1.6', label: 'Legal charges', k: 'legalCharges' },
+  { kind: 'item', no: '1.7', label: 'Development charges', k: 'developmentCharges' },
+  { kind: 'item', no: '1.8', label: 'Other purchase costs', k: 'otherAcquisition' },
+  { kind: 'section', no: '2', label: 'Govt taxes (buy side)' },
+  { kind: 'item', no: '2.1', label: 'FBR §236K advance tax on purchase', basis: 'Filer 3%', k: 'tax236K', rate: (cs) => ['3%', Math.round(cs.netBuyCost * 0.03)] },
+  { kind: 'section', no: '3', label: 'Handling & expenses' },
+  { kind: 'item', no: '3.1', label: 'Renovation & repairs', k: 'renovationRepairs' },
+  { kind: 'item', no: '3.2', label: 'Maintenance & bills', k: 'maintenanceBills' },
+  { kind: 'item', no: '3.3', label: 'Marketing', k: 'marketingExpenses' },
+  { kind: 'item', no: '3.4', label: 'Fuel & travelling', k: 'fuelTravelling' },
+  { kind: 'item', no: '3.5', label: 'Salary', k: 'salaryExpenses' },
+  { kind: 'item', no: '3.6', label: 'Other handling expenses', k: 'handlingExpenses' },
+  { kind: 'section', no: '4', label: 'Real estate agent fee' },
+  { kind: 'item', no: '4.1', label: 'Agent fee — buy side', k: 'buySideAgentFee' },
+  { kind: 'total', label: 'Purchase price (landed cost)', basis: '= Net buy cost + 1 + 2 + 3 + 4', value: (cs) => cs.purchasePrice },
+  { kind: 'base', label: 'Gross sale price', basis: 'Sale price, or current value if unsold', k: 'grossSalePrice' },
+  { kind: 'section', no: '5', label: 'Selling costs' },
+  { kind: 'item', no: '5.1', label: 'FBR §236C advance tax on sale', basis: 'Filer 3%', k: 'tax236C', rate: (cs) => ['3%', Math.round(cs.grossSalePrice * 0.03)] },
+  { kind: 'item', no: '5.2', label: 'Agent fee — sell side', k: 'sellSideAgentFee' },
+  { kind: 'item', no: '5.3', label: 'Other selling expenses', k: 'otherSellingExpenses' },
+  { kind: 'total', label: 'Gross profit', basis: '= Sale price − selling costs − purchase price', value: (cs) => cs.grossProfit },
+  { kind: 'section', no: '6', label: 'Deductions from profit' },
+  {
+    kind: 'item',
+    no: '6.1',
+    label: 'Capital gains tax (CGT)',
+    basis: '15% of gross profit, if payable',
+    k: 'cgtAmount',
+    rate: (cs) => ['15%', Math.max(0, Math.round(cs.grossProfit * 0.15))],
+  },
+  { kind: 'item', no: '6.2', label: 'Zakat', k: 'zakat' },
+  { kind: 'item', no: '6.3', label: 'Charity', k: 'charity' },
+  { kind: 'item', no: '6.4', label: 'Office expense share', basis: 'Optional', k: 'officeExpenseDeduction' },
+  { kind: 'result', label: 'Net margin (clean profit)', basis: '= Gross profit − 6', value: (cs) => cs.netMargin },
+];
+
+const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);
+const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
+
+/** The deal a register row or a link points at, as the calculator should open it. */
+const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
+
+export function TradingPage() {
+  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet } = useApp();
+  const [printing, setPrinting] = useState<CostSheet | null>(null);
 
   // =========================================================================
-  // TAB 1: COST SHEET REGISTER (Matching Client Excel Rows 2–4)
+  // COST SHEET REGISTER — one row per deal, read from the records
   // =========================================================================
   if (tab === 'sheets') {
-    const costSheets: CostSheet[] = (M.DATA as any).costSheets || [];
-
-    // Filter matching
-    const rows = costSheets.filter((cs) => {
+    const rows = M.dealSheets().filter((cs: CostSheet) => {
       if (f.project !== 'all') {
         const prj = M.PROJECTS.find((p: any) => p.name === cs.project);
         if (prj && prj.id !== f.project) return false;
@@ -42,187 +101,158 @@ export function TradingPage() {
       return true;
     });
 
-    const totalNetBuy = rows.reduce((a, s) => a + (s.netBuyCost || s.purchasePrice), 0);
-    const totalPurchasePrice = rows.reduce((a, s) => a + s.purchasePrice, 0);
-    const totalRev = rows.reduce((a, s) => a + (s.grossSalePrice || s.sellingPrice), 0);
-    const totalGrossProfit = rows.reduce((a, s) => a + s.grossProfit, 0);
-    const totalNetMargin = rows.reduce((a, s) => a + (s.netMargin ?? s.netProfit), 0);
-    const totalCommissions = rows.reduce((a, s) => a + s.totalCommissions, 0);
+    const sum = (fn: (cs: CostSheet) => number) => rows.reduce((a: number, cs: CostSheet) => a + (fn(cs) || 0), 0);
+    const totalSale = sum((cs) => cs.grossSalePrice);
+    const totalNet = sum((cs) => cs.netMargin);
 
     const summaryPairs: [string, string][] = [
-      ['Total deals', M.fmtNum(rows.length)],
-      ['Net Buy Cost', M.fmt(totalNetBuy, numbers)],
-      ['Purchase Price (Landed)', M.fmt(totalPurchasePrice, numbers)],
-      ['Current Value / Sale', M.fmt(totalRev, numbers)],
-      ['Agent Commission', M.fmt(totalCommissions, numbers)],
-      ['Gross Profit', M.fmt(totalGrossProfit, numbers)],
-      ['Net Margin', M.fmt(totalNetMargin, numbers)],
+      ['Deals', M.fmtNum(rows.length)],
+      ['Purchase price (landed)', M.fmt(sum((cs) => cs.purchasePrice), numbers)],
+      ['Sale / current value', M.fmt(totalSale, numbers)],
+      ['Gross profit', M.fmt(sum((cs) => cs.grossProfit), numbers)],
+      ['Net margin', M.fmt(totalNet, numbers)],
+      ['Net margin %', pctText(M.pctOf(totalNet, totalSale))],
     ];
 
-    // Columns directly matching Excel rows 2-4
     const cols = [
       {
         key: 'id',
-        label: 'ID',
-        cls: 'mono',
+        label: 'Sheet',
         render: (cs: CostSheet) => (
-          <span style={{ fontWeight: 700, color: 'var(--brand)' }}>{cs.id}</span>
+          <>
+            <span className="mono" style={{ fontWeight: 700, color: 'var(--brand)' }}>
+              {cs.fromRecords ? cs.propertyId : cs.id}
+            </span>
+            {cs.fromRecords ? (
+              <span className="tag mute" style={{ marginLeft: 6 }} title="Read from the property, sale, expense and tax records. Open and save to keep a copy.">
+                From records
+              </span>
+            ) : M.sheetOutOfDate(cs) ? (
+              <span className="tag warn" style={{ marginLeft: 6 }} title="The property's records have changed since this sheet was saved. Open it and press “Update from records”.">
+                Records changed
+              </span>
+            ) : null}
+            {cs.mirrorOf && (
+              <span className="tag mute" style={{ marginLeft: 6 }}>
+                Mirror of {cs.mirrorOf}
+              </span>
+            )}
+          </>
         ),
       },
-      {
-        key: 'name',
-        label: 'Property',
-        render: (cs: CostSheet) => (
-          <div>
-            <b>{cs.name}</b>
-          </div>
-        ),
-      },
-      { key: 'type', label: 'Type' },
+      { key: 'name', label: 'Property', render: (cs: CostSheet) => <b>{cs.name}</b> },
       { key: 'project', label: 'Project' },
-      { key: 'city', label: 'City' },
-      { key: 'size', label: 'Size', cls: 'mono' },
-      {
-        key: 'netBuyCost',
-        label: 'Net Buy Cost',
-        a: 'r' as const,
-        sum: true,
-        cls: 'mono',
-        render: (cs: CostSheet) => M.fmt(cs.netBuyCost || cs.purchasePrice, numbers),
-      },
-      {
-        key: 'totalCommissions',
-        label: 'Agent Commission',
-        a: 'r' as const,
-        sum: true,
-        cls: 'mono',
-        render: (cs: CostSheet) => M.fmt(cs.totalCommissions, numbers),
-      },
-      {
-        key: 'grossSalePrice',
-        label: 'Current Value',
-        a: 'r' as const,
-        sum: true,
-        cls: 'mono',
-        render: (cs: CostSheet) => <b>{M.fmt(cs.grossSalePrice || cs.sellingPrice, numbers)}</b>,
-      },
+      { key: 'status', label: 'Status' },
+      { key: 'netBuyCost', label: 'Net buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (cs: CostSheet) => M.fmt(cs.netBuyCost, numbers) },
+      { key: 'purchasePrice', label: 'Purchase price', a: 'r' as const, sum: true, cls: 'mono', render: (cs: CostSheet) => M.fmt(cs.purchasePrice, numbers) },
+      { key: 'grossSalePrice', label: 'Sale / value', a: 'r' as const, sum: true, cls: 'mono', render: (cs: CostSheet) => <b>{M.fmt(cs.grossSalePrice, numbers)}</b> },
       {
         key: 'grossProfit',
-        label: 'GROSS PROFIT',
+        label: 'Gross profit',
         a: 'r' as const,
         sum: true,
         cls: 'mono',
-        render: (cs: CostSheet) => (
-          <span className={cs.grossProfit >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}>
-            {M.fmt(cs.grossProfit, numbers)}
-          </span>
-        ),
+        render: (cs: CostSheet) => <span className={cs.grossProfit >= 0 ? 'pos' : 'neg'}>{M.fmt(cs.grossProfit, numbers)}</span>,
       },
       {
         key: 'netMargin',
-        label: 'NET MARGIN',
+        label: 'Net margin',
         a: 'r' as const,
         sum: true,
         cls: 'mono',
         render: (cs: CostSheet) => (
-          <span
-            className={(cs.netMargin ?? cs.netProfit) >= 0 ? 'pos' : 'neg'}
-            style={{ fontWeight: 800 }}
-          >
-            {M.fmt(cs.netMargin ?? cs.netProfit, numbers)}
+          <span className={cs.netMargin >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
+            {M.fmt(cs.netMargin, numbers)}
           </span>
         ),
       },
+      { key: 'netMarginPct', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (cs: CostSheet) => pctText(cs.netMarginPct) },
       {
         key: 'actions',
-        label: 'Action',
+        label: '',
         render: (cs: CostSheet) => (
-          <button
-            type="button"
-            className="btn"
-            style={{ padding: '3px 8px', fontSize: '11px', height: '24px' }}
-            onClick={() => openCostSheet(cs.id)}
-          >
-            <Icon name="calculator" size={12} /> Open Sheet
-          </button>
+          <span className="rowacts">
+            <button type="button" className="btn sm pri" onClick={() => openCostSheet(openKey(cs))}>
+              <Icon name="calculator" size={12} /> Open
+            </button>
+            <button type="button" className="btn sm" onClick={() => setPrinting(cs)} title="Print this cost sheet now">
+              <Icon name="print" size={12} /> Print
+            </button>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => openCostSheet('mirror:' + openKey(cs))}
+              title="Make an editable copy of this cost sheet, saved as a new sheet"
+            >
+              Mirror
+            </button>
+          </span>
         ),
       },
     ];
 
     return (
       <PageShell
-        title="Cost Sheet Register"
+        title="Cost sheet register"
         u="لاگت رجسٹر"
-        p="Summary register of property trade deals matching your Excel sheet format."
+        p="Every deal with its cost sheet, read from the purchase, sale, expense, tax and Zakat records."
         acts={
-          <button
-            type="button"
-            className="btn pri"
-            onClick={() => openCostSheet('new')}
-          >
-            <Icon name="calculator" /> New Cost Sheet
+          <button type="button" className="btn pri" onClick={() => openCostSheet('new')}>
+            <Icon name="calculator" /> New cost sheet
           </button>
         }
       >
         <SummaryKpis pairs={summaryPairs} />
         <div style={{ marginTop: '14px' }}>
-          <DataTable cols={cols} rows={rows} totals={true} attach="costSheets" />
+          <DataTable cols={cols} rows={rows} totals={true} />
         </div>
+        {printing && (
+          <PrintNow onDone={() => setPrinting(null)} margin="8mm">
+            <PrintableCostSheetDoc sheet={printing} />
+          </PrintNow>
+        )}
       </PageShell>
     );
   }
 
   // =========================================================================
-  // TAB 3: TRADING ANALYTICS (Clean Simple Comparison Table)
+  // TRADING ANALYTICS — profitability by society
   // =========================================================================
   if (tab === 'analytics') {
-    const costSheets: CostSheet[] = (M.DATA as any).costSheets || [];
-    
-    // Project breakdown
     const prjMap: Record<string, { count: number; buyCost: number; rev: number; gross: number; net: number; comm: number }> = {};
-    costSheets.forEach((cs) => {
-      if (!prjMap[cs.project]) {
-        prjMap[cs.project] = { count: 0, buyCost: 0, rev: 0, gross: 0, net: 0, comm: 0 };
-      }
-      prjMap[cs.project].count++;
-      prjMap[cs.project].buyCost += cs.netBuyCost || cs.purchasePrice;
-      prjMap[cs.project].rev += cs.grossSalePrice || cs.sellingPrice;
-      prjMap[cs.project].gross += cs.grossProfit;
-      prjMap[cs.project].net += cs.netMargin ?? cs.netProfit;
-      prjMap[cs.project].comm += cs.totalCommissions;
+    M.dealSheets().forEach((cs: CostSheet) => {
+      const d = prjMap[cs.project] || (prjMap[cs.project] = { count: 0, buyCost: 0, rev: 0, gross: 0, net: 0, comm: 0 });
+      d.count++;
+      d.buyCost += cs.purchasePrice;
+      d.rev += cs.grossSalePrice;
+      d.gross += cs.grossProfit;
+      d.net += cs.netMargin;
+      d.comm += cs.totalCommissions;
     });
 
-    const prjRows = Object.keys(prjMap).map((prj) => {
-      const d = prjMap[prj];
-      return {
-        id: prj,
-        project: prj,
-        count: d.count,
-        buyCost: d.buyCost,
-        rev: d.rev,
-        comm: d.comm,
-        gross: d.gross,
-        net: d.net,
-        margin: d.rev > 0 ? (d.net / d.rev) * 100 : 0,
-      };
-    }).sort((a, b) => b.net - a.net);
+    const prjRows = Object.keys(prjMap)
+      .map((prj) => {
+        const d = prjMap[prj];
+        return { id: prj, project: prj, ...d, margin: d.rev > 0 ? (d.net / d.rev) * 100 : 0 };
+      })
+      .sort((a, b) => b.net - a.net);
 
     const prjCols = [
-      { key: 'project', label: 'Society / Project' },
+      { key: 'project', label: 'Society / project' },
       { key: 'count', label: 'Deals', a: 'r' as const, cls: 'mono', render: (r: any) => M.fmtNum(r.count) },
-      { key: 'buyCost', label: 'Total Net Buy Cost', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.buyCost, numbers) },
-      { key: 'rev', label: 'Current Value / Sale', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.rev, numbers) },
-      { key: 'comm', label: 'Agent Commission', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.comm, numbers) },
-      { key: 'gross', label: 'Gross Profit', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => <span className={r.gross >= 0 ? 'pos' : 'neg'}>{M.fmt(r.gross, numbers)}</span> },
-      { key: 'net', label: 'Net Margin', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => <span className={r.net >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}>{M.fmt(r.net, numbers)}</span> },
-      { key: 'margin', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (r: any) => `${r.margin.toFixed(1)}%` },
+      { key: 'buyCost', label: 'Purchase price', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.buyCost, numbers) },
+      { key: 'rev', label: 'Sale / value', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.rev, numbers) },
+      { key: 'comm', label: 'Agent commission', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => M.fmt(r.comm, numbers) },
+      { key: 'gross', label: 'Gross profit', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => <span className={r.gross >= 0 ? 'pos' : 'neg'}>{M.fmt(r.gross, numbers)}</span> },
+      { key: 'net', label: 'Net margin', a: 'r' as const, sum: true, cls: 'mono', render: (r: any) => <span className={r.net >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }}>{M.fmt(r.net, numbers)}</span> },
+      { key: 'margin', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (r: any) => pctText(r.margin) },
     ];
 
     return (
-      <PageShell title="Trading Comparison" u="تجزیہ منافع" p="Simple profitability comparison by society.">
+      <PageShell title="Trading comparison" u="تجزیہ منافع" p="Profitability of every deal, added up by society.">
         <div className="panel">
           <div className="panel-h">
-            <h3>Society Comparison</h3>
+            <h3>Society comparison</h3>
           </div>
           <div className="panel-b" style={{ padding: 0 }}>
             <DataTable cols={prjCols} rows={prjRows} totals={true} />
@@ -233,583 +263,185 @@ export function TradingPage() {
   }
 
   // =========================================================================
-  // TAB 2: INTERACTIVE DEAL COST SHEET (Exact Excel Format, No Extra Clutter)
+  // DEAL COST SHEET
   // =========================================================================
-  return <SimpleCostSheetView activeCostSheetId={activeCostSheetId} />;
+  return <CostSheetView activeCostSheetId={activeCostSheetId} />;
 }
 
 // ---------------------------------------------------------------------------
-// BEAUTIFUL, EXECUTIVE PRINTABLE COST SHEET DOCUMENT
+// PRINTED COST SHEET — dark text on white, emphasis from rules and weight.
+// Browsers drop background colours when printing by default, so nothing here
+// relies on a filled background to be readable.
 // ---------------------------------------------------------------------------
-function PrintableCostSheetDoc({
-  sheet,
-  form,
-  numbers,
-}: {
-  sheet: CostSheet;
-  form: any;
-  numbers: any;
-}) {
-  const marginPct = (sheet.netMarginPct || 0).toFixed(1);
-  const roiPct = (sheet.roiPct || 0).toFixed(1);
+export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
+  const full = (n: number) => M.fmt(n || 0, 'full');
+  const date = (d: any) => (d ? M.fmtDate(d instanceof Date ? d : M.parseDate(d)) : '—');
 
   return (
-    <div
-      className="printable-cost-sheet-doc"
-      style={{
-        background: '#ffffff',
-        color: '#0f172a',
-        fontFamily: 'var(--font-sans, system-ui, -apple-system, sans-serif)',
-        padding: '24px 28px',
-        maxWidth: '820px',
-        margin: '0 auto',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* 1. OFFICIAL CORPORATE LETTERHEAD */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '3px solid #047857',
-          paddingBottom: '10px',
-          marginBottom: '10px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              background: '#047857',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 900,
-              fontSize: '20px',
-              fontFamily: 'var(--display)',
-              boxShadow: '0 2px 6px rgba(4, 120, 87, 0.25)',
-            }}
-          >
-            {M.COMPANY[0].toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: '17px', fontWeight: 900, color: '#064e3b', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              {M.COMPANY.toUpperCase()}
-            </div>
-            <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600, marginTop: '2px' }}>
-              Real Estate Trading &amp; Portfolio RMS · Financial Deal Division
-            </div>
-          </div>
+    <div className="cs-doc">
+      <div className="cs-doc-banner">
+        <BrandBanner />
+      </div>
+      <div className="cs-doc-title">
+        <div>
+          <b>Property Cost Sheet</b>
+          <span>{sheet.name || 'Untitled deal'}</span>
         </div>
-
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800 }}>
-            <span>OFFICIAL COST SHEET</span>
-            <span>·</span>
-            <span>#{sheet.id || 'NEW'}</span>
-          </div>
-          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', fontWeight: 500 }}>
-            Issued: <b>{M.fmtDate(M.TODAY)}</b>
-          </div>
+        <div className="cs-doc-ref">
+          <span>Sheet no.</span>
+          <b>{sheet.fromRecords || !sheet.id ? sheet.propertyId || 'DRAFT' : sheet.id}</b>
+          <span>Printed {M.fmtDate(new Date())}</span>
         </div>
       </div>
 
-      {/* 2. PROPERTY SPECIFICATION & DEAL CONTEXT STRIP */}
-      <div
-        style={{
-          background: '#f8fafc',
-          border: '1px solid #cbd5e1',
-          borderRadius: '6px',
-          padding: '8px 12px',
-          marginBottom: '10px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '10px',
-          fontSize: '11.5px',
-        }}
-      >
-        <div>
-          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Property</span>
-          <span style={{ fontWeight: 800, color: '#0f172a' }}>{sheet.name || 'Untitled Deal'}</span>
-        </div>
-        <div>
-          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Project / Society</span>
-          <span style={{ fontWeight: 700, color: '#0f172a' }}>{sheet.project}</span>
-        </div>
-        <div>
-          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Location &amp; City</span>
-          <span style={{ fontWeight: 600, color: '#334155' }}>{sheet.city}</span>
-        </div>
-        <div>
-          <span style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Size &amp; Category</span>
-          <span style={{ fontWeight: 700, color: '#047857' }}>{sheet.size} · {sheet.type}</span>
+      <div className="cs-doc-facts">
+        <div><span>Project / society</span><b>{sheet.project || '—'}</b></div>
+        <div><span>City</span><b>{sheet.city || '—'}</b></div>
+        <div><span>Type · size</span><b>{[sheet.type, sheet.size].filter(Boolean).join(' · ') || '—'}</b></div>
+        <div><span>Status</span><b>{sheet.status || '—'}</b></div>
+        <div><span>Purchased from</span><b>{sheet.seller || '—'}</b></div>
+        <div><span>Purchase date</span><b>{date(sheet.purchaseDate)}</b></div>
+        <div><span>Sold to</span><b>{sheet.buyer || '—'}</b></div>
+        <div><span>Sale date</span><b>{date(sheet.saleDate)}</b></div>
+      </div>
+
+      <div className="cs-doc-kpis">
+        <div><span>Purchase price</span><b>{full(sheet.purchasePrice)}</b></div>
+        <div><span>Sale price</span><b>{full(sheet.grossSalePrice)}</b></div>
+        <div><span>Gross profit</span><b>{full(sheet.grossProfit)}</b></div>
+        <div className="hi">
+          <span>Net margin</span>
+          <b>{full(sheet.netMargin)}</b>
+          <em>
+            {pctText(sheet.netMarginPct)} of sale · ROI {pctText(sheet.roiPct)}
+          </em>
         </div>
       </div>
 
-      {/* 3. EXECUTIVE FINANCIAL SUMMARY CARDS */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '8px',
-          marginBottom: '10px',
-        }}
-      >
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px' }}>
-          <div style={{ fontSize: '9px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Net Purchase Cost</div>
-          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0f172a', marginTop: '2px' }}>
-            {M.fmt(sheet.netBuyCost || form.netBuyCost, numbers)}
-          </div>
-          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Base Property Price</div>
-        </div>
-
-        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px' }}>
-          <div style={{ fontSize: '9px', color: '#0369a1', textTransform: 'uppercase', fontWeight: 700 }}>Total Landed Basis</div>
-          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0284c7', marginTop: '2px' }}>
-            {M.fmt(sheet.purchasePrice, numbers)}
-          </div>
-          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Cost + Taxes + Fees</div>
-        </div>
-
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 8px' }}>
-          <div style={{ fontSize: '9px', color: '#475569', textTransform: 'uppercase', fontWeight: 700 }}>Gross Sale / Exit</div>
-          <div style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: 'var(--mono)', color: '#0f172a', marginTop: '2px' }}>
-            {M.fmt(sheet.grossSalePrice || form.grossSalePrice, numbers)}
-          </div>
-          <div style={{ fontSize: '8.5px', color: '#94a3b8', marginTop: '1px' }}>Target Selling Value</div>
-        </div>
-
-        <div style={{ background: '#ecfdf5', border: '1.5px solid #059669', borderRadius: '6px', padding: '6px 8px' }}>
-          <div style={{ fontSize: '9px', color: '#047857', textTransform: 'uppercase', fontWeight: 800 }}>Clean Net Margin</div>
-          <div style={{ fontSize: '14.5px', fontWeight: 900, fontFamily: 'var(--mono)', color: '#047857', marginTop: '2px' }}>
-            {M.fmt(sheet.netMargin ?? sheet.netProfit, numbers)}
-          </div>
-          <div style={{ fontSize: '9px', color: '#059669', fontWeight: 700, marginTop: '1px' }}>
-            Margin: {marginPct}% · ROI: {roiPct}%
-          </div>
-        </div>
-      </div>
-
-      {/* 4. MASTER LEDGER TABLE */}
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: '11px',
-          marginBottom: '10px',
-        }}
-      >
+      <table className="cs-doc-table">
         <thead>
-          <tr style={{ background: '#0f172a', color: '#ffffff' }}>
-            <th style={{ padding: '4px 6px', textAlign: 'center', width: '35px', fontWeight: 700 }}>#</th>
-            <th style={{ padding: '4px 6px', textAlign: 'left', fontWeight: 700 }}>Item Description</th>
-            <th style={{ padding: '4px 6px', textAlign: 'left', width: '180px', fontWeight: 600 }}>Calculation Basis / Detail</th>
-            <th style={{ padding: '4px 6px', textAlign: 'right', width: '140px', fontWeight: 700 }}>Amount (PKR)</th>
+          <tr>
+            <th className="no">#</th>
+            <th>Item</th>
+            <th>Basis</th>
+            <th className="r">Amount (PKR)</th>
           </tr>
         </thead>
         <tbody>
-          {/* NET BUY COST */}
-          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1', fontWeight: 700 }}>
-            <td style={{ padding: '4px 6px', textAlign: 'center' }}>•</td>
-            <td style={{ padding: '4px 6px', color: '#047857', fontWeight: 800 }}>NET BUY COST</td>
-            <td style={{ padding: '4px 6px', color: '#64748b' }}>Base property acquisition price</td>
-            <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 800, fontSize: '11.5px' }}>
-              {M.fmt(form.netBuyCost ?? sheet.netBuyCost, numbers)}
-            </td>
-          </tr>
-
-          {/* SECTION 1 */}
-          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>1</td>
-            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
-              Society / Govt Transfer Cost
-            </td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.0</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>NDC &amp; Verification Fee</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Verification fee</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.ndcFee ?? 10000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.1</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Provincial Stamp Duty</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>1% Stamp</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.stampDuty ?? 0, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Capital Value Tax (CVT)</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>1% CVT</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.cvt ?? 0, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>1.2</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Govt Authority CDA/RDA Transfer Fee</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>0.5% of sale value</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.cdaRdaTransferFee ?? 0, numbers)}</td>
-          </tr>
-
-          {/* SECTION 2 */}
-          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>2</td>
-            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
-              Govt Taxes (Buy Side)
-            </td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>2.1</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>FBR Section 236K (Advance Tax on Purchase)</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Filer (sec236k : 3%)</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{M.fmt(form.tax236K ?? 150000, numbers)}</td>
-          </tr>
-
-          {/* SECTION 3 */}
-          <tr style={{ background: '#f1f5f9', fontWeight: 800, borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3.5px 6px', textAlign: 'center', color: '#047857' }}>3</td>
-            <td style={{ padding: '3.5px 6px', textTransform: 'uppercase', color: '#0f172a' }} colSpan={3}>
-              Handling &amp; Operating Expenses
-            </td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.1</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Renovation &amp; Repairs</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Property repairs &amp; fixes</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.renovationRepairs ?? 0, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.2</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Maintenance &amp; Bills</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Holding upkeep &amp; dues</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.maintenanceBills ?? 0, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.3</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Marketing</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Ad &amp; portal promotion</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.marketingExpenses ?? 1000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.4</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Fuel &amp; Travelling</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Site visits &amp; inspection</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.fuelTravelling ?? 1000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>3.5</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Salary &amp; other Expenses</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Staff &amp; office allocation</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.salaryExpenses ?? 5000, numbers)}</td>
-          </tr>
-
-          {/* SECTION 4 */}
-          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3.5px 6px', textAlign: 'center', fontWeight: 800, color: '#047857' }}>4</td>
-            <td style={{ padding: '3.5px 6px', fontWeight: 800, color: '#0f172a' }}>REAL ESTATE AGENT FEE</td>
-            <td style={{ padding: '3.5px 6px', color: '#64748b' }}>BUY SIDE</td>
-            <td style={{ padding: '3.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{M.fmt(form.buySideAgentFee ?? 10000, numbers)}</td>
-          </tr>
-
-          {/* PURCHASE PRICE (LANDED BASIS) */}
-          <tr style={{ background: '#047857', color: '#ffffff', fontWeight: 900, borderTop: '2px solid #064e3b', borderBottom: '2px solid #064e3b' }}>
-            <td style={{ padding: '4.5px 6px', textAlign: 'center' }}>★</td>
-            <td style={{ padding: '4.5px 6px', fontSize: '11.5px', letterSpacing: '0.02em' }}>PURCHASE PRICE (ALL-IN LANDED BASIS)</td>
-            <td style={{ padding: '4.5px 6px', fontSize: '10px', opacity: 0.9 }}>= Total Investment Cost</td>
-            <td style={{ padding: '4.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '12px' }}>
-              {M.fmt(sheet.purchasePrice, numbers)}
-            </td>
-          </tr>
-
-          {/* SALE SIDE */}
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>2.2</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>FBR Section 236C (Advance Tax on Sale)</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Filer (sec236C : 3%)</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.tax236C ?? 150000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>REAL ESTATE AGENT FEE</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>SELL SIDE</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.sellSideAgentFee ?? 10000, numbers)}</td>
-          </tr>
-          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3.5px 6px', textAlign: 'center', fontWeight: 800, color: '#047857' }}>5</td>
-            <td style={{ padding: '3.5px 6px', fontWeight: 800, color: '#0f172a' }}>GROSS SALE PRICE (incl. CGT)</td>
-            <td style={{ padding: '3.5px 6px', color: '#64748b' }}>Current Value / Exit Price</td>
-            <td style={{ padding: '3.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 800, fontSize: '11px', color: '#0f172a' }}>
-              {M.fmt(form.grossSalePrice ?? 5600000, numbers)}
-            </td>
-          </tr>
-
-          {/* GROSS PROFIT */}
-          <tr style={{ background: '#ecfdf5', fontWeight: 900, borderTop: '1px solid #10b981', borderBottom: '1px solid #10b981' }}>
-            <td style={{ padding: '4.5px 6px', textAlign: 'center' }}>•</td>
-            <td style={{ padding: '4.5px 6px', fontSize: '11px', color: '#047857' }}>GROSS PROFIT</td>
-            <td style={{ padding: '4.5px 6px', color: '#059669', fontSize: '10px' }}>= Exit Value − Landed Basis</td>
-            <td style={{ padding: '4.5px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '12px', color: '#047857' }}>
-              {M.fmt(sheet.grossProfit, numbers)}
-            </td>
-          </tr>
-
-          {/* DEDUCTIONS */}
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Capital Gain Tax (CGT)</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>= Profit × 15%</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
-              {M.fmt(form.cgtAmount ?? Math.max(0, Math.round(sheet.grossProfit * 0.15)), numbers)}
-            </td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>ZAQAT</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Zakat fund</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.zakat ?? 10000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>CHARITY</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>Welfare</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.charity ?? 5000, numbers)}</td>
-          </tr>
-          <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-            <td style={{ padding: '3px 6px', textAlign: 'center', color: '#94a3b8' }}>•</td>
-            <td style={{ padding: '3px 6px 3px 18px', color: '#334155' }}>Salary &amp; other Expenses (Deduction)</td>
-            <td style={{ padding: '3px 6px', color: '#64748b' }}>= F19 Allocation</td>
-            <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{M.fmt(form.officeExpenseDeduction ?? 5000, numbers)}</td>
-          </tr>
-
-          {/* NET MARGIN FINAL ROW */}
-          <tr style={{ background: '#dcfce7', borderTop: '2px solid #047857', borderBottom: '2px solid #047857', fontWeight: 900 }}>
-            <td style={{ padding: '6px 6px', textAlign: 'center', color: '#047857', fontSize: '13px' }}>✔</td>
-            <td style={{ padding: '6px 6px' }}>
-              <div style={{ fontSize: '12px', color: '#047857', fontWeight: 900, letterSpacing: '0.02em' }}>
-                NET MARGIN (CLEAN PROFIT)
-              </div>
-              <div style={{ fontSize: '9.5px', color: '#059669', fontWeight: 700, marginTop: '1px' }}>
-                Net Margin: {marginPct}% · Cash ROI: {roiPct}%
-              </div>
-            </td>
-            <td style={{ padding: '6px 6px', fontSize: '9.5px', color: '#475569' }}>
-              = Gross Profit − CGT − Zakat − Charity − Deduction
-            </td>
-            <td style={{ padding: '6px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '15px', color: '#047857', fontWeight: 900 }}>
-              {M.fmt(sheet.netMargin ?? sheet.netProfit, numbers)}
-            </td>
-          </tr>
+          {LINES.map((l, i) =>
+            l.kind === 'section' ? (
+              <tr key={i} className="sec">
+                <td className="no">{l.no}</td>
+                <td colSpan={3}>{l.label}</td>
+              </tr>
+            ) : (
+              <tr key={i} className={l.kind}>
+                <td className="no">{l.no || ''}</td>
+                <td>{l.label}</td>
+                <td className="basis">{l.basis || ''}</td>
+                <td className="r mono">{l.kind === 'item' && !amountOf(sheet, l) ? '—' : full(amountOf(sheet, l))}</td>
+              </tr>
+            )
+          )}
         </tbody>
       </table>
 
-      {/* 5. OFFICIAL AUTHORIZATION & SIGNATURES */}
-      <div
-        style={{
-          borderTop: '1px solid #cbd5e1',
-          paddingTop: '10px',
-          marginTop: '8px',
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '16px',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
-          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Prepared By</div>
-          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Trading Desk / Accounts Officer</div>
-        </div>
-
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
-          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Verified &amp; Audited</div>
-          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Chief Financial Officer</div>
-        </div>
-
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ borderBottom: '1px solid #94a3b8', height: '28px', marginBottom: '3px' }}></div>
-          <div style={{ fontSize: '9.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>Approved &amp; Accepted</div>
-          <div style={{ fontSize: '8.5px', color: '#64748b' }}>Client / Managing Partner</div>
-        </div>
+      <div className="cs-doc-signs">
+        <div><i />Prepared by</div>
+        <div><i />Checked by</div>
+        <div><i />Approved by</div>
       </div>
-
-      {/* 6. DOCUMENT FOOTER */}
-      <div
-        style={{
-          borderTop: '1px dashed #cbd5e1',
-          marginTop: '10px',
-          paddingTop: '5px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '8.5px',
-          color: '#94a3b8',
-        }}
-      >
-        <span>Meridian Estates (Pvt) Ltd · RMS Real Estate Trading Division</span>
-        <span>Certified Deal Record · Deal #{sheet.id || 'DRAFT'}</span>
-        <span>Page 1 of 1 · Confidential</span>
+      <div className="cs-doc-foot">
+        <BrandFooter />
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// SIMPLE, DIRECT COST SHEET (Matches property bussiness erp software.xlsx)
+// DEAL COST SHEET — opened from a saved sheet, from a property's records, as a
+// mirror of another sheet, or blank.
 // ---------------------------------------------------------------------------
-function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
+function blankDeal(over: Record<string, any> = {}) {
+  const zero: Record<string, number> = {};
+  M.SHEET_AMOUNT_KEYS.forEach((k: string) => (zero[k] = 0));
+  return M.calculateCostSheet({
+    ...zero,
+    id: '',
+    name: '',
+    project: M.PROJECTS[0].name,
+    city: M.PROJECTS[0].city,
+    type: 'Residential Plot',
+    size: '',
+    status: 'Active Deal',
+    office: M.OFFICES[0],
+    ...over,
+  });
+}
+
+/** Find a sheet by its own ID, or a property's sheet (saved, else read from its records). */
+function findSheet(key: string): CostSheet | null {
+  const saved = M.DATA.costSheets.find((s: any) => s.id === key || s.propertyId === key);
+  if (saved) return saved;
+  return M.sheetFromRecords(key);
+}
+
+function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
   const { numbers, toast, setActiveCostSheetId } = useApp();
-  const allSheets: CostSheet[] = (M.DATA as any).costSheets || [];
+  const allSheets: CostSheet[] = M.dealSheets();
+  const [printing, setPrinting] = useState(false);
 
-  const blankDeal = (over: Record<string, any> = {}) =>
-    M.calculateCostSheet({
-      id: '',
-      name: '',
-      project: M.PROJECTS[0].name,
-      city: M.PROJECTS[0].city,
-      type: 'Residential Plot',
-      size: '',
-      status: 'Active Deal',
-      office: M.OFFICES[0],
-      netBuyCost: 0,
-      ndcFee: 0,
-      stampDuty: 0,
-      cvt: 0,
-      cdaRdaTransferFee: 0,
-      societyTransferFee: 0,
-      legalCharges: 0,
-      developmentCharges: 0,
-      otherAcquisition: 0,
-      buyerFilerStatus: 'Filer',
-      tax236K: 0,
-      renovationRepairs: 0,
-      maintenanceBills: 0,
-      marketingExpenses: 0,
-      fuelTravelling: 0,
-      salaryExpenses: 0,
-      buySideAgentFee: 0,
-      sellerFilerStatus: 'Filer',
-      tax236C: 0,
-      sellSideAgentFee: 0,
-      grossSalePrice: 0,
-      cgtAmount: 0,
-      zakat: 0,
-      charity: 0,
-      officeExpenseDeduction: 0,
-      ...over,
-    });
-
-  // The deal asked for: a saved sheet (by its own ID or its property's), else a new sheet
-  // started from that property's purchase, else a blank one.
-  const wanted = activeCostSheetId && activeCostSheetId !== 'new' ? activeCostSheetId : null;
-  const target = wanted ? allSheets.find((s) => s.id === wanted || s.propertyId === wanted) : null;
-  const targetProp = wanted && !target ? M.DATA.properties.find((p: any) => p.id === wanted) : null;
-
-  const initialSheet = () => {
-    if (target) return target;
-    if (targetProp) {
-      // A property that is already sold brings its actual sale price and date.
-      const sale = M.DATA.sales.find((s: any) => s.propertyId === targetProp.id);
-      const exit = sale ? sale.sellingPrice : targetProp.currentValue;
-      return blankDeal({
-        propertyId: targetProp.id,
-        name: targetProp.name,
-        project: targetProp.project,
-        city: targetProp.location,
-        type: targetProp.type,
-        size: targetProp.size,
-        office: targetProp.office,
-        seller: targetProp.seller,
-        purchaseDate: targetProp.purchaseDate,
-        netBuyCost: targetProp.price,
-        tax236K: Math.round(targetProp.price * 0.03),
-        grossSalePrice: exit,
-        tax236C: Math.round(exit * 0.03),
-        saleDate: sale ? sale.date : null,
-        buyer: sale ? sale.buyer : undefined,
-        status: targetProp.status === 'Sold' ? 'Sold' : 'Active Deal',
-      });
+  const initialSheet = (): CostSheet => {
+    const key = activeCostSheetId || '';
+    if (key === 'new') return blankDeal();
+    if (key.startsWith('mirror:')) {
+      const src = findSheet(key.slice(7));
+      if (!src) return blankDeal();
+      const mirrorOf = src.fromRecords || !src.id ? src.propertyId : src.id;
+      return M.calculateCostSheet({ ...src, id: '', fromRecords: false, attachments: [], name: `${src.name} (mirror)`, mirrorOf });
     }
-    if (activeCostSheetId === 'new') return blankDeal();
-    return allSheets[0] || blankDeal();
+    if (key) {
+      const found = findSheet(key);
+      if (found) return found.fromRecords ? { ...found, id: '' } : found;
+    }
+    const first = allSheets[0];
+    if (!first) return blankDeal();
+    return first.fromRecords ? (M.sheetFromRecords(first.propertyId) as CostSheet) : first;
   };
 
   const [form, setForm] = useState<any>(initialSheet);
-  const [showPrintModal, setShowPrintModal] = useState(false);
 
-  // Reload the form only when a different deal is asked for (or it first arrives from the
-  // server) — never just because the ledger refreshed, which would wipe unsaved edits.
-  const loadKey = `${activeCostSheetId || ''}|${target ? target.id : targetProp ? 'property' : allSheets.length ? 'first' : 'blank'}`;
+  // Reload only when a different deal is asked for (or the records it is read from first
+  // arrive) — never just because a ledger refreshed, which would wipe unsaved edits.
+  const loadKey = `${activeCostSheetId || ''}|${M.DATA.properties.length}|${M.DATA.costSheets.length}`;
   useEffect(() => {
     setForm(initialSheet());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey]);
 
-  // Recalculate
-  const liveCostSheet: CostSheet = useMemo(() => {
-    return M.calculateCostSheet(form);
-  }, [form]);
+  const live: CostSheet = useMemo(() => M.calculateCostSheet(form), [form]);
+  const outOfDate = !!live.id && M.sheetOutOfDate(live);
+  const sources: any[] = live.propertyId ? (M.sheetFromRecords(live.propertyId) || { sources: [] }).sources : [];
 
-  const updateField = (key: string, val: any) => {
-    setForm((prev: any) => {
-      const next = { ...prev, [key]: val };
-      // Quick auto-updates if netBuyCost or grossSalePrice changes
-      if (key === 'netBuyCost') {
-        const p = +val || 0;
-        next.tax236K = Math.round(p * 0.03);
+  const updateField = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
+  const setAmount = (key: string, raw: string) => updateField(key, raw === '' ? 0 : Math.max(0, +raw || 0));
+
+  const linkProperty = (pid: string) => {
+    // A new sheet linked to a property is filled from that property's records straight away.
+    if (pid && !form.id) {
+      const fromRecords = M.sheetFromRecords(pid);
+      if (fromRecords) {
+        setForm({ ...fromRecords, attachments: form.attachments || [], mirrorOf: form.mirrorOf });
+        toast('Filled in from the records of ' + fromRecords.name);
+        return;
       }
-      if (key === 'grossSalePrice') {
-        const sp = +val || 0;
-        next.tax236C = Math.round(sp * 0.03);
-      }
-      return next;
-    });
+    }
+    updateField('propertyId', pid);
   };
 
-  const handleSelectProperty = (id: string) => {
-    setActiveCostSheetId(id);
-    if (id === 'new') setForm(blankDeal());
-  };
-
-  const handleResetToExcelTemplate = () => {
-    const s =
-      allSheets.find((x) => x.id === '10002') ||
-      M.calculateCostSheet({
-        id: '10002',
-        name: 'Plot # 940 A Block (Faisal Hills)',
-        project: 'Faisal Hills',
-        city: 'Islamabad',
-        type: 'Residential Plot',
-        size: '30x60',
-        netBuyCost: 5000000,
-        ndcFee: 10000,
-        stampDuty: 0,
-        cvt: 0,
-        cdaRdaTransferFee: 0,
-        societyTransferFee: 0,
-        legalCharges: 0,
-        developmentCharges: 0,
-        otherAcquisition: 0,
-        buyerFilerStatus: 'Filer',
-        tax236K: 150000,
-        renovationRepairs: 0,
-        maintenanceBills: 0,
-        marketingExpenses: 1000,
-        fuelTravelling: 1000,
-        salaryExpenses: 5000,
-        buySideAgentFee: 10000,
-        sellerFilerStatus: 'Filer',
-        tax236C: 150000,
-        sellSideAgentFee: 10000,
-        grossSalePrice: 5600000,
-        cgtAmount: 61950,
-        zakat: 10000,
-        charity: 5000,
-        officeExpenseDeduction: 5000,
-      });
-    setForm(s);
-    toast('Loaded Excel template: Plot # 940 A Block (Faisal Hills)');
+  const refresh = () => {
+    setForm(M.refreshSheetFromRecords(form));
+    toast('Updated from the latest records — press Save to keep it');
   };
 
   const handleSave = () => {
@@ -825,669 +457,271 @@ function SimpleCostSheetView({ activeCostSheetId }: { activeCostSheetId: string 
       toast('Not saved — the database is not reachable (see the notice at the top)');
       return;
     }
-    const saved = M.saveCostSheet(liveCostSheet);
+    const { fromRecords, sources: _s, ...rest } = live as any;
+    const saved = M.saveCostSheet(rest);
     setForm(saved);
     setActiveCostSheetId(saved.id);
-    toast(`Cost Sheet #${saved.id} saved!`);
+    toast(`Cost sheet ${saved.id} saved`);
   };
 
   const dateValue = (d: any) => (d ? M.dateInput(M.parseDate(d)) : '');
-
-  const handlePrint = () => {
-    if (typeof window !== 'undefined') window.print();
-  };
+  const selectValue = live.id || (live.propertyId && !live.mirrorOf ? live.propertyId : 'new');
 
   return (
     <div className="page">
-      {/* SCREEN VIEW (INTERACTIVE FORM) */}
       <div className="cost-sheet-screen-only">
-        <PrintHead title="Property Business Cost Sheet" />
-        <div
-          className="phead"
-          style={{
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h1 style={{ fontSize: '18px', margin: 0, letterSpacing: '-0.02em' }}>Property Business Cost Sheet</h1>
-            <span className="u" style={{ fontSize: '12px', color: 'var(--ink-3)' }}>پراپرٹی بزنس لاگت شیٹ</span>
+        <div className="phead cs-head">
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+            <h1 style={{ fontSize: '18px', margin: 0 }}>Property cost sheet</h1>
+            <span className="u" style={{ fontSize: '12px' }}>پراپرٹی لاگت شیٹ</span>
           </div>
-          <div className="acts" data-noprint="1" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginLeft: 'auto' }}>
-            <span style={{ fontWeight: 600, fontSize: '12.5px', color: 'var(--ink)' }}>Select Deal:</span>
+          <div className="acts" data-noprint="1">
+            <label htmlFor="cs-pick" style={{ fontWeight: 600, fontSize: '12.5px' }}>
+              Deal:
+            </label>
             <select
+              id="cs-pick"
               className="fldsel"
               style={{ minWidth: '240px', fontWeight: 600, height: '30px', padding: '2px 8px' }}
-              value={liveCostSheet.id || 'new'}
-              onChange={(e) => handleSelectProperty(e.target.value)}
+              value={selectValue}
+              onChange={(e) => setActiveCostSheetId(e.target.value)}
             >
-              <option value="new">➕ New Blank Deal</option>
+              <option value="new">➕ New blank sheet</option>
               {allSheets.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.id} — {s.name} ({s.project})
+                <option key={openKey(s)} value={openKey(s)}>
+                  {s.fromRecords ? s.propertyId : s.id} — {s.name} ({s.project})
                 </option>
               ))}
             </select>
-            <button type="button" className="btn" style={{ height: '30px', padding: '0 8px', fontSize: '12px' }} onClick={handleResetToExcelTemplate} title="Load Plot 940 from Excel">
-              <Icon name="history" /> Excel Template
+            {live.id && (
+              <button type="button" className="btn" onClick={() => setActiveCostSheetId('mirror:' + live.id)} title="Copy this sheet into a new one">
+                Mirror
+              </button>
+            )}
+            <button type="button" className="btn" onClick={() => setPrinting(true)} title="Print this cost sheet now">
+              <Icon name="print" /> Print
             </button>
-            <button
-              type="button"
-              className="btn"
-              style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
-              onClick={() => setShowPrintModal(true)}
-              title="Open and print official Cost Sheet statement"
-            >
-              <Icon name="print" /> Print Cost Sheet
-            </button>
-            <button type="button" className="btn pri" style={{ height: '30px', padding: '0 10px', fontSize: '12px' }} onClick={handleSave}>
+            <button type="button" className="btn pri" onClick={handleSave}>
               <Icon name="ok" /> Save
             </button>
           </div>
         </div>
 
-      {/* DEAL DETAILS — which property this sheet is for */}
-      <div className="panel" style={{ marginBottom: '8px' }} data-noprint="1">
-        <div className="panel-h">
-          <h3>Deal details</h3>
-          <span className="sub">Which property this cost sheet is for</span>
-        </div>
-        <div className="panel-b">
-          <div className="formgrid">
-            <div className="fld">
-              <label htmlFor="cs-name">Property name *</label>
-              <input id="cs-name" value={form.name || ''} placeholder="Plot 940, A Block" onChange={(e) => updateField('name', e.target.value)} />
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-project">Project / society</label>
-              <input id="cs-project" list="cs-projects" value={form.project || ''} onChange={(e) => updateField('project', e.target.value)} />
-              <datalist id="cs-projects">
-                {M.PROJECTS.map((p: any) => (
-                  <option key={p.id} value={p.name} />
-                ))}
-              </datalist>
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-city">City</label>
-              <input id="cs-city" value={form.city || ''} onChange={(e) => updateField('city', e.target.value)} />
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-type">Property type</label>
-              <select id="cs-type" value={form.type || M.TYPES[0]} onChange={(e) => updateField('type', e.target.value)}>
-                {M.TYPES.map((t: string) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-size">Size</label>
-              <input id="cs-size" value={form.size || ''} placeholder="10 Marla" onChange={(e) => updateField('size', e.target.value)} />
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-status">Deal status</label>
-              <select id="cs-status" value={form.status || 'Active Deal'} onChange={(e) => updateField('status', e.target.value)}>
-                {['Draft', 'Active Deal', 'Reserved', 'Sold'].map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-pdate">Purchase date</label>
-              <input id="cs-pdate" type="date" value={dateValue(form.purchaseDate)} onChange={(e) => updateField('purchaseDate', e.target.value || M.TODAY)} />
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-sdate">Sale date</label>
-              <input id="cs-sdate" type="date" value={dateValue(form.saleDate)} onChange={(e) => updateField('saleDate', e.target.value || null)} />
-            </div>
-            <div className="fld">
-              <label htmlFor="cs-prop">Linked property</label>
-              <select id="cs-prop" value={form.propertyId || ''} onChange={(e) => updateField('propertyId', e.target.value)}>
-                <option value="">— Not linked —</option>
-                {M.DATA.properties.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id} — {p.name}
-                  </option>
-                ))}
-              </select>
-              <span className="hint">Saving updates this property’s cost and value.</span>
-            </div>
-            <div className="fld full">
-              <label>Attachments</label>
-              <AttachmentsField value={form.attachments || []} onChange={(next) => updateField('attachments', next)} />
-              <span className="hint">Deeds, transfer letters, receipts. Stored with the sheet when you press Save.</span>
+        {live.mirrorOf && !live.id && (
+          <div className="note calm" style={{ marginBottom: '8px' }}>
+            <span className="ic"><Icon name="info" /></span>
+            <div>
+              This is a <b>mirror</b> of {live.mirrorOf}. Change anything you need and press Save — it is kept as a new
+              sheet and {live.mirrorOf} is not touched.
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* SUMMARY TABLE (EXACT ROWS 2–4 OF EXCEL) */}
-      <div className="panel" style={{ marginBottom: '8px', overflowX: 'auto', padding: 0 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-2)', borderBottom: '1px solid var(--rule-2)' }}>
-              <th style={{ padding: '5px 8px' }}>ID</th>
-              <th style={{ padding: '5px 8px' }}>Property</th>
-              <th style={{ padding: '5px 8px' }}>Type</th>
-              <th style={{ padding: '5px 8px' }}>Project</th>
-              <th style={{ padding: '5px 8px' }}>City</th>
-              <th style={{ padding: '5px 8px' }}>Size</th>
-              <th style={{ padding: '5px 8px', textAlign: 'right' }}>Net Buy Cost</th>
-              <th style={{ padding: '5px 8px', textAlign: 'right' }}>Agent Commission</th>
-              <th style={{ padding: '5px 8px', textAlign: 'right' }}>Current value</th>
-              <th style={{ padding: '5px 8px', textAlign: 'right' }}>GROSS PROFIT</th>
-              <th style={{ padding: '5px 8px', textAlign: 'right' }}>NET MARGIN</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ fontWeight: 600 }}>
-              <td style={{ padding: '5px 8px', fontFamily: 'var(--mono)' }}>{liveCostSheet.id}</td>
-              <td style={{ padding: '5px 8px' }}>{liveCostSheet.name}</td>
-              <td style={{ padding: '5px 8px' }}>{liveCostSheet.type}</td>
-              <td style={{ padding: '5px 8px' }}>{liveCostSheet.project}</td>
-              <td style={{ padding: '5px 8px' }}>{liveCostSheet.city}</td>
-              <td style={{ padding: '5px 8px', fontFamily: 'var(--mono)' }}>{liveCostSheet.size}</td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
-                {M.fmt(liveCostSheet.netBuyCost || liveCostSheet.purchasePrice, numbers)}
-              </td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
-                {M.fmt(liveCostSheet.totalCommissions, numbers)}
-              </td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700 }}>
-                {M.fmt(liveCostSheet.grossSalePrice || liveCostSheet.sellingPrice, numbers)}
-              </td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 700 }}>
-                {M.fmt(liveCostSheet.grossProfit, numbers)}
-              </td>
-              <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--good)', fontWeight: 800 }}>
-                {M.fmt(liveCostSheet.netMargin ?? liveCostSheet.netProfit, numbers)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* DETAILED COST SHEET LEDGER (EXACT ROWS 6–31 OF EXCEL) */}
-      <div
-        className="panel"
-        style={{
-          maxWidth: '820px',
-          margin: '0 auto',
-          border: '2px solid var(--rule-2)',
-          background: 'var(--card)',
-        }}
-      >
-        <div
-          style={{
-            padding: '12px 16px',
-            borderBottom: '2px solid var(--brand)',
-            background: 'var(--paper-2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: 'var(--brand)' }}>
-              Cost Sheet Ledger
-            </span>
-            <h2 style={{ fontSize: '17px', margin: '2px 0 0', color: 'var(--ink)' }}>
-              {liveCostSheet.name} · {liveCostSheet.project}
-            </h2>
+        )}
+        {outOfDate && (
+          <div className="note" style={{ marginBottom: '8px' }} data-noprint="1">
+            <span className="ic"><Icon name="warn" /></span>
+            <div style={{ flex: 1 }}>
+              <b>The records for this property have changed since this sheet was saved.</b> Update it to bring in the
+              latest purchase, sale, expense and tax amounts.
+            </div>
+            <button type="button" className="btn pri sm" onClick={refresh}>
+              Update from records
+            </button>
           </div>
-          <span className="tag ok" style={{ fontSize: '12px', fontWeight: 700 }}>
-            ID: {liveCostSheet.id}
-          </span>
+        )}
+
+        {/* HEADLINE FIGURES */}
+        <div className="kpis cs-kpis">
+          <div className="kpi"><span className="k">Purchase price (landed)</span><span className="v">{M.fmt(live.purchasePrice, numbers)}</span></div>
+          <div className="kpi"><span className="k">Sale / current value</span><span className="v">{M.fmt(live.grossSalePrice, numbers)}</span></div>
+          <div className="kpi"><span className="k">Gross profit</span><span className={`v ${live.grossProfit < 0 ? 'neg' : ''}`}>{M.fmt(live.grossProfit, numbers)}</span></div>
+          <div className="kpi hi"><span className="k">Net margin</span><span className={`v ${live.netMargin < 0 ? 'neg' : 'pos'}`}>{M.fmt(live.netMargin, numbers)}</span></div>
+          <div className="kpi"><span className="k">Net margin %</span><span className="v">{pctText(live.netMarginPct)}</span></div>
+          <div className="kpi"><span className="k">Return on cost</span><span className="v">{pctText(live.roiPct)}</span></div>
         </div>
 
-        <div style={{ padding: '16px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--rule-2)', color: 'var(--ink-2)', fontSize: '11.5px' }}>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '50px' }}>#</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left' }}>Item Description</th>
-                <th style={{ padding: '6px 8px', textAlign: 'left', width: '180px' }}>Rate / Detail</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right', width: '180px' }}>Amount (PKR)</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="cs-grid">
+          {/* THE SHEET */}
+          <div className="panel cs-ledger">
+            <div className="panel-h">
+              <h3>{live.name || 'New deal'}</h3>
+              <span className="sub">{live.project}</span>
+              <span className="spacer" />
+              <span className="tag ok">{live.id || (live.propertyId ? 'Not saved yet' : 'Draft')}</span>
+            </div>
+            <table className="cs-table">
+              <thead>
+                <tr>
+                  <th className="no">#</th>
+                  <th>Item</th>
+                  <th>Basis</th>
+                  <th className="r">Amount (PKR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {LINES.map((l, i) => {
+                  if (l.kind === 'section') {
+                    return (
+                      <tr key={i} className="sec">
+                        <td className="no">{l.no}</td>
+                        <td colSpan={3}>{l.label}</td>
+                      </tr>
+                    );
+                  }
+                  const rate = l.rate ? l.rate(live) : null;
+                  return (
+                    <tr key={i} className={l.kind}>
+                      <td className="no">{l.no || ''}</td>
+                      <td>{l.label}</td>
+                      <td className="basis">
+                        {l.basis || ''}
+                        {rate && rate[1] > 0 && Math.round(+form[l.k as string] || 0) !== rate[1] && (
+                          <button
+                            type="button"
+                            className="ratebtn"
+                            onClick={() => updateField(l.k as string, rate[1])}
+                            title={`Fill in ${rate[0]} = ${M.fmt(rate[1], 'full')}`}
+                          >
+                            use {rate[0]}
+                          </button>
+                        )}
+                      </td>
+                      <td className="r">
+                        {l.k ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            aria-label={l.label}
+                            value={form[l.k] === 0 || form[l.k] == null ? '' : form[l.k]}
+                            placeholder="0"
+                            onChange={(e) => setAmount(l.k as string, e.target.value)}
+                          />
+                        ) : (
+                          <b className={`mono ${amountOf(live, l) < 0 ? 'neg' : l.kind === 'result' ? 'pos' : ''}`}>
+                            {M.fmt(amountOf(live, l), 'full')}
+                          </b>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              {/* NET BUY COST (ROW 6) */}
-              <tr style={{ background: 'var(--paper-2)', borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '8px', fontWeight: 700 }}></td>
-                <td style={{ padding: '8px', fontWeight: 700, color: 'var(--brand)' }}>
-                  NET BUY COST
-                </td>
-                <td style={{ padding: '8px', color: 'var(--ink-2)' }}>Base property price</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="50000"
-                    style={{ width: '150px', padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '13px' }}
-                    value={form.netBuyCost ?? form.purchasePrice ?? 5000000}
-                    onChange={(e) => updateField('netBuyCost', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* SECTION 1: SOCIETY / GOVT TRANSFER COST */}
-              <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>1</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
-                  SOCIETY / GOVT TRANSFER COST
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.0</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>NDC &amp; Verification Fee</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Verification fee</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.ndcFee ?? 10000}
-                    onChange={(e) => updateField('ndcFee', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Provincial Stamp Duty</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>1% Stamp</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.stampDuty ?? 0}
-                    onChange={(e) => updateField('stampDuty', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Capital Value Tax (CVT)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>1% CVT</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.cvt ?? 0}
-                    onChange={(e) => updateField('cvt', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>1.2</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Govt Authority CDA/RDA Transfer Fee</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>0.5% of sale value</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.cdaRdaTransferFee ?? 0}
-                    onChange={(e) => updateField('cdaRdaTransferFee', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* SECTION 2: GOVT TAXES (BUY SIDE) */}
-              <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>2</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
-                  GOVT TAXES
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>2.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>FBR Section 236K (Advance Tax on Purchase)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Filer (sec236k : 3%)</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="5000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}
-                    value={form.tax236K ?? 150000}
-                    onChange={(e) => updateField('tax236K', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* SECTION 3: HANDLING \ EXPENSES */}
-              <tr style={{ background: 'var(--paper)', fontWeight: 700 }}>
-                <td style={{ padding: '6px 8px' }}>3</td>
-                <td style={{ padding: '6px 8px' }} colSpan={3}>
-                  HANDLING \ EXPENSES
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.1</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Renovation &amp; Repairs</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Property repairs</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.renovationRepairs ?? 0}
-                    onChange={(e) => updateField('renovationRepairs', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.2</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Maintenance &amp; Bills</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Holding upkeep</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.maintenanceBills ?? 0}
-                    onChange={(e) => updateField('maintenanceBills', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.3</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Marketing</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Ad &amp; portal</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.marketingExpenses ?? 1000}
-                    onChange={(e) => updateField('marketingExpenses', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.4</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Fuel &amp; Travelling</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Visits</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.fuelTravelling ?? 1000}
-                    onChange={(e) => updateField('fuelTravelling', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>3.5</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>Salary &amp; other Expenses</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Staff &amp; office</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.salaryExpenses ?? 5000}
-                    onChange={(e) => updateField('salaryExpenses', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* SECTION 4: REAL ESTATE AGENT FEE (BUY SIDE) */}
-              <tr style={{ borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '6px 8px', fontWeight: 700 }}>4</td>
-                <td style={{ padding: '6px 8px', fontWeight: 700 }}>REAL ESTATE AGENT FEE</td>
-                <td style={{ padding: '6px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>BUY SIDE</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}
-                    value={form.buySideAgentFee ?? 10000}
-                    onChange={(e) => updateField('buySideAgentFee', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* ROW 21: PURCHASE PRICE (All-in Landed Basis = SUM(F6:F20)) */}
-              <tr style={{ background: 'var(--brand)', color: '#fff', fontWeight: 800 }}>
-                <td style={{ padding: '8px' }}></td>
-                <td style={{ padding: '8px', fontSize: '13px' }}>PURCHASE PRICE</td>
-                <td style={{ padding: '8px', fontSize: '11.5px', opacity: 0.9 }}>= Landed Basis</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '14px' }}>
-                  {M.fmt(liveCostSheet.purchasePrice, numbers)}
-                </td>
-              </tr>
-
-              {/* SALE SIDE (ROWS 22–24) */}
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-3)' }}>2.2</td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>FBR Section 236C (Advance Tax on Sale)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Filer (sec236C : 3%)</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="5000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.tax236C ?? 150000}
-                    onChange={(e) => updateField('tax236C', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px' }}>REAL ESTATE AGENT FEE</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>SELL SIDE</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.sellSideAgentFee ?? 10000}
-                    onChange={(e) => updateField('sellSideAgentFee', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ background: 'var(--good-wash)', borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '8px' }}></td>
-                <td style={{ padding: '8px', fontWeight: 700, color: 'var(--good)' }}>
-                  GROSS SALE PRICE (incl. CGT)
-                </td>
-                <td style={{ padding: '8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Current Value / Exit</td>
-                <td style={{ padding: '8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="50000"
-                    style={{ width: '150px', padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 700, fontSize: '13px' }}
-                    value={form.grossSalePrice ?? form.sellingPrice ?? 5600000}
-                    onChange={(e) => updateField('grossSalePrice', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* ROW 26: GROSS PROFIT */}
-              <tr style={{ background: 'var(--paper-2)', fontWeight: 800, borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '8px' }}></td>
-                <td style={{ padding: '8px', fontSize: '13px' }}>GROSS PROFIT</td>
-                <td style={{ padding: '8px', fontSize: '11.5px', color: 'var(--ink-2)' }}>= Exit − Landed</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '14px' }} className={liveCostSheet.grossProfit >= 0 ? 'pos' : 'neg'}>
-                  {M.fmt(liveCostSheet.grossProfit, numbers)}
-                </td>
-              </tr>
-
-              {/* ROWS 27–30: STATUTORY & PURIFICATION DEDUCTIONS */}
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>Capital Gain Tax (CGT)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>= F26 * 15%</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.cgtAmount ?? Math.max(0, Math.round(liveCostSheet.grossProfit * 0.15))}
-                    onChange={(e) => updateField('cgtAmount', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>ZAQAT</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Zakat fund</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.zakat ?? 10000}
-                    onChange={(e) => updateField('zakat', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>CHARITY</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>Welfare</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="500"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.charity ?? 5000}
-                    onChange={(e) => updateField('charity', +e.target.value)}
-                  />
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--rule-2)' }}>
-                <td style={{ padding: '5px 8px' }}></td>
-                <td style={{ padding: '5px 8px 5px 24px', color: 'var(--ink-2)' }}>Salary &amp; other Expenses (Deduction)</td>
-                <td style={{ padding: '5px 8px', color: 'var(--ink-2)', fontSize: '11.5px' }}>= F19</td>
-                <td style={{ padding: '5px 8px', textAlign: 'right' }}>
-                  <input
-                    type="number"
-                    step="1000"
-                    style={{ width: '140px', padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--mono)' }}
-                    value={form.officeExpenseDeduction ?? form.salaryExpenses ?? 5000}
-                    onChange={(e) => updateField('officeExpenseDeduction', +e.target.value)}
-                  />
-                </td>
-              </tr>
-
-              {/* ROW 31: NET MARGIN */}
-              <tr style={{ background: 'var(--good-wash)', borderTop: '2px solid var(--ink)', fontWeight: 900, fontSize: '15px' }}>
-                <td style={{ padding: '12px 8px' }}></td>
-                <td style={{ padding: '12px 8px' }}>
-                  NET MARGIN
-                  <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--good)' }}>
-                    Net Margin: {(liveCostSheet.netMarginPct || 0).toFixed(1)}% · Cash ROI: {(liveCostSheet.roiPct || 0).toFixed(1)}%
+          {/* DEAL DETAILS AND WHERE THE FIGURES CAME FROM */}
+          <div className="cs-side">
+            <div className="panel" data-noprint="1">
+              <div className="panel-h">
+                <h3>Deal details</h3>
+              </div>
+              <div className="panel-b">
+                <div className="formgrid one">
+                  <div className="fld">
+                    <label htmlFor="cs-prop">Linked property</label>
+                    <select id="cs-prop" value={form.propertyId || ''} onChange={(e) => linkProperty(e.target.value)}>
+                      <option value="">— Not linked —</option>
+                      {M.DATA.properties.map((p: any) => (
+                        <option key={p.id} value={p.id}>
+                          {p.id} — {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="hint">Linking fills the sheet from that property’s purchase, sale, expenses and taxes.</span>
                   </div>
-                </td>
-                <td style={{ padding: '12px 8px', fontSize: '11px', color: 'var(--ink-2)' }}>
-                  = F26 − F28 − F29 − F27 − F19
-                </td>
-                <td style={{ padding: '12px 8px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: '18px' }} className="pos">
-                  {M.fmt(liveCostSheet.netMargin ?? liveCostSheet.netProfit, numbers)}
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-      {/* PRINT-ONLY EMBEDDED SHEET (Ensures standard Ctrl+P prints the official document) */}
-      <div className="cost-sheet-print-only">
-        <PrintableCostSheetDoc sheet={liveCostSheet} form={form} numbers={numbers} />
-      </div>
-
-      {/* INTERACTIVE PRINT PREVIEW MODAL */}
-      {showPrintModal && (
-        <div
-          className="cost-sheet-print-modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowPrintModal(false);
-          }}
-        >
-          <div className="cost-sheet-print-modal-dialog">
-            <div className="cost-sheet-print-modal-header" data-noprint="1">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '6px',
-                    background: '#047857',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Icon name="print" size={16} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#ffffff' }}>
-                    Official Cost Sheet Printout — #{liveCostSheet.id}
+                  <div className="fld">
+                    <label htmlFor="cs-name">Property name *</label>
+                    <input id="cs-name" value={form.name || ''} placeholder="Plot 1104, Faisal Hills" onChange={(e) => updateField('name', e.target.value)} />
                   </div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                    {liveCostSheet.name} ({liveCostSheet.project}) · Formatted for A4 / PDF Export
+                  <div className="fld">
+                    <label htmlFor="cs-project">Project / society</label>
+                    <input id="cs-project" list="cs-projects" value={form.project || ''} onChange={(e) => updateField('project', e.target.value)} />
+                    <datalist id="cs-projects">
+                      {M.PROJECTS.map((p: any) => (
+                        <option key={p.id} value={p.name} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-city">City</label>
+                    <input id="cs-city" value={form.city || ''} onChange={(e) => updateField('city', e.target.value)} />
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-type">Property type</label>
+                    <select id="cs-type" value={form.type || M.TYPES[0]} onChange={(e) => updateField('type', e.target.value)}>
+                      {M.TYPES.map((t: string) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-size">Size</label>
+                    <input id="cs-size" value={form.size || ''} placeholder="5 Marla" onChange={(e) => updateField('size', e.target.value)} />
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-status">Deal status</label>
+                    <select id="cs-status" value={form.status || 'Active Deal'} onChange={(e) => updateField('status', e.target.value)}>
+                      {['Draft', 'Active Deal', 'Reserved', 'Sold'].map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-pdate">Purchase date</label>
+                    <input id="cs-pdate" type="date" value={dateValue(form.purchaseDate)} onChange={(e) => updateField('purchaseDate', e.target.value || M.TODAY)} />
+                  </div>
+                  <div className="fld">
+                    <label htmlFor="cs-sdate">Sale date</label>
+                    <input id="cs-sdate" type="date" value={dateValue(form.saleDate)} onChange={(e) => updateField('saleDate', e.target.value || null)} />
+                  </div>
+                  <div className="fld">
+                    <label>Attachments</label>
+                    <AttachmentsField value={form.attachments || []} onChange={(next) => updateField('attachments', next)} />
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="btn pri"
-                  style={{
-                    height: '32px',
-                    padding: '0 14px',
-                    fontSize: '12.5px',
-                    fontWeight: 700,
-                    background: '#047857',
-                    borderColor: '#059669',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => {
-                    if (typeof window !== 'undefined') window.print();
-                  }}
-                >
-                  <Icon name="print" /> Print / Save as PDF
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{
-                    height: '32px',
-                    padding: '0 12px',
-                    fontSize: '12px',
-                    background: '#334155',
-                    color: '#ffffff',
-                    borderColor: '#475569',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setShowPrintModal(false)}
-                >
-                  ✕ Close
-                </button>
+            </div>
+
+            {live.propertyId && (
+              <div className="panel" data-noprint="1">
+                <div className="panel-h">
+                  <h3>From the records</h3>
+                  <span className="sub">linked to {live.propertyId}</span>
+                </div>
+                <div className="panel-b tight">
+                  {sources.length === 0 ? (
+                    <p className="muted" style={{ margin: 0, fontSize: '12.5px' }}>
+                      Only the purchase and sale are recorded for this property. Expenses, taxes and Zakat show here once
+                      they are entered with this property picked.
+                    </p>
+                  ) : (
+                    <ul className="cs-sources">
+                      {sources.map((s, i) => (
+                        <li key={i}>
+                          <span className="mono">{s.id}</span>
+                          <span>{s.what}</span>
+                          <b className="mono">{M.fmt(s.amount, 'full')}</b>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="cost-sheet-print-modal-body">
-              <PrintableCostSheetDoc sheet={liveCostSheet} form={form} numbers={numbers} />
-            </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* Ctrl+P on this page prints the sheet document, not the form. */}
+      {!printing && (
+        <div className="cost-sheet-print-only">
+          <PrintableCostSheetDoc sheet={live} />
+        </div>
+      )}
+      {printing && (
+        <PrintNow onDone={() => setPrinting(false)} margin="8mm">
+          <PrintableCostSheetDoc sheet={live} />
+        </PrintNow>
       )}
     </div>
   );

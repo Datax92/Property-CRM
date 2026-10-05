@@ -7,12 +7,13 @@ import { ShareBar, RankedList } from '../Charts';
 import { Icon } from '../Icons';
 import { PAGE_META, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
-import { InvoiceReceiptModal } from '../InvoiceReceiptModal';
+import { InvoiceReceiptModal, PrintInvoiceNow } from '../InvoiceReceiptModal';
 import type { Invoice } from '../../lib/types';
 
 export function SalesPage() {
   const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [printing, setPrinting] = useState<Invoice | null>(null);
   const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
@@ -122,8 +123,9 @@ export function SalesPage() {
     );
   }
 
-  if (tab === 'saleInvoices' || tab === 'purchaseInvoices') {
-    const invoiceType = tab === 'saleInvoices' ? 'sale' : 'purchase';
+  if (tab === 'saleInvoices' || tab === 'purchaseInvoices' || tab === 'proformaInvoices') {
+    const invoiceType = tab === 'saleInvoices' ? 'sale' : tab === 'proformaInvoices' ? 'proforma' : 'purchase';
+    const kindWord = invoiceType === 'sale' ? 'sale' : invoiceType === 'proforma' ? 'proforma' : 'purchase';
     const invRows = M.DATA.invoices.filter(
       (i: any) => i.type === invoiceType && M.inRange(i.receiptDate, r)
     );
@@ -174,14 +176,29 @@ export function SalesPage() {
           type="button"
           className="btn sm pri"
           style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-          onClick={() => setSelectedInvoice(i)}
-          title="Open the printable receipt / voucher (A4 or thermal)"
+          onClick={() => setPrinting(i)}
+          title="Print this invoice now (A4)"
         >
-          <Icon name="print" size={12} /> Print Receipt
+          <Icon name="print" size={12} /> Print
         </button>
       ),
     } as any);
     invCols.splice(1, 0, {
+      key: 'view',
+      label: 'View',
+      render: (i: any) => (
+        <button
+          type="button"
+          className="btn sm"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => setSelectedInvoice(i)}
+          title="Preview the voucher, or print it on an 80 mm thermal roll"
+        >
+          View
+        </button>
+      ),
+    } as any);
+    invCols.splice(2, 0, {
       key: 'mirror',
       label: 'Mirror',
       render: (i: any) => (
@@ -197,8 +214,8 @@ export function SalesPage() {
       ),
     } as any);
 
-    const modalType = tab === 'saleInvoices' ? 'saleInvoice' : 'purchaseInvoice';
-    const btnLabel = tab === 'saleInvoices' ? 'Create sale invoice' : 'Create purchase invoice';
+    const modalType = invoiceType + 'Invoice';
+    const btnLabel = 'Create ' + kindWord + ' invoice';
 
     return (
       <PageShell
@@ -215,7 +232,7 @@ export function SalesPage() {
         {invRows.length === 0 ? (
           <div className="empty">
             <Icon name="empty" />
-            <h3>No {tab === 'saleInvoices' ? 'sale' : 'purchase'} invoices yet</h3>
+            <h3>No {kindWord} invoices yet</h3>
             <p>
               Click “{btnLabel}” to create one
               {tab === 'saleInvoices' ? ', or use “Receipt Slip” on a row of the sales register.' : '.'}
@@ -225,6 +242,7 @@ export function SalesPage() {
           <DataTable cols={invCols} rows={invRows} totals={true} attach="invoices" />
         )}
         <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
+        {printing && <PrintInvoiceNow invoice={printing} onDone={() => setPrinting(null)} />}
       </PageShell>
     );
   }

@@ -8,6 +8,7 @@ import { PropArt, Icon } from '../Icons';
 import { PAGE_META, SC, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 import { HomePage } from './HomePage';
+import { TasksPage } from './TasksPage';
 
 export function DashboardPage() {
   const {
@@ -26,6 +27,7 @@ export function DashboardPage() {
   const meta = PAGE_META[`dashboard/${tab}`] || { t: 'Dashboard' };
 
   if (tab === 'home') return <HomePage />;
+  if (tab === 'tasks') return <TasksPage />;
 
   if (tab === 'alerts') {
     const al = M.alerts().filter((a: any) => !denied(a.view));

@@ -27,7 +27,7 @@ interface DotFieldProps {
 export default function DotField({
   gap = 14,
   color = "#111827",
-  accent = "#714B67",
+  accent = "#1F2456",
   radius = 150,
   dotOpacity = 0.055,
   className = "",

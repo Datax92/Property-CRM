@@ -253,6 +253,54 @@ export function FinancePage() {
     );
   }
 
+  if (tab === 'assets') {
+    // An asset stays an asset however long ago it was bought, so the register is not limited to the period.
+    const rows = M.DATA.expenses.filter((e: any) => e.group === 'Assets' && (f.office === 'all' || e.office === f.office));
+    const inPeriod = rows.filter((e: any) => M.inRange(e.date, r));
+    const summaryPairs: [string, string][] = [
+      ['Assets held', M.fmtNum(rows.length)],
+      ['Total asset value (at cost)', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+      [`Bought in ${r.label}`, M.fmt(inPeriod.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+      ['Still owed to vendors', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
+    ];
+    const cols = [
+      { key: 'id', label: 'ID' },
+      { key: 'category', label: 'Asset type' },
+      { key: 'note', label: 'Description' },
+      { key: 'vendor', label: 'Bought from' },
+      { key: 'office', label: 'Office' },
+      { key: 'date', label: 'Date bought', cls: 'mono', render: (e: any) => M.fmtDate(e.date) },
+      { key: 'amount', label: 'Cost', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.amount, numbers) },
+      { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.paid, numbers) },
+      { key: 'outstanding', label: 'Owed', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.outstanding, numbers) },
+    ];
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        toolProps={{ period: false }}
+        acts={
+          <button type="button" className="btn pri" onClick={() => openModal('expense', { group: 'Assets' })}>
+            <Icon name="plus" /> Add asset
+          </button>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
+        <div className="note calm" style={{ marginBottom: '14px' }}>
+          <span className="ic">
+            <Icon name="info" />
+          </span>
+          <div>
+            Buying an asset moves cash into something the company owns, so it shows on the cash flow but is{' '}
+            <b>not an expense</b> and does not reduce profit.
+          </div>
+        </div>
+        <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
+      </PageShell>
+    );
+  }
+
   // P&L tab (default)
   const k = M.computeKPIs(r, f);
   const bv = M.basisView(k, grossBasis);
@@ -294,6 +342,14 @@ export function FinancePage() {
           L('Tax', -k.tax),
           L('Zakat', -k.zakat),
           L('NET PROFIT', bv.net, 'g'),
+          // The owner's personal spending is drawn out of profit, not a cost of earning it.
+          ...(k.personal > 0
+            ? [
+                L('BELOW THE PROFIT LINE', null, 'h'),
+                L('Personal expenses (owner drawings)', -k.personal),
+                L('Left in the business', bv.net - k.personal, 't'),
+              ]
+            : []),
         ]),
   ];
 

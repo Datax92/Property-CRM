@@ -117,10 +117,18 @@ export function Menus() {
             closeMenu();
           }}
         >
-          <Icon name="calculator" /> Trade cost calculator
+          <Icon name="calculator" /> Cost sheet
         </button>
         <div className="sep" />
         <h5>Invoices</h5>
+        <button
+          type="button"
+          onClick={() => {
+            openModal('proformaInvoice');
+          }}
+        >
+          <Icon name="receipt" /> Proforma invoice
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -356,7 +364,7 @@ export function Menus() {
                 closeMenu();
               }}
             >
-              <Icon name="calculator" /> New Cost Calculator
+              <Icon name="calculator" /> New cost sheet
             </button>
           </>
         )}
@@ -371,6 +379,14 @@ export function Menus() {
               }}
             >
               <Icon name="plus" /> Record sale
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                openModal('proformaInvoice');
+              }}
+            >
+              <Icon name="receipt" /> Proforma invoice
             </button>
             <button
               type="button"

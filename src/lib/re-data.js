@@ -7,9 +7,12 @@ import { saveRecordToFirestore, deleteRecordFromFirestore } from './firestore-se
 
 const _now = new Date();
 export const TODAY = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
-export const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME || 'Meridian Estates (Pvt) Ltd';
-export const COMPANY_ADDRESS = process.env.NEXT_PUBLIC_COMPANY_ADDRESS || '';
-export const COMPANY_PHONE = process.env.NEXT_PUBLIC_COMPANY_PHONE || '';
+export const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME || 'A & SONS TRADEWAY ASSOCIATE (SMC) PVT LTD';
+export const COMPANY_SHORT = 'A & Sons Tradeway';
+export const COMPANY_ADDRESS = process.env.NEXT_PUBLIC_COMPANY_ADDRESS ||
+  'Office No. 3, First Floor, Islamabad Shopping Centre, Near Petrol Pump, Fateh Jang Road, Tarnol, Islamabad';
+export const COMPANY_PHONE = process.env.NEXT_PUBLIC_COMPANY_PHONE || '+92 314 5530782';
+export const COMPANY_EMAIL = process.env.NEXT_PUBLIC_COMPANY_EMAIL || 'a_sonstradeway@hotmail.com';
 
 // Who is making entries — stamped on the cash ledger and the audit trail.
 let ACTOR = 'Admin';
@@ -61,8 +64,30 @@ const EXPENSE_TREE = {
   'Employee Expenses': ['Bonuses','Allowances','Overtime','Travel','Staff Welfare'],
   'Marketing Expenses': ['Facebook / Instagram Ads','Google Ads','Property Portals','Printing','Billboards','Promotional Material','Events'],
   'Property Expenses': ['Property Maintenance','Transfer Charges','Legal Fees','Documentation','Development Charges','Renovation'],
-  'Other Expenses': ['Bank Charges','Donations','Miscellaneous'],
+  'Other Expenses': ['Bank Charges','Donations','Charity','Miscellaneous'],
+  // Not business costs: the owner's own spending (drawings) and things bought to keep (assets).
+  // Both leave the cash ledger but neither is charged against profit.
+  'Personal Expenses': ['Household','Family','Medical','Education','Personal Travel','Other Personal'],
+  'Assets': ['Furniture & Fixtures','Computers & IT','Vehicles','Office Equipment','Land & Building','Other Assets'],
 };
+export const EXPENSE_GROUPS = Object.keys(EXPENSE_TREE);
+export const expenseSubcats = (group) => EXPENSE_TREE[group] || [];
+/** Groups on the expense ledger that are not expenses of the business. */
+export const NON_EXPENSE_GROUPS = ['Personal Expenses', 'Assets'];
+/** Words in an expense's sub-category or note that place it on a line of a deal cost sheet. */
+export const DEAL_COST_LINES = [
+  ['Society / transfer expenses', 'societyTransferFee', /societ|transfer|ndc|verif|stamp|cvt|registr/i],
+  ['Legal fees', 'legalCharges', /legal|lawyer|documentation/i],
+  ['Development charges', 'developmentCharges', /develop/i],
+  ['Salary', 'salaryExpenses', /salar|staff|wage/i],
+  ['Travelling / fuel', 'fuelTravelling', /travel|fuel|petrol|visit|transport/i],
+  ['Marketing', 'marketingExpenses', /market|advert|ads?|portal|print|billboard/i],
+  ['Renovation & repairs', 'renovationRepairs', /renovat|repair/i],
+  ['Maintenance & bills', 'maintenanceBills', /mainten|bill|electric|gas|water/i],
+  ['Charity', 'charity', /charit|donat|sadaq|sadq|khairat/i],
+];
+export const DEAL_COST_SUGGESTIONS = DEAL_COST_LINES.map((x) => x[0]);
+
 const BILL_TYPES = [
   ['Electricity','LESCO',420000],['Gas','SNGPL',85000],['Water','WASA',35000],['Internet','Nayatel',120000],
   ['Telephone','PTCL',48000],['Office Rent','Gulberg Trust',1400000],['Software','Zoho / MS 365',180000],
@@ -94,7 +119,8 @@ function buildData() {
   const invoices = [];
   const projects = [];
 
-  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices };
+  const tasks = [];
+  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks };
 }
 
 
@@ -290,6 +316,7 @@ export function computeKPIs(r, f) {
   const officeExp = byGroup['Office Expenses'], marketing = byGroup['Marketing Expenses'],
     propertyExp = byGroup['Property Expenses'], employeeExp = byGroup['Employee Expenses'],
     other = byGroup['Other Expenses'];
+  const personal = byGroup['Personal Expenses'], assetsBought = byGroup['Assets'];
 
   // Operating costs exclude tax and Zakat: tax is a statutory charge and Zakat (§17) is an
   // appropriation of profit, not an operating expense. Keeping the three stages apart is what
@@ -341,6 +368,7 @@ export function computeKPIs(r, f) {
     profitBeforeZakat: grossProfit - operatingCosts - directCosts - tax,
     commission, commissionPaid, commissionOut,
     officeExp, marketing, propertyExp, employeeExp, other, salaries, salariesPaid,
+    personal, assetsBought, retainedAfterPersonal: netProfit - personal,
     bills, billsPaid, billsOut, billsOverdueCount: billsOverdue.length,
     tax, taxPaid, taxOut, taxDueSoon, zakat, zakatPaid,
     zakatCalculated: DATA.zakatSummary.calculated, zakatRemaining: DATA.zakatSummary.remaining,
@@ -604,9 +632,15 @@ export function projectSummary(r, f) {
 const CHARITY_RE = /charit|donat|sadaq|sadq|khairat/i;
 export function charityRows(r) {
   const rows = [];
+  // A sheet's charity line is listed only for the part not already booked as an expense of that
+  // property — a charity expense linked to a deal is on its sheet too, and must not show twice.
   DATA.costSheets.filter((cs) => cs.charity > 0).forEach((cs) => {
+    const booked = cs.propertyId
+      ? DATA.expenses.filter((e) => e.propertyId === cs.propertyId && CHARITY_RE.test(e.category + ' ' + e.note)).reduce((a, e) => a + e.amount, 0)
+      : 0;
+    const amount = cs.charity - booked;
     const date = cs.saleDate instanceof Date ? cs.saleDate : cs.purchaseDate;
-    if (inR(date, r)) rows.push({ id: cs.id, source: 'Deal cost sheet', detail: cs.name || '—', party: cs.project || '—', date, amount: cs.charity });
+    if (amount > 0 && inR(date, r)) rows.push({ id: cs.id, source: 'Deal cost sheet', detail: cs.name || '—', party: cs.project || '—', date, amount });
   });
   DATA.expenses.filter((e) => CHARITY_RE.test(e.category + ' ' + e.note) && inR(e.date, r))
     .forEach((e) => rows.push({ id: e.id, source: 'Expense ledger', detail: e.note || e.category, party: e.vendor, date: e.date, amount: e.amount }));
@@ -636,9 +670,12 @@ export function sourceCount(view, r, f) {
     agentList: () => DATA.agents.length,
     cashflow: () => cashLedger(r, f).count,
     audit: () => DATA.audit.length,
-    sheets: () => DATA.costSheets.length,
-    calculator: () => DATA.costSheets.length,
-    analytics: () => DATA.costSheets.length,
+    sheets: () => dealSheets().length,
+    calculator: () => dealSheets().length,
+    analytics: () => dealSheets().length,
+    proformaInvoices: () => DATA.invoices.filter((i) => i.type === 'proforma').length,
+    assets: () => DATA.expenses.filter((e) => e.group === 'Assets').length,
+    tasks: () => DATA.tasks.length,
     invoices: () => DATA.invoices.length,
     saleInvoices: () => DATA.invoices.filter((i) => i.type === 'sale').length,
     purchaseInvoices: () => DATA.invoices.filter((i) => i.type === 'purchase').length,
@@ -736,10 +773,17 @@ export function addSale(v) {
   return s;
 }
 
+/** The property / deal a cost was spent on (optional), stored with its name for the registers. */
+function dealLink(propertyId) {
+  const p = propertyId ? DATA.properties.find((x) => x.id === propertyId) : null;
+  return { propertyId: p ? p.id : null, property: p ? p.name : '' };
+}
+
 export function addExpense(v) {
   const amount = +v.amount, paid = Math.min(+v.paid || 0, amount);
   const e = {
     id: nextId(DATA.expenses, 'EX-', 4), group: v.group, category: v.category,
+    ...dealLink(v.propertyId),
     date: parseDate(v.date), amount, paid, outstanding: Math.max(0, amount - paid),
     vendor: v.vendor, office: v.office, method: v.method,
     note: v.note || v.category, manual: true, attachments: v.attachments || [],
@@ -748,7 +792,7 @@ export function addExpense(v) {
   DATA.expenses.push(e);
   saveRecordToFirestore('expenses', e.id, e);
   if (paid > 0) addPayment({
-    date: v.date, dir: 'out', category: v.group, amount: paid, party: v.vendor,
+    date: v.date, dir: 'out', category: v.group, amount: paid, party: v.vendor, propertyId: e.propertyId,
     office: v.office, method: v.method, note: e.note, settleKey: 'exp:' + e.id,
   });
   return e;
@@ -841,6 +885,8 @@ function invoiceBody(v) {
   };
 }
 
+export const INVOICE_LABEL = { sale: 'Sale Invoice', purchase: 'Purchase Invoice', proforma: 'Proforma Invoice' };
+
 export function addInvoice(v) {
   const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
   // A mirror is a separate invoice started as a copy of another one; it keeps a link to its source.
@@ -864,10 +910,10 @@ export function addInvoice(v) {
     txnId: inv.id,
     action: 'Created',
     user: ACTOR,
-    entity: inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice',
+    entity: INVOICE_LABEL[inv.type] || 'Invoice',
     prevAmount: null,
     newAmount: inv.totalAmount,
-    note: `${inv.type === 'sale' ? 'Sale' : 'Purchase'} invoice ${inv.id} created for ${inv.type === 'sale' ? inv.buyerName : inv.sellerName || inv.buyerName}` +
+    note: `${INVOICE_LABEL[inv.type] || 'Invoice'} ${inv.id} created for ${inv.type === 'purchase' ? inv.sellerName || inv.buyerName : inv.buyerName}` +
       (inv.mirrorOf ? ` (mirror of ${inv.mirrorOf})` : ''),
     manual: true,
   };
@@ -964,12 +1010,13 @@ export function addZakat(v) {
   const z = {
     id: nextId(DATA.zakat, 'ZK-', 4), period: v.period, eligibleAssets, zakatable, rate,
     calculated: Math.round((zakatable * rate) / 100), amount: Math.round(+v.amount || 0),
+    ...dealLink(v.propertyId),
     date: parseDate(v.date), ref: v.ref || '—', manual: true, attachments: v.attachments || [],
   };
   DATA.zakat.push(z);
   saveRecordToFirestore('zakat', z.id, z);
   if (z.amount > 0) addPayment({
-    date: v.date, dir: 'out', category: 'Zakat', amount: z.amount, party: v.paidTo || 'Zakat recipients',
+    date: v.date, dir: 'out', category: 'Zakat', amount: z.amount, party: v.paidTo || 'Zakat recipients', propertyId: z.propertyId,
     method: v.method, note: 'Zakat — ' + z.period, settleKey: 'zakat:' + z.id,
   });
   refreshZakatSummary();
@@ -1243,7 +1290,7 @@ export function updateExpense(id, v) {
   if (e.paid > amount) throw alreadyPaid(e.paid, 'the amount');
   const prev = e.amount;
   Object.assign(e, {
-    group: v.group, category: v.category, date: parseDate(v.date), amount, outstanding: amount - e.paid,
+    group: v.group, category: v.category, ...dealLink(v.propertyId), date: parseDate(v.date), amount, outstanding: amount - e.paid,
     vendor: v.vendor, office: v.office, note: v.note || v.category, status: settled(amount, e.paid),
     attachments: v.attachments || e.attachments || [],
   });
@@ -1291,7 +1338,7 @@ export function updateZakat(id, v) {
   const rate = v.rate === '' || v.rate == null ? 2.5 : +v.rate;
   const prev = z.calculated;
   Object.assign(z, {
-    period: v.period, eligibleAssets, zakatable, rate, calculated: Math.round((zakatable * rate) / 100),
+    period: v.period, eligibleAssets, zakatable, rate, calculated: Math.round((zakatable * rate) / 100), ...dealLink(v.propertyId),
     date: parseDate(v.date), ref: v.ref || '—', attachments: v.attachments || z.attachments || [],
   });
   saveRecordToFirestore('zakat', z.id, z);
@@ -1347,7 +1394,7 @@ export function updateInvoice(id, v) {
     inv.propertyName = prop ? prop.name + ' · ' + prop.project : '';
   }
   saveRecordToFirestore('invoices', inv.id, inv);
-  logEdit(inv.id, inv.type === 'sale' ? 'Sale Invoice' : 'Purchase Invoice', prev, inv.totalAmount);
+  logEdit(inv.id, INVOICE_LABEL[inv.type] || 'Invoice', prev, inv.totalAmount);
   return inv;
 }
 
@@ -1456,7 +1503,12 @@ export function calculateCostSheet(v) {
   const totalCommissions = buySideAgentFee + sellSideAgentFee;
 
   // PROFIT & LOSS WATERFALL
-  const grossProfit = grossSalePrice - purchasePrice;
+  // What it costs to sell (advance tax on sale, the sell-side agent and any other selling cost)
+  // comes off the sale price: these are real outflows of the deal, not just figures on the sheet.
+  const otherSellingExpenses = Math.max(0, +(v.otherSellingExpenses || 0));
+  const saleSideCosts = tax236C + sellSideAgentFee + otherSellingExpenses;
+  const netSaleProceeds = grossSalePrice - saleSideCosts;
+  const grossProfit = netSaleProceeds - purchasePrice;
   const grossProfitPct = grossSalePrice > 0 ? (grossProfit / grossSalePrice) * 100 : 0;
   const grossMarginPct = grossProfitPct;
 
@@ -1467,7 +1519,9 @@ export function calculateCostSheet(v) {
   // Zakat & Charity
   const zakat = Math.max(0, +(v.zakat || 0));
   const charity = Math.max(0, +(v.charity || 0));
-  const officeExpenseDeduction = Math.max(0, +(v.officeExpenseDeduction !== undefined ? v.officeExpenseDeduction : (v.salaryExpenses || 0)));
+  // An extra share of office overheads charged to this deal. It is separate from the salary line
+  // above (already inside the purchase price), so it defaults to nothing rather than repeating it.
+  const officeExpenseDeduction = Math.max(0, +(v.officeExpenseDeduction || 0));
 
   // NET MARGIN = Gross Profit - CGT - Zakat - Charity - office allocation
   const netMargin = grossProfit - cgtAmount - zakat - charity - officeExpenseDeduction;
@@ -1481,10 +1535,9 @@ export function calculateCostSheet(v) {
   const annualizedRoiPct = heldDays > 0 ? (roiPct / heldDays) * 365 : roiPct;
 
   const municipalTax = v.municipalTax !== undefined ? +v.municipalTax : Math.round(grossSalePrice * 0.005);
-  const otherSellingExpenses = Math.max(0, +(v.otherSellingExpenses || 0));
   const totalSellingExpenses = otherSellingExpenses + municipalTax;
   const totalTaxesToPay = tax236K + tax236C + cgtAmount + stampDuty + cvt + cdaRdaTransferFee;
-  const breakEvenPrice = Math.round(purchasePrice + tax236C + sellSideAgentFee + cgtAmount + zakat + charity + officeExpenseDeduction);
+  const breakEvenPrice = Math.round(purchasePrice + saleSideCosts + cgtAmount + zakat + charity + officeExpenseDeduction);
 
   return {
     ...v,
@@ -1528,6 +1581,8 @@ export function calculateCostSheet(v) {
     saleBrokerage,
     saleBrokeragePct,
     totalCommissions,
+    saleSideCosts,
+    netSaleProceeds,
     grossProfit,
     grossProfitPct,
     grossMarginPct,
@@ -1650,36 +1705,15 @@ export function saveCostSheet(raw, user) {
   }
   saveRecordToFirestore('costSheets', cs.id, cs);
 
-  // Synchronize with property if matched
+  // A linked property takes the sheet's base price and, while unsold, its expected sale value.
+  // Nothing else is written back: the other lines of a linked sheet are read from the expense,
+  // tax and sale records, so copying them onto the property would count them twice.
   const p = DATA.properties.find((x) => x.id === cs.propertyId);
   if (p) {
-    // The property's cost is the sheet's landed cost: base price plus the named extras, with
-    // everything else on the sheet (taxes, handling, agent fee) carried as "other".
     p.price = cs.netBuyCost;
-    p.extras = {
-      registration: cs.societyTransferFee,
-      legal: cs.legalCharges,
-      development: cs.developmentCharges,
-      other: Math.max(0, cs.totalLandedCost - cs.netBuyCost - cs.societyTransferFee - cs.legalCharges - cs.developmentCharges),
-    };
     recomputeProperty(p);
-    if (cs.sellingPrice > 0) p.currentValue = cs.sellingPrice;
+    if (p.status !== 'Sold' && cs.grossSalePrice > 0) p.currentValue = cs.grossSalePrice;
     saveRecordToFirestore('properties', p.id, p);
-    if (cs.status === 'Sold') {
-      const sale = DATA.sales.find((s) => s.propertyId === p.id);
-      if (sale) {
-        sale.sellingPrice = cs.sellingPrice;
-        sale.received = Math.min(sale.received, sale.sellingPrice);
-        sale.outstanding = sale.sellingPrice - sale.received;
-        sale.propertyCost = cs.totalLandedCost;
-        sale.commission = cs.saleBrokerage;
-        sale.grossProfit = cs.grossProfit;
-        sale.netProfit = cs.netProfit;
-        sale.tax = cs.tax236C;
-        sale.netRevenue = sale.sellingPrice - sale.commission - sale.tax - (sale.otherExpenses || 0);
-        saveRecordToFirestore('sales', sale.id, sale);
-      }
-    }
   }
 
   const au = {
@@ -1700,3 +1734,135 @@ export function saveCostSheet(raw, user) {
   return cs;
 }
 
+
+/* ====================================================================
+   COST SHEETS FROM THE RECORDS
+   A property's cost sheet is read from what has actually been recorded:
+   its purchase, its sale, and every expense, tax and Zakat entry linked
+   to it. A saved sheet is kept as saved; the register flags it when the
+   records have moved on since.
+   ==================================================================== */
+const ZERO_LINES = {
+  ndcFee: 0, stampDuty: 0, cvt: 0, cdaRdaTransferFee: 0, societyTransferFee: 0, legalCharges: 0,
+  developmentCharges: 0, otherAcquisition: 0, tax236K: 0, handlingExpenses: 0, renovationRepairs: 0,
+  maintenanceBills: 0, marketingExpenses: 0, fuelTravelling: 0, salaryExpenses: 0, buySideAgentFee: 0,
+  tax236C: 0, sellSideAgentFee: 0, otherSellingExpenses: 0, cgtAmount: 0, zakat: 0, charity: 0,
+  officeExpenseDeduction: 0,
+};
+export const SHEET_AMOUNT_KEYS = Object.keys(ZERO_LINES).concat(['netBuyCost', 'grossSalePrice']);
+
+export function sheetFromRecords(propertyId) {
+  const p = DATA.properties.find((x) => x.id === propertyId);
+  if (!p) return null;
+  const sale = DATA.sales.find((s) => s.propertyId === p.id);
+  const ex = p.extras || {};
+  const v = {
+    ...ZERO_LINES,
+    id: '', propertyId: p.id, name: p.name, project: p.project, city: p.location, type: p.type,
+    size: p.size, office: p.office, seller: p.seller, purchaseDate: p.purchaseDate,
+    netBuyCost: p.price,
+    societyTransferFee: ex.registration || 0, legalCharges: ex.legal || 0,
+    developmentCharges: ex.development || 0, otherAcquisition: ex.other || 0,
+    grossSalePrice: sale ? sale.sellingPrice : p.currentValue || 0,
+    saleDate: sale ? sale.date : null, buyer: sale ? sale.buyer : '',
+    status: p.status === 'Sold' ? 'Sold' : 'Active Deal',
+    sources: [],
+  };
+  const src = (id, what, amount) => v.sources.push({ id, what, amount });
+
+  DATA.expenses.filter((e) => e.propertyId === p.id && NON_EXPENSE_GROUPS.indexOf(e.group) < 0).forEach((e) => {
+    const text = (e.category || '') + ' ' + (e.note || '');
+    const line = DEAL_COST_LINES.find((l) => l[2].test(text));
+    v[line ? line[1] : 'handlingExpenses'] += e.amount;
+    src(e.id, (line ? line[0] : 'Other handling') + ' · ' + e.category, e.amount);
+  });
+  let saleTaxRecorded = false;
+  DATA.taxes.filter((t) => t.propertyId === p.id).forEach((t) => {
+    const key = t.type === 'Advance Tax §236K' ? 'tax236K'
+      : t.type === 'Advance Tax §236C' || t.type === 'Withholding Tax' ? 'tax236C'
+      : t.type === 'Capital Gains Tax' ? 'cgtAmount' : 'otherAcquisition';
+    if (key === 'tax236C') saleTaxRecorded = true;
+    v[key] += t.amount;
+    src(t.id, t.type, t.amount);
+  });
+  DATA.zakat.filter((z) => z.propertyId === p.id).forEach((z) => {
+    v.zakat += z.amount || 0;
+    src(z.id, 'Zakat', z.amount || 0);
+  });
+  if (sale) {
+    v.sellSideAgentFee += sale.commission || 0;
+    if (sale.commission) src(sale.id, 'Agent commission on sale', sale.commission);
+    // Tax typed on the sale form, unless the same tax has its own tax entry.
+    if (!saleTaxRecorded && sale.tax) { v.tax236C += sale.tax; src(sale.id, 'Withholding tax on sale', sale.tax); }
+    if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses); }
+  }
+  return calculateCostSheet(v);
+}
+
+/** True when a saved sheet's amounts no longer match its property's records. */
+export function sheetOutOfDate(cs) {
+  if (!cs || !cs.propertyId) return false;
+  const fresh = sheetFromRecords(cs.propertyId);
+  if (!fresh) return false;
+  return SHEET_AMOUNT_KEYS.some((k) => fresh[k] > 0 && Math.round(fresh[k]) !== Math.round(cs[k] || 0));
+}
+
+/** A saved sheet brought up to date: every line the records know takes the recorded amount;
+    lines only typed on the sheet (nothing recorded for them) keep what was typed. */
+export function refreshSheetFromRecords(cs) {
+  const fresh = cs && cs.propertyId ? sheetFromRecords(cs.propertyId) : null;
+  if (!fresh) return cs;
+  const next = { ...cs };
+  SHEET_AMOUNT_KEYS.forEach((k) => { if (fresh[k] > 0) next[k] = fresh[k]; });
+  next.sources = fresh.sources;
+  return calculateCostSheet(next);
+}
+
+/** Every deal: the saved cost sheets, plus a sheet read from the records for each property
+    that has none saved yet. */
+export function dealSheets() {
+  const out = DATA.costSheets.slice();
+  const covered = new Set(DATA.costSheets.map((s) => s.propertyId).filter(Boolean));
+  DATA.properties.forEach((p) => {
+    if (covered.has(p.id)) return;
+    const cs = sheetFromRecords(p.id);
+    if (cs) out.push({ ...cs, id: p.id, fromRecords: true });
+  });
+  return out;
+}
+
+/* ====================================================================
+   DAILY TASKS — a simple to-do list per day.
+   ==================================================================== */
+export function addTask(v) {
+  const text = String(v.text || '').trim();
+  if (!text) throw new Error('Write the task first.');
+  const t = {
+    id: nextId(DATA.tasks, 'TK-', 5), text, date: parseDate(v.date || TODAY),
+    done: false, doneAt: null, createdBy: ACTOR, createdAt: new Date(),
+  };
+  DATA.tasks.push(t);
+  saveRecordToFirestore('tasks', t.id, t);
+  return t;
+}
+
+export function updateTask(id, patch) {
+  const t = mustFind(DATA.tasks, id, 'Task');
+  if (patch.text !== undefined) {
+    const text = String(patch.text).trim();
+    if (!text) throw new Error('A task cannot be empty.');
+    t.text = text;
+  }
+  if (patch.date !== undefined) t.date = parseDate(patch.date);
+  if (patch.done !== undefined) { t.done = !!patch.done; t.doneAt = t.done ? new Date() : null; }
+  saveRecordToFirestore('tasks', t.id, t);
+  return t;
+}
+
+export function deleteTask(id) {
+  const i = DATA.tasks.findIndex((x) => x.id === id);
+  if (i < 0) return false;
+  DATA.tasks.splice(i, 1);
+  deleteRecordFromFirestore('tasks', id);
+  return true;
+}

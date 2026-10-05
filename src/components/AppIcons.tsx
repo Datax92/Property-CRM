@@ -198,6 +198,34 @@ const ART: Record<string, React.ReactNode> = {
       <path d="M26 26v16a18 18 0 0 0 16-16z" fill={C.blue} />
     </>
   ),
+  tasks: (
+    <>
+      <rect x="8" y="6" width="32" height="36" rx="5" fill={C.teal} />
+      <rect x="15" y="3" width="18" height="8" rx="3" fill={C.deep} />
+      <path d="M14 21l3.5 3.5L24 18" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="27" y="19" width="8" height="3.4" rx="1.7" fill="#fff" />
+      <path d="M14 32l3.5 3.5L24 29" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="27" y="30" width="8" height="3.4" rx="1.7" fill="#fff" opacity=".7" />
+    </>
+  ),
+  proforma: (
+    <>
+      <path d="M10 5h20l9 9v29H10z" fill={C.orange} />
+      <path d="M30 5v9h9z" fill={C.amber} />
+      <rect x="15" y="20" width="18" height="3.2" rx="1.6" fill="#fff" />
+      <rect x="15" y="27" width="13" height="3.2" rx="1.6" fill="#fff" />
+      <circle cx="31" cy="35" r="5" fill={C.navy} />
+    </>
+  ),
+  assets: (
+    <>
+      <rect x="6" y="20" width="36" height="20" rx="3" fill={C.navy} />
+      <path d="M6 20L24 7l18 13z" fill={C.blue} />
+      <rect x="12" y="25" width="6" height="15" fill={C.amber} />
+      <rect x="22" y="25" width="6" height="15" fill={C.amber} />
+      <rect x="32" y="25" width="6" height="15" fill={C.amber} />
+    </>
+  ),
   account: (
     <>
       <path d="M24 5l16.5 9.5v19L24 43 7.5 33.500v-19z" fill={C.purple} />

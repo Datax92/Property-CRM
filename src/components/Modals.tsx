@@ -26,7 +26,7 @@ export function Modals() {
 
   // Editing a saved record: amounts already posted to the cash ledger are not on the form.
   const fields = editId ? F.fields.filter((fd: any) => !fd.addOnly) : F.fields;
-  const title = editId ? `${F.editTitle} · ${editId}` : mirrorOf ? `Mirror invoice · copy of ${mirrorOf}` : F.title;
+  const title = editId ? `${F.editTitle} · ${editId}` : mirrorOf ? `${F.title.replace(/^Create /, 'Mirror ')} · copy of ${mirrorOf}` : F.title;
 
   // Group fields into fieldsets
   const groups: { name: string; fields: any[] }[] = [];
@@ -118,11 +118,15 @@ export function Modals() {
                   } else {
                     const type =
                       fd.type === 'date' ? 'date' : fd.type === 'money' || fd.type === 'number' ? 'number' : 'text';
+                    // A text field may offer suggestions while still accepting anything typed.
+                    const suggest: string[] | null = fd.list ? fd.list(values) : null;
                     ctl = (
+                      <>
                       <input
                         ref={inputRef}
                         type={type}
                         value={val}
+                        list={suggest ? `dl-${fd.k}` : undefined}
                         placeholder={fd.ph}
                         max={fd.maxToday ? dstr(M.TODAY) : undefined}
                         min={fd.min != null ? fd.min : fd.type === 'money' ? '0' : undefined}
@@ -130,6 +134,14 @@ export function Modals() {
                         onChange={(e) => setModalField(fd.k, e.target.value)}
                         aria-invalid={err ? 'true' : undefined}
                       />
+                      {suggest && (
+                        <datalist id={`dl-${fd.k}`}>
+                          {suggest.map((s) => (
+                            <option key={s} value={s} />
+                          ))}
+                        </datalist>
+                      )}
+                      </>
                     );
                   }
 

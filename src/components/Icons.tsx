@@ -168,6 +168,31 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M5.3 8.2 7.2 10l3.5-3.9" />
         </svg>
       );
+    case 'edit':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.6 2.8l2.6 2.6-7.7 7.7H2.9v-2.6z" />
+          <path d="M9.2 4.2l2.6 2.6" />
+        </svg>
+      );
+    case 'trash':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.8 4.4h10.4M6.2 4.4V2.8h3.6v1.6M4.2 4.4l.7 8.8h6.2l.7-8.8" />
+        </svg>
+      );
+    case 'prev':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 3.5L5.5 8l4.5 4.5" />
+        </svg>
+      );
+    case 'next':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 3.5L10.5 8 6 12.5" />
+        </svg>
+      );
     case 'x':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

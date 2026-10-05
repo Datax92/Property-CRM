@@ -26,6 +26,7 @@ const COLLECTIONS = [
   'bills',
   'zakat',
   'audit',
+  'tasks',
 ] as const;
 
 export type CollectionName = typeof COLLECTIONS[number] | 'users';

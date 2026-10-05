@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import CursorGrid from './effects/CursorGrid';
+import { BrandBanner } from './Brand';
 import { ShieldCheck, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function LoginPage() {
@@ -68,7 +69,7 @@ export function LoginPage() {
     <div className="property-login-viewport">
       {/* Interactive Cursor Grid Background from CRM */}
       <CursorGrid
-        color="#714B67"
+        color="#1F2456"
         cellSize={65}
         radius={180}
         gridOpacity={0.045}
@@ -83,52 +84,10 @@ export function LoginPage() {
 
       {/* Main Elevated Login Card */}
       <div className="property-login-card">
-        {/* Brand Header for Property CRM */}
+        {/* Company letterhead */}
         <div className="property-brand-header">
-          <div className="property-brand-logo-wrap">
-            <svg
-              viewBox="0 0 48 48"
-              className="property-brand-svg"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient id="propTealGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#8F6A86" />
-                  <stop offset="100%" stopColor="#5F3F57" />
-                </linearGradient>
-              </defs>
-              {/* Roof architecture line */}
-              <path
-                d="M6 24L24 8L42 24"
-                stroke="url(#propTealGrad)"
-                strokeWidth="4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Modern building tower silhouette */}
-              <path
-                d="M14 22V40H34V22"
-                stroke="#1e293b"
-                strokeWidth="3.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Ascending investment chevron inside */}
-              <path
-                d="M19 33L24 27L29 33"
-                stroke="url(#propTealGrad)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-
-            <div className="property-brand-title-box">
-              <span className="property-brand-main">Property</span>
-              <span className="property-brand-sub">CRM</span>
-            </div>
+          <div className="login-banner">
+            <BrandBanner />
           </div>
 
           {/* Single Admin Role Badge */}

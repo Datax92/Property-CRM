@@ -83,8 +83,9 @@ const dstr = (d: Date | string) => (d instanceof Date ? M.dateInput(d) : d);
 /* Sale invoice: the company sells, the customer buys. Purchase invoice: the company buys
    from a seller. Both carry the same blocks so the printed voucher can show buyer and
    seller side by side. */
-function invoiceFields(kind: 'sale' | 'purchase') {
-  const sale = kind === 'sale';
+function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
+  // A proforma is a quotation to a buyer before the sale, so it is laid out like a sale invoice.
+  const sale = kind !== 'purchase';
   return [
     { g: 'Invoice' },
     { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
@@ -274,9 +275,27 @@ export const FORMS_DEF: Record<string, any> = {
         l: 'Category',
         type: 'select',
         req: true,
-        opts: () => ['Office Expenses', 'Employee Expenses', 'Marketing Expenses', 'Property Expenses', 'Other Expenses'],
+        opts: () =>
+          M.EXPENSE_GROUPS.map((g: string) => [
+            g,
+            g === 'Assets' ? 'Assets (kept as an asset, not an expense)' : g === 'Personal Expenses' ? 'Personal Expenses (owner, not business)' : g,
+          ]),
       },
-      { k: 'category', l: 'Sub-category', req: true, ph: 'Electricity' },
+      {
+        k: 'category',
+        l: 'Sub-category',
+        req: true,
+        ph: 'Type or pick one',
+        // Sub-categories of the chosen category; for a deal, the cost sheet lines as well.
+        list: (v: any) => Array.from(new Set([...(v.propertyId ? M.DEAL_COST_SUGGESTIONS : []), ...M.expenseSubcats(v.group)])),
+      },
+      {
+        k: 'propertyId',
+        l: 'Property / deal (optional)',
+        type: 'select',
+        opts: () => [['', '— General, not for one property —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+        hint: 'Pick the property this was spent on and it appears on that deal’s cost sheet.',
+      },
       { k: 'vendor', l: 'Vendor', req: true, ph: 'City Traders' },
       { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
@@ -292,10 +311,21 @@ export const FORMS_DEF: Record<string, any> = {
       ['Paid', n(v.paid)],
       ['Outstanding', Math.max(0, n(v.amount) - n(v.paid)), true],
     ],
-    validate: (v: any) => (n(v.paid) > n(v.amount) ? { paid: 'Paid cannot exceed the amount.' } : {}),
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      if (n(v.paid) > n(v.amount)) e.paid = 'Paid cannot exceed the amount.';
+      if (v.propertyId && M.NON_EXPENSE_GROUPS.indexOf(v.group) >= 0)
+        e.propertyId = v.group + ' are not costs of a deal — leave the property blank.';
+      return e;
+    },
     submit: (v: any) => {
       const e = M.addExpense(v);
-      return { id: e.id, msg: 'Expense ' + e.id + ' recorded', go: 'costs/expenses' };
+      const asset = e.group === 'Assets';
+      return {
+        id: e.id,
+        msg: (asset ? 'Asset ' : 'Expense ') + e.id + ' recorded',
+        go: asset ? 'finance/assets' : 'costs/expenses',
+      };
     },
   },
   payment: {
@@ -345,6 +375,8 @@ export const FORMS_DEF: Record<string, any> = {
           'Charity',
           'Marketing Expenses',
           'Other Expenses',
+          'Personal Expenses',
+          'Assets',
         ],
       },
       { k: 'party', l: 'Customer / vendor', req: true, ph: 'Kamran Aziz' },
@@ -395,6 +427,20 @@ export const FORMS_DEF: Record<string, any> = {
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'sale', mirrorOf });
       return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/saleInvoices' };
+    },
+  },
+  proformaInvoice: {
+    title: 'Create proforma invoice',
+    editTitle: 'Edit proforma invoice',
+    coll: 'invoices',
+    update: (id: string, v: any) => M.updateInvoice(id, v),
+    sub: 'A quotation given to the buyer before the sale. It is not a receipt and moves no money.',
+    fields: invoiceFields('proforma'),
+    calc: invoiceCalc,
+    validate: invoiceValidate,
+    submit: (v: any, mirrorOf?: string) => {
+      const inv = M.addInvoice({ ...v, type: 'proforma', mirrorOf });
+      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/proformaInvoices' };
     },
   },
   purchaseInvoice: {
@@ -497,7 +543,14 @@ export const FORMS_DEF: Record<string, any> = {
     fields: [
       { g: 'Assessment' },
       { k: 'period', l: 'Period', req: true, def: () => 'FY ' + M.TODAY.getFullYear(), ph: 'FY 2026 or 1448 AH' },
-      { k: 'eligibleAssets', l: 'Eligible assets (PKR)', type: 'money', req: true, hint: 'Stock held for resale, cash and receivables.' },
+      {
+        k: 'propertyId',
+        l: 'For one deal (optional)',
+        type: 'select',
+        opts: () => [['', '— Company Zakat for the period —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+        hint: 'Pick a property to show this Zakat on that deal’s cost sheet.',
+      },
+      { k: 'eligibleAssets', l: 'Eligible assets (PKR)', type: 'money', hint: 'Stock held for resale, cash and receivables. Leave blank for Zakat on one deal.' },
       { k: 'liabilities', l: 'Less: liabilities due', type: 'money' },
       { k: 'rate', l: 'Rate %', type: 'number', def: '2.5', req: true },
       { g: 'Payment' },
@@ -614,7 +667,7 @@ function formDefaults(id: string) {
 
 /** The form that edits a saved record of this ledger, if it has one. */
 export function editFormFor(coll: string, rec?: any): string | null {
-  if (coll === 'invoices') return rec && rec.type === 'purchase' ? 'purchaseInvoice' : 'saleInvoice';
+  if (coll === 'invoices') return rec && rec.type === 'purchase' ? 'purchaseInvoice' : rec && rec.type === 'proforma' ? 'proformaInvoice' : 'saleInvoice';
   return Object.keys(FORMS_DEF).find((k) => FORMS_DEF[k].coll === coll && FORMS_DEF[k].update) || null;
 }
 

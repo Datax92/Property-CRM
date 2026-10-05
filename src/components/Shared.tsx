@@ -6,6 +6,7 @@ import { Icon } from './Icons';
 import * as M from '../lib/re-data';
 import type { TableColumn } from '../lib/types';
 import { AttachButton } from './Attachments';
+import { BrandMark } from './Brand';
 
 const Pencil = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -173,7 +174,10 @@ export function PrintHead({ title }: { title: string }) {
   const { range, user, role } = useApp();
   return (
     <div className="print-head">
-      <div className="co">{M.COMPANY}</div>
+      <div className="print-head-brand">
+        <BrandMark size={34} />
+        <div className="co">{M.COMPANY}</div>
+      </div>
       <div className="mt">
         <b>{title}</b> · Period: {range.label} ({M.fmtDate(range.start)} – {M.fmtDate(range.end)}) · Generated:{' '}
         {M.fmtDate(M.TODAY)} · User: {user.name} ({role})

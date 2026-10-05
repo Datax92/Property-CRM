@@ -2,11 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Property CRM — Real Estate Management System",
+  title: "A & Sons Tradeway — Property Management",
   description: "Real Estate Management System - property, sales, invoice and finance management.",
-  icons: {
-    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23714B67'/%3E%3Ctext x='20' y='27' text-anchor='middle' font-family='Arial,sans-serif' font-size='19' font-weight='700' fill='%23FFFFFF'%3EM%3C/text%3E%3C/svg%3E",
-  },
+  // The company mark, traced to vectors (src/app/icon.svg is served as the tab icon).
 };
 
 export default function RootLayout({
