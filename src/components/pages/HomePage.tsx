@@ -83,7 +83,8 @@ function withSpare(cells: (string | null)[]) {
 export function HomePage() {
   const { effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, setRangeKey, openModal, openCostSheet } = useApp();
   const { look, update, surprise } = useAppearance();
-  const tone = findWallpaper(look.wallpaper).tone;
+  const wall = findWallpaper(look.wallpaper);
+  const tone = wall.tone;
 
   const k = M.computeKPIs(r, f);
   // Same profit basis as the dashboard and the P&L, so the three never disagree.
@@ -245,7 +246,7 @@ export function HomePage() {
   while (lastFilled >= 0 && !(cells[lastFilled] && visible(cells[lastFilled]))) lastFilled--;
 
   return (
-    <div className="page o-home" data-tone={tone}>
+    <div className="page o-home" data-tone={tone} data-busy={wall.busy}>
       <Wallpaper id={look.wallpaper} seed={look.seed} themeKey={look.theme + (look.uniqueName || '')} />
 
       {/* Shortcuts on top: chosen under "Customize" or on the Appearance page. */}
