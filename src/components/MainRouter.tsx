@@ -15,6 +15,7 @@ import { CostsPage } from './pages/CostsPage';
 import { AdminPage } from './pages/AdminPage';
 import { AccountPage } from './pages/AccountPage';
 import { SearchPage } from './pages/SearchPage';
+import { TasksPage } from './pages/TasksPage';
 
 export function MainRouter() {
   const { page, tab, role, denied } = useApp();
@@ -44,6 +45,8 @@ export function MainRouter() {
   switch (page) {
     case 'dashboard':
       return <DashboardPage />;
+    case 'tasks':
+      return <TasksPage />;
     case 'properties':
       return <PropertiesPage />;
     case 'trading':

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { AppIcon } from '../AppIcons';
 import { Icon } from '../Icons';
@@ -75,8 +76,7 @@ export function HomePage() {
   const invoices = (kind: string) => M.DATA.invoices.filter((i: any) => i.type === kind).length;
   const projects = M.projectSummary(r, f).filter((p: any) => p.total > 0).length;
   const alerts = M.alerts().filter((a: any) => !denied(a.view));
-  const todayKey = M.dateInput(M.TODAY);
-  const openTasks = M.DATA.tasks.filter((t: any) => !t.done && M.dateInput(t.date) <= todayKey).length;
+  const openTasks = M.DATA.tasks.filter((t: any) => ['Completed', 'Cancelled'].indexOf(M.taskStatus(t)) < 0).length;
   const assetsHeld = M.DATA.expenses.filter((e: any) => e.group === 'Assets').reduce((a: number, e: any) => a + e.amount, 0);
 
   const money = (n: number) => M.fmt(n, numbers);
@@ -90,7 +90,7 @@ export function HomePage() {
     purchase: { icon: 'purchase', label: 'Total Purchase', value: money(k.purchaseCost), go: 'properties/purchases', need: 'purchases' },
     cash: { icon: 'cash', label: 'Cash in Hand', value: money(cash.closing), go: 'finance/cashflow', need: 'cashflow' },
     expenses: { icon: 'expenses', label: 'Expenses', value: money(k.totalExpenses), go: 'costs/expenses', need: 'expenses' },
-    tasks: { icon: 'tasks', label: 'Daily Tasks', value: count(openTasks, 'task to do', 'tasks to do'), go: 'dashboard/tasks' },
+    tasks: { icon: 'tasks', label: 'Tasks', value: count(openTasks, 'task to do', 'tasks to do'), go: 'tasks/list' },
     proforma: { icon: 'proforma', label: 'Proforma Invoices', value: count(invoices('proforma'), 'invoice', 'invoices'), go: 'sales/proformaInvoices' },
     saleInvoice: { icon: 'saleInvoice', label: 'Sale Invoices', value: count(invoices('sale'), 'invoice', 'invoices'), go: 'sales/saleInvoices' },
     purchaseInvoice: { icon: 'purchaseInvoice', label: 'Purchase Invoices', value: count(invoices('purchase'), 'invoice', 'invoices'), go: 'sales/purchaseInvoices' },
@@ -205,6 +205,9 @@ export function HomePage() {
   };
 
   const dragTile = drag ? cells[drag.from] : null;
+  // Outside "Customize" and dragging, the spare places after the last icon are not drawn at all.
+  let lastFilled = cells.length - 1;
+  while (lastFilled >= 0 && !(cells[lastFilled] && visible(cells[lastFilled]))) lastFilled--;
 
   return (
     <div className="page o-home">
@@ -261,7 +264,7 @@ export function HomePage() {
       </div>
 
       <nav className={`launch ${editing ? 'editing' : ''} ${drag ? 'dragging' : ''}`} aria-label="All sections">
-        {cells.map((id, i) => {
+        {(editing || drag ? cells : cells.slice(0, lastFilled + 1)).map((id, i) => {
           const t = id && visible(id) ? TILES[id] : null;
           const isOver = drag && drag.over === i && drag.from !== i;
           if (!t) {
@@ -300,13 +303,19 @@ export function HomePage() {
         })}
       </nav>
 
-      {drag && dragTile && TILES[dragTile] && (
-        <div className="tile-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
-          <span className="tile-ic">
-            <AppIcon name={TILES[dragTile].icon} />
-          </span>
-        </div>
-      )}
+      {/* The icon being carried. It lives on <body> so nothing on the page can pin it in place. */}
+      {drag &&
+        dragTile &&
+        TILES[dragTile] &&
+        createPortal(
+          <div className="tile-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+            <span className="tile-ic">
+              <AppIcon name={TILES[dragTile].icon} />
+            </span>
+            <span className="tile-l">{TILES[dragTile].label}</span>
+          </div>,
+          document.body
+        )}
 
       {picker != null && (
         <div className="overlay" onClick={() => setPicker(null)}>

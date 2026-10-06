@@ -120,7 +120,8 @@ function buildData() {
   const projects = [];
 
   const tasks = [];
-  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks };
+  const taskProjects = [];
+  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects };
 }
 
 
@@ -1832,15 +1833,41 @@ export function dealSheets() {
 }
 
 /* ====================================================================
-   DAILY TASKS — a simple to-do list per day.
+   TASKS & TASK PROJECTS — a to-do list grouped into projects
+   (Personal, A&Sons work, Property business ...). A project's progress is
+   the share of its tasks that are completed.
    ==================================================================== */
-export function addTask(v) {
+export const TASK_STATUSES = ['Open', 'Working', 'Pending Review', 'Completed', 'Cancelled'];
+export const TASK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
+export const PROJECT_TYPES = ['Internal', 'External', 'Personal', 'Other'];
+
+/** A task's status as shown: an unfinished task past its due date is Overdue. */
+export function taskStatus(t) {
+  const st = t.status || (t.done ? 'Completed' : 'Open');
+  if (st !== 'Completed' && st !== 'Cancelled' && t.date instanceof Date && t.date < TODAY) return 'Overdue';
+  return st;
+}
+
+function taskBody(v) {
   const text = String(v.text || '').trim();
-  if (!text) throw new Error('Write the task first.');
-  const t = {
-    id: nextId(DATA.tasks, 'TK-', 5), text, date: parseDate(v.date || TODAY),
-    done: false, doneAt: null, createdBy: ACTOR, createdAt: new Date(),
+  if (!text) throw new Error('Write the task subject first.');
+  const status = TASK_STATUSES.indexOf(v.status) >= 0 ? v.status : 'Open';
+  const proj = v.projectId ? DATA.taskProjects.find((p) => p.id === v.projectId) : null;
+  return {
+    text, status, done: status === 'Completed',
+    priority: TASK_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Low',
+    projectId: proj ? proj.id : null, project: proj ? proj.name : '',
+    date: v.date ? parseDate(v.date) : null,
+    description: v.description || '',
   };
+}
+
+export function addTask(v) {
+  const t = {
+    id: nextId(DATA.tasks, 'TK-', 5), ...taskBody(v),
+    doneAt: null, createdBy: ACTOR, createdAt: new Date(),
+  };
+  if (t.done) t.doneAt = new Date();
   DATA.tasks.push(t);
   saveRecordToFirestore('tasks', t.id, t);
   return t;
@@ -1848,13 +1875,14 @@ export function addTask(v) {
 
 export function updateTask(id, patch) {
   const t = mustFind(DATA.tasks, id, 'Task');
-  if (patch.text !== undefined) {
-    const text = String(patch.text).trim();
-    if (!text) throw new Error('A task cannot be empty.');
-    t.text = text;
-  }
-  if (patch.date !== undefined) t.date = parseDate(patch.date);
-  if (patch.done !== undefined) { t.done = !!patch.done; t.doneAt = t.done ? new Date() : null; }
+  const wasDone = t.status === 'Completed' || t.done;
+  // A quick tick sends only { done }; the form sends every field.
+  const next = patch.done !== undefined && patch.status === undefined
+    ? { ...t, status: patch.done ? 'Completed' : (t.status === 'Completed' ? 'Open' : t.status || 'Open') }
+    : { ...t, ...patch };
+  Object.assign(t, taskBody({ ...next, date: next.date === undefined ? t.date : next.date }));
+  if (t.done && !wasDone) t.doneAt = new Date();
+  if (!t.done) t.doneAt = null;
   saveRecordToFirestore('tasks', t.id, t);
   return t;
 }
@@ -1865,4 +1893,46 @@ export function deleteTask(id) {
   DATA.tasks.splice(i, 1);
   deleteRecordFromFirestore('tasks', id);
   return true;
+}
+
+export function addTaskProject(v) {
+  const name = String(v.name || '').trim();
+  if (!name) throw new Error('Enter the project name.');
+  if (DATA.taskProjects.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
+  const p = { id: nextId(DATA.taskProjects, 'TP-', 3), name, type: v.type || '', notes: v.notes || '', createdAt: new Date() };
+  DATA.taskProjects.push(p);
+  saveRecordToFirestore('taskProjects', p.id, p);
+  return p;
+}
+
+export function updateTaskProject(id, v) {
+  const p = mustFind(DATA.taskProjects, id, 'Project');
+  const name = String(v.name || '').trim();
+  if (!name) throw new Error('Enter the project name.');
+  if (DATA.taskProjects.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
+  Object.assign(p, { name, type: v.type || '', notes: v.notes || '' });
+  saveRecordToFirestore('taskProjects', p.id, p);
+  // Tasks carry the project's name for their list.
+  DATA.tasks.filter((t) => t.projectId === id).forEach((t) => { t.project = name; saveRecordToFirestore('tasks', t.id, t); });
+  return p;
+}
+
+/** Deleting a project keeps its tasks; they are simply no longer in a project. */
+export function deleteTaskProject(id) {
+  const i = DATA.taskProjects.findIndex((x) => x.id === id);
+  if (i < 0) return false;
+  DATA.taskProjects.splice(i, 1);
+  deleteRecordFromFirestore('taskProjects', id);
+  DATA.tasks.filter((t) => t.projectId === id).forEach((t) => { t.projectId = null; t.project = ''; saveRecordToFirestore('tasks', t.id, t); });
+  return true;
+}
+
+/** Progress of each project: cancelled tasks do not count either way. */
+export function taskProjectStats() {
+  return DATA.taskProjects.map((p) => {
+    const ts = DATA.tasks.filter((t) => t.projectId === p.id && taskStatus(t) !== 'Cancelled');
+    const completed = ts.filter((t) => taskStatus(t) === 'Completed').length;
+    const overdue = ts.filter((t) => taskStatus(t) === 'Overdue').length;
+    return { ...p, total: ts.length, completed, overdue, open: ts.length - completed - overdue, pct: ts.length ? (completed / ts.length) * 100 : 0 };
+  });
 }

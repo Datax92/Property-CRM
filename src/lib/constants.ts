@@ -9,9 +9,20 @@ export const NAV: NavSection[] = [
     group: 'Main',
     tabs: [
       { id: 'home', label: 'Home' },
-      { id: 'tasks', label: 'Daily tasks' },
       { id: 'overview', label: 'Graphs & comparison' },
       { id: 'alerts', label: 'Alerts' },
+    ],
+  },
+  {
+    id: 'tasks',
+    label: 'Tasks',
+    u: 'کام',
+    icon: 'ok',
+    group: 'Main',
+    tabs: [
+      { id: 'list', label: 'Tasks' },
+      { id: 'projects', label: 'Projects' },
+      { id: 'summary', label: 'Summary' },
     ],
   },
   {
@@ -109,7 +120,9 @@ export const NAV: NavSection[] = [
 
 export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = {
   'dashboard/home': { t: 'Home', u: 'ہوم' },
-  'dashboard/tasks': { t: 'Daily tasks', u: 'روزانہ کام', p: 'What needs doing today. Tick a task when it is done.' },
+  'tasks/list': { t: 'Tasks', u: 'کام', p: 'Everything that needs doing, by project, status and priority.' },
+  'tasks/projects': { t: 'Projects', u: 'پراجیکٹس', p: 'Groups of tasks and how far each one has got.' },
+  'tasks/summary': { t: 'Project summary', u: 'خلاصہ', p: 'Completion, overdue work and tasks per project.' },
   'dashboard/overview': { t: 'Dashboard', u: 'ڈیش بورڈ' },
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost, what it is worth today, and the difference.' },

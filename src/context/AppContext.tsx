@@ -457,6 +457,54 @@ export const FORMS_DEF: Record<string, any> = {
       return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/purchaseInvoices' };
     },
   },
+  task: {
+    title: 'Add a task',
+    editTitle: 'Edit task',
+    coll: 'tasks',
+    update: (id: string, v: any) => M.updateTask(id, v),
+    sub: 'Something that needs doing. Pick a project to group it, and a due date to be reminded when it is late.',
+    fields: [
+      { g: 'Task' },
+      { k: 'text', l: 'Subject', req: true, ph: 'Sell FHA 1122', full: true },
+      {
+        k: 'projectId',
+        l: 'Project',
+        type: 'select',
+        opts: () => [['', '— No project —'], ...M.DATA.taskProjects.map((p: any) => [p.id, p.name])],
+        hint: 'Add projects under Tasks → Projects.',
+      },
+      { k: 'status', l: 'Status', type: 'select', opts: () => M.TASK_STATUSES, def: 'Open', req: true },
+      { k: 'priority', l: 'Priority', type: 'select', opts: () => M.TASK_PRIORITIES, def: 'Low', req: true },
+      { k: 'date', l: 'Due date', type: 'date' },
+      { k: 'description', l: 'Details', ph: 'Optional notes', full: true },
+    ],
+    validate: () => ({}),
+    submit: (v: any) => {
+      const t = M.addTask(v);
+      return { id: t.id, msg: 'Task ' + t.id + ' added', go: 'tasks/list' };
+    },
+  },
+  taskProject: {
+    title: 'Add a project',
+    editTitle: 'Edit project',
+    coll: 'taskProjects',
+    update: (id: string, v: any) => M.updateTaskProject(id, v),
+    sub: 'A group of tasks, such as Personal, A&Sons Work or Property Business.',
+    fields: [
+      { g: 'Project' },
+      { k: 'name', l: 'Project name', req: true, ph: 'PROPERTY BUSINESS', full: true },
+      { k: 'type', l: 'Project type', type: 'select', opts: () => [['', '— None —'], ...M.PROJECT_TYPES.map((t: string) => [t, t])] },
+      { k: 'notes', l: 'Notes', ph: 'Optional', full: true },
+    ],
+    validate: (v: any, editId?: string) =>
+      M.DATA.taskProjects.some((p: any) => p.id !== editId && p.name.toLowerCase() === String(v.name || '').trim().toLowerCase())
+        ? { name: 'A project with this name already exists.' }
+        : {},
+    submit: (v: any) => {
+      const p = M.addTaskProject(v);
+      return { id: p.id, msg: 'Project ' + p.name + ' added', go: 'tasks/projects' };
+    },
+  },
   project: {
     title: 'Add a project',
     sub: 'A project or society. It can then be picked on a property, in the filters and on a cost sheet.',
@@ -987,7 +1035,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries'];
+    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;
