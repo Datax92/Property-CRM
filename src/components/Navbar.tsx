@@ -44,8 +44,9 @@ export function Navbar() {
         type="button"
         className="o-nav-brand"
         onClick={() => (sec && tabs[0] ? goto(`${sec.id}/${tabs[0].id}`) : goto('dashboard/home'))}
+        title={brand}
       >
-        {brand}
+        <span className="o-nav-brand-t">{brand}</span>
       </button>
 
       {!isHome && sec && (

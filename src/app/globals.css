@@ -99,7 +99,9 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--display); font-weight: 600; lette
 .o-nav-apps { width: 46px; flex: 0 0 46px; }
 .o-nav-apps svg { transition: transform .25s var(--ease); }
 .o-nav-apps:hover svg { transform: scale(1.18) rotate(90deg); }
-.o-nav-brand { padding: 0 12px 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+.o-nav-brand { padding: 0 12px 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+/* On a narrow screen the name gives way (with "…") so the icons and the avatar always fit. */
+.o-nav-brand-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .o-nav-menu { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .o-nav-menu::-webkit-scrollbar { display: none; }
 .o-nav-item { position: relative; padding: 0 12px; font-size: 14px; font-weight: 400; white-space: nowrap; }
@@ -118,7 +120,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--display); font-weight: 600; lette
   font-size: 10px; font-weight: 700; display: grid; place-items: center;
   animation: o-pop .35s var(--ease) both;
 }
-.o-nav-user { gap: 8px; padding: 0 10px; font-size: 14px; }
+.o-nav-user { flex: 0 0 auto; gap: 8px; padding: 0 10px; font-size: 14px; }
 .o-nav-user .ini {
   width: 26px; height: 26px; border-radius: 4px; display: grid; place-items: center;
   background: #fff; color: var(--brand); font-size: 11px; font-weight: 700;
@@ -560,6 +562,12 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 
 /* ------------------------------ 11b. responsive ------------------------------ */
 @media (max-width: 1100px) { .navsearch { width: 130px; } .o-nav-user .nm { display: none; } }
+@media (max-width: 480px) {
+  .o-nav-apps { width: 40px; flex-basis: 40px; }
+  .o-nav-brand { font-size: 15px; padding-right: 6px; }
+  .o-nav-ic { width: 34px; flex-basis: 34px; }
+  .o-nav-user { padding: 0 8px 0 4px; }
+}
 @media (max-width: 900px) {
   .o-nav-menu { display: none; }
   .o-nav-ic.burger { display: inline-flex; }
@@ -1326,7 +1334,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 
 /* ---- brand in the shell ---- */
 .o-nav-logo {
-  display: grid; place-items: center; align-self: center; width: 32px; height: 32px; margin: 0 4px 0 2px;
+  display: grid; place-items: center; align-self: center; flex: 0 0 32px; width: 32px; height: 32px; margin: 0 4px 0 2px;
   border-radius: 7px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2);
 }
 .o-nav-logo:hover { transform: scale(1.06); }
