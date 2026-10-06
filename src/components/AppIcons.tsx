@@ -2,16 +2,18 @@ import React from 'react';
 
 /* Launcher artwork for the home screen: flat, overlapping colour shapes in the style of the
    client's reference board. Decorative only — every tile carries a text label. */
+/* Each colour is a variable so an icon pack can recolour every icon at once; the classic
+   values are the defaults in globals.css. */
 const C = {
-  orange: '#F58220',
-  amber: '#FBB945',
-  teal: '#1AD3BB',
-  deep: '#005E7A',
-  purple: '#985184',
-  blue: '#2EBCFA',
-  coral: '#FC868B',
-  red: '#F9464C',
-  navy: '#1A2F70',
+  orange: 'var(--ic-orange)',
+  amber: 'var(--ic-amber)',
+  teal: 'var(--ic-teal)',
+  deep: 'var(--ic-deep)',
+  purple: 'var(--ic-purple)',
+  blue: 'var(--ic-blue)',
+  coral: 'var(--ic-coral)',
+  red: 'var(--ic-red)',
+  navy: 'var(--ic-navy)',
 };
 
 const ART: Record<string, React.ReactNode> = {
@@ -32,9 +34,9 @@ const ART: Record<string, React.ReactNode> = {
   sales: (
     <>
       <path d="M7 10h17l17 17-14 14L7 24z" fill={C.teal} />
-      <circle cx="15.5" cy="18.5" r="3.4" fill="#fff" />
+      <circle cx="15.5" cy="18.5" r="3.4" fill="var(--ic-paper)" />
       <circle cx="34" cy="33" r="9" fill={C.deep} />
-      <path d="M29.6 33.2l3 3 5.6-6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M29.6 33.2l3 3 5.6-6" fill="none" stroke="var(--ic-paper)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
   purchase: (
@@ -66,9 +68,9 @@ const ART: Record<string, React.ReactNode> = {
       <rect x="6" y="9" width="10.5" height="30" rx="3" fill={C.teal} />
       <rect x="18.8" y="9" width="10.5" height="20" rx="3" fill={C.purple} />
       <rect x="31.5" y="9" width="10.5" height="25" rx="3" fill={C.amber} />
-      <rect x="8.5" y="12" width="5.5" height="5" rx="1.4" fill="#fff" opacity=".85" />
-      <rect x="21.3" y="12" width="5.5" height="5" rx="1.4" fill="#fff" opacity=".85" />
-      <rect x="34" y="12" width="5.5" height="5" rx="1.4" fill="#fff" opacity=".85" />
+      <rect x="8.5" y="12" width="5.5" height="5" rx="1.4" fill="var(--ic-paper)" opacity=".85" />
+      <rect x="21.3" y="12" width="5.5" height="5" rx="1.4" fill="var(--ic-paper)" opacity=".85" />
+      <rect x="34" y="12" width="5.5" height="5" rx="1.4" fill="var(--ic-paper)" opacity=".85" />
     </>
   ),
   tax: (
@@ -123,8 +125,8 @@ const ART: Record<string, React.ReactNode> = {
       <rect x="5" y="12" width="19" height="24" rx="4" fill={C.amber} />
       <rect x="24" y="12" width="19" height="24" rx="4" fill={C.teal} />
       <rect x="22.4" y="7" width="3.2" height="34" rx="1.6" fill={C.purple} />
-      <path d="M17 18v12l-8-6z" fill="#fff" />
-      <path d="M31 18v12l8-6z" fill="#fff" />
+      <path d="M17 18v12l-8-6z" fill="var(--ic-paper)" />
+      <path d="M31 18v12l8-6z" fill="var(--ic-paper)" />
     </>
   ),
   gross: (
@@ -187,7 +189,7 @@ const ART: Record<string, React.ReactNode> = {
       <circle cx="34" cy="23" r="5.5" fill={C.navy} />
       <path d="M24 40c1-6 4-9 10-9s9 3 10 9z" fill={C.navy} />
       <circle cx="18" cy="16" r="10" fill={C.blue} />
-      <path d="M21.6 12.6c-.8-1.2-2.1-1.8-3.6-1.8-2 0-3.4 1-3.4 2.6 0 3.6 7.2 1.6 7.2 5.3 0 1.6-1.5 2.7-3.7 2.7-1.8 0-3.2-.8-3.9-2.1M18 8.6v2.2M18 21.4v2.2" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21.6 12.6c-.8-1.2-2.1-1.8-3.6-1.8-2 0-3.4 1-3.4 2.6 0 3.6 7.2 1.6 7.2 5.3 0 1.6-1.5 2.7-3.7 2.7-1.8 0-3.2-.8-3.9-2.1M18 8.6v2.2M18 21.4v2.2" fill="none" stroke="var(--ic-paper)" strokeWidth="2" strokeLinecap="round" />
     </>
   ),
   fiscal: (
@@ -198,22 +200,31 @@ const ART: Record<string, React.ReactNode> = {
       <path d="M26 26v16a18 18 0 0 0 16-16z" fill={C.blue} />
     </>
   ),
+  appearance: (
+    <>
+      <path d="M24 6C13 6 5 13.6 5 23c0 9.6 8.2 18 18.2 18 3.6 0 5.2-2 4.2-4.6-.9-2.4.4-4.4 3-4.4H35c4.6 0 8-3.4 8-8.4C43 13.4 34.6 6 24 6z" fill={C.amber} />
+      <circle cx="15" cy="20" r="3.6" fill={C.red} />
+      <circle cx="22" cy="13.5" r="3.6" fill={C.teal} />
+      <circle cx="31.5" cy="15" r="3.6" fill={C.purple} />
+      <circle cx="14.5" cy="30" r="3.6" fill={C.deep} />
+    </>
+  ),
   tasks: (
     <>
       <rect x="8" y="6" width="32" height="36" rx="5" fill={C.teal} />
       <rect x="15" y="3" width="18" height="8" rx="3" fill={C.deep} />
-      <path d="M14 21l3.5 3.5L24 18" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="27" y="19" width="8" height="3.4" rx="1.7" fill="#fff" />
-      <path d="M14 32l3.5 3.5L24 29" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="27" y="30" width="8" height="3.4" rx="1.7" fill="#fff" opacity=".7" />
+      <path d="M14 21l3.5 3.5L24 18" fill="none" stroke="var(--ic-paper)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="27" y="19" width="8" height="3.4" rx="1.7" fill="var(--ic-paper)" />
+      <path d="M14 32l3.5 3.5L24 29" fill="none" stroke="var(--ic-paper)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="27" y="30" width="8" height="3.4" rx="1.7" fill="var(--ic-paper)" opacity=".7" />
     </>
   ),
   proforma: (
     <>
       <path d="M10 5h20l9 9v29H10z" fill={C.orange} />
       <path d="M30 5v9h9z" fill={C.amber} />
-      <rect x="15" y="20" width="18" height="3.2" rx="1.6" fill="#fff" />
-      <rect x="15" y="27" width="13" height="3.2" rx="1.6" fill="#fff" />
+      <rect x="15" y="20" width="18" height="3.2" rx="1.6" fill="var(--ic-paper)" />
+      <rect x="15" y="27" width="13" height="3.2" rx="1.6" fill="var(--ic-paper)" />
       <circle cx="31" cy="35" r="5" fill={C.navy} />
     </>
   ),
@@ -231,7 +242,7 @@ const ART: Record<string, React.ReactNode> = {
       <path d="M24 5l16.5 9.5v19L24 43 7.5 33.500v-19z" fill={C.purple} />
       <path d="M24 5l16.5 9.5v9.5H7.5v-9.5z" fill={C.amber} />
       <path d="M40.5 24v9.500L24 43V24z" fill={C.orange} />
-      <circle cx="24" cy="24" r="6.5" fill="#fff" />
+      <circle cx="24" cy="24" r="6.5" fill="var(--ic-paper)" />
     </>
   ),
 };

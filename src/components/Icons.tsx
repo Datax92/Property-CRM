@@ -181,6 +181,45 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M2.8 4.4h10.4M6.2 4.4V2.8h3.6v1.6M4.2 4.4l.7 8.8h6.2l.7-8.8" />
         </svg>
       );
+    case 'dice':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <rect x="2.2" y="2.2" width="11.6" height="11.6" rx="2.6" />
+          <circle cx="5.4" cy="5.4" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="10.6" cy="5.4" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="5.4" cy="10.6" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="10.6" cy="10.6" r=".9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'palette':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <path d="M8 2.2C4.6 2.2 2 4.6 2 7.7 2 10.9 4.6 13.8 7.7 13.8c1.2 0 1.7-.7 1.4-1.5-.3-.8.1-1.4 1-1.4H11.6c1.4 0 2.4-1.1 2.4-2.6C14 4.6 11.4 2.2 8 2.2z" />
+          <circle cx="5.2" cy="7" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="7.6" cy="4.9" r=".9" fill="currentColor" stroke="none" />
+          <circle cx="10.6" cy="5.6" r=".9" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'undo':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5.5 4.5 2.8 7.2l2.7 2.7" />
+          <path d="M3 7.2h6.4a3.6 3.6 0 0 1 0 7.2H7.6" />
+        </svg>
+      );
+    case 'move-up':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3.5 10 8 5.5l4.5 4.5" />
+        </svg>
+      );
+    case 'move-down':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3.5 6 8 10.5 12.5 6" />
+        </svg>
+      );
     case 'prev':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

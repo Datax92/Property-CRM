@@ -154,6 +154,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'admin/audit': { t: 'Audit trail', u: 'آڈٹ', p: 'Who did what, and when. Records are voided or reversed, never deleted.' },
   'admin/users': { t: 'Admin account', u: 'ایڈمن اکاؤنٹ', p: 'This portal has a single administrator account with full access.' },
   'account': { t: 'My account', u: 'میرا اکاؤنٹ' },
+  'appearance': { t: 'Appearance', u: 'ظاہری شکل' },
   'search': { t: 'Search results', u: 'تلاش' },
 };
 

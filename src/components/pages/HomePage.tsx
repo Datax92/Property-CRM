@@ -5,7 +5,9 @@ import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { AppIcon } from '../AppIcons';
 import { Icon } from '../Icons';
-import DotField from '../effects/DotField';
+import { Wallpaper } from '../Wallpapers';
+import { useAppearance } from '../../context/AppearanceContext';
+import { SHORTCUTS, MAX_SHORTCUTS, findWallpaper, type ShortcutDef } from '../../lib/appearance';
 import * as M from '../../lib/re-data';
 
 interface Tile {
@@ -21,22 +23,39 @@ interface Tile {
 /* The home layout is a list of grid cells, each holding a tile ID or nothing. Dragging a tile
    drops it into the cell under the pointer (swapping with whatever was there), so tiles always
    sit on the grid. The layout is kept in this browser. */
-const LAYOUT_KEY = 'home-layout-v2';
+const LAYOUT_KEY = 'home-layout-v3';
+/** Icons added since a layout was saved, placed in the first free spot of an older layout. */
+const NEW_TILES: Record<string, string[]> = { 'home-layout-v2': ['appearance'] };
 const DEFAULT_LAYOUT = [
   'dashboard', 'pnl', 'sales', 'purchase', 'cash', 'expenses',
   'tasks', 'proforma', 'saleInvoice', 'purchaseInvoice', 'costSheets', 'projects',
   'tax', 'zakat', 'charity', 'commission', 'inventory', 'assets',
   'gross', 'net', 'receivables', 'agents', 'finance', 'admin',
-  'fiscal', 'account',
+  'fiscal', 'appearance', 'account',
 ];
 /** Cells kept free at the end, so there is always room to drop or add a tile. */
 const SPARE = 6;
 
 function loadLayout(): (string | null)[] {
   try {
-    const raw = window.localStorage.getItem(LAYOUT_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (Array.isArray(parsed)) return parsed.map((x) => (typeof x === 'string' ? x : null));
+    const read = (key: string): (string | null)[] | null => {
+      const raw = window.localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed.map((x: any) => (typeof x === 'string' ? x : null)) : null;
+    };
+    const now = read(LAYOUT_KEY);
+    if (now) return now;
+    for (const old of Object.keys(NEW_TILES)) {
+      const cells = read(old);
+      if (!cells) continue;
+      NEW_TILES[old].forEach((id) => {
+        if (cells.includes(id)) return;
+        const free = cells.indexOf(null);
+        if (free >= 0) cells[free] = id;
+        else cells.push(id);
+      });
+      return cells;
+    }
   } catch {
     /* storage blocked or corrupt: fall back to the default */
   }
@@ -62,7 +81,9 @@ function withSpare(cells: (string | null)[]) {
 
 /** Home: premium shortcuts on top, then one large icon per area of the business. */
 export function HomePage() {
-  const { effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, setRangeKey, openModal } = useApp();
+  const { effectiveFilters: f, range: r, numbers, grossBasis, goto, denied, setRangeKey, openModal, openCostSheet } = useApp();
+  const { look, update, surprise } = useAppearance();
+  const tone = findWallpaper(look.wallpaper).tone;
 
   const k = M.computeKPIs(r, f);
   // Same profit basis as the dashboard and the P&L, so the three never disagree.
@@ -116,6 +137,7 @@ export function HomePage() {
       need: 'pnl',
       before: () => setRangeKey('thisFiscalYear'),
     },
+    appearance: { icon: 'appearance', label: 'Appearance', value: 'Themes, wallpapers & icons', go: 'appearance' },
     account: { icon: 'account', label: 'My Account', value: 'Profile & sign out', go: 'account' },
   };
 
@@ -133,6 +155,7 @@ export function HomePage() {
 
   const [editing, setEditing] = useState(false);
   const [picker, setPicker] = useState<number | null>(null);
+  const [scPicker, setScPicker] = useState(false);
   const [drag, setDrag] = useState<{ from: number; over: number | null; x: number; y: number } | null>(null);
   const pending = useRef<{ from: number; x: number; y: number; id: number } | null>(null);
   const justDragged = useRef(false);
@@ -204,42 +227,63 @@ export function HomePage() {
     setPicker(null);
   };
 
+  // Shortcuts on top: the ones chosen, in the chosen order.
+  const shortcuts = look.shortcuts
+    .map((id) => SHORTCUTS.find((s) => s.id === id))
+    .filter((s): s is ShortcutDef => !!s && !denied(s.need));
+  const scHidden = SHORTCUTS.filter((s) => !look.shortcuts.includes(s.id) && !denied(s.need));
+  const runShortcut = (s: ShortcutDef) => {
+    if (editing) return;
+    if (s.costSheet) openCostSheet('new');
+    else if (s.modal) openModal(s.modal, s.preset);
+    else if (s.go) goto(s.go);
+  };
+
   const dragTile = drag ? cells[drag.from] : null;
   // Outside "Customize" and dragging, the spare places after the last icon are not drawn at all.
   let lastFilled = cells.length - 1;
   while (lastFilled >= 0 && !(cells[lastFilled] && visible(cells[lastFilled]))) lastFilled--;
 
   return (
-    <div className="page o-home">
-      <DotField />
+    <div className="page o-home" data-tone={tone}>
+      <Wallpaper id={look.wallpaper} seed={look.seed} themeKey={look.theme + (look.uniqueName || '')} />
 
-      {/* Premium shortcuts: the three documents made most often. */}
-      <div className="shortcuts" data-noprint="1">
-        <button type="button" className="shortcut sc-proforma" onClick={() => openModal('proformaInvoice')}>
-          <span className="sc-ic"><AppIcon name="proforma" size={30} /></span>
-          <span className="sc-t">
-            <b>Proforma</b>
-            <small>Quotation for a buyer</small>
-          </span>
-          <span className="sc-plus"><Icon name="plus" /></span>
-        </button>
-        <button type="button" className="shortcut sc-sale" onClick={() => openModal('saleInvoice')}>
-          <span className="sc-ic"><AppIcon name="saleInvoice" size={30} /></span>
-          <span className="sc-t">
-            <b>Sale Invoice</b>
-            <small>Receipt to the buyer</small>
-          </span>
-          <span className="sc-plus"><Icon name="plus" /></span>
-        </button>
-        <button type="button" className="shortcut sc-purchase" onClick={() => openModal('purchaseInvoice')}>
-          <span className="sc-ic"><AppIcon name="purchaseInvoice" size={30} /></span>
-          <span className="sc-t">
-            <b>Purchase Invoice</b>
-            <small>Payment to a seller</small>
-          </span>
-          <span className="sc-plus"><Icon name="plus" /></span>
-        </button>
-      </div>
+      {/* Shortcuts on top: chosen under "Customize" or on the Appearance page. */}
+      {(shortcuts.length > 0 || editing) && (
+        <div className="shortcuts" data-noprint="1">
+          {shortcuts.map((s, i) => (
+            <div key={s.id} className="shortcut-wrap">
+              <button type="button" className={`shortcut sc-v${i % 3}`} onClick={() => runShortcut(s)}>
+                <span className="sc-ic">
+                  <AppIcon name={s.icon} size={30} />
+                </span>
+                <span className="sc-t">
+                  <b>{s.label}</b>
+                  <small>{s.sub}</small>
+                </span>
+                <span className="sc-plus">
+                  <Icon name="plus" />
+                </span>
+              </button>
+              {editing && (
+                <button
+                  type="button"
+                  className="shortcut-x"
+                  aria-label={`Remove the ${s.label} shortcut`}
+                  onClick={() => update({ shortcuts: look.shortcuts.filter((x) => x !== s.id) })}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          {editing && shortcuts.length < MAX_SHORTCUTS && scHidden.length > 0 && (
+            <button type="button" className="shortcut-add" onClick={() => setScPicker(true)}>
+              <Icon name="plus" /> Add a shortcut
+            </button>
+          )}
+        </div>
+      )}
 
       {alerts.length > 0 && (
         <button type="button" className="home-alert" data-noprint="1" onClick={() => goto('dashboard/alerts')}>
@@ -253,6 +297,16 @@ export function HomePage() {
       <div className="launch-bar" data-noprint="1">
         <span className="kicker">{editing ? 'Drag icons to move them · × removes · + adds' : 'Your apps'}</span>
         <span className="spacer" />
+        {!editing && (
+          <>
+            <button type="button" className="btn sm dice" onClick={surprise} title="A new matching theme, wallpaper and icon pack">
+              <Icon name="dice" /> Surprise me
+            </button>
+            <button type="button" className="btn sm" onClick={() => goto('appearance')}>
+              <Icon name="palette" /> Appearance
+            </button>
+          </>
+        )}
         {editing && (
           <button type="button" className="btn sm" onClick={() => commit(DEFAULT_LAYOUT.slice())}>
             Reset
@@ -308,7 +362,7 @@ export function HomePage() {
         dragTile &&
         TILES[dragTile] &&
         createPortal(
-          <div className="tile-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+          <div className="tile-ghost" data-tone={tone} style={{ left: drag.x, top: drag.y }} aria-hidden="true">
             <span className="tile-ic">
               <AppIcon name={TILES[dragTile].icon} />
             </span>
@@ -316,6 +370,45 @@ export function HomePage() {
           </div>,
           document.body
         )}
+
+      {scPicker && (
+        <div className="overlay" onClick={() => setScPicker(false)}>
+          <div className="modal tile-picker" role="dialog" aria-modal="true" aria-label="Add a shortcut" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h">
+              <div>
+                <h2>Add a shortcut</h2>
+                <p>Up to {MAX_SHORTCUTS} shortcuts sit on top of the home screen.</p>
+              </div>
+              <button type="button" className="x" onClick={() => setScPicker(false)} aria-label="Close">
+                <Icon name="x" />
+              </button>
+            </div>
+            <div className="modal-b">
+              <div className="picker-grid wide">
+                {scHidden.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="sc-pick"
+                    onClick={() => {
+                      update({ shortcuts: [...look.shortcuts, s.id].slice(0, MAX_SHORTCUTS) });
+                      setScPicker(false);
+                    }}
+                  >
+                    <span className="sc-ic">
+                      <AppIcon name={s.icon} size={28} />
+                    </span>
+                    <span>
+                      <b>{s.label}</b>
+                      <small>{s.sub}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {picker != null && (
         <div className="overlay" onClick={() => setPicker(null)}>

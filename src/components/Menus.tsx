@@ -77,6 +77,15 @@ export function Menus() {
         >
           <Icon name="user" /> My account
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            goto('appearance');
+            closeMenu();
+          }}
+        >
+          <Icon name="palette" /> Appearance
+        </button>
         <div className="sep" />
         <button
           type="button"

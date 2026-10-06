@@ -859,7 +859,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const h = decodeURIComponent(window.location.hash.replace(/^#/, ''));
       if (!h) return;
       const [p, t] = h.split('/');
-      if (p === 'account' || p === 'search') {
+      if (p === 'account' || p === 'search' || p === 'appearance') {
         setPage(p);
         setTab(null);
         setQuery('');

@@ -16,11 +16,12 @@ import { AdminPage } from './pages/AdminPage';
 import { AccountPage } from './pages/AccountPage';
 import { SearchPage } from './pages/SearchPage';
 import { TasksPage } from './pages/TasksPage';
+import { AppearancePage } from './pages/AppearancePage';
 
 export function MainRouter() {
   const { page, tab, role, denied } = useApp();
 
-  const pageKey = page === 'account' || page === 'search' ? page : `${page}/${tab}`;
+  const pageKey = page === 'account' || page === 'search' || page === 'appearance' ? page : `${page}/${tab}`;
   const meta = PAGE_META[pageKey] || { t: 'Page' };
   const sec = NAV.find((s) => s.id === page);
 
@@ -47,6 +48,8 @@ export function MainRouter() {
       return <DashboardPage />;
     case 'tasks':
       return <TasksPage />;
+    case 'appearance':
+      return <AppearancePage />;
     case 'properties':
       return <PropertiesPage />;
     case 'trading':

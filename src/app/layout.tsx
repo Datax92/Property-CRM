@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Script from "next/script";
+import { EARLY_APPLY_SCRIPT } from "../lib/appearance";
 
 export const metadata: Metadata = {
   title: "A & Sons Tradeway — Property Management",
@@ -13,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="signature" data-icons="classic" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -22,7 +24,14 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Puts the saved theme and icon pack on the page before it is drawn, so a reload
+            never flashes the default colours first. */}
+        <Script id="saved-look" strategy="beforeInteractive">
+          {EARLY_APPLY_SCRIPT}
+        </Script>
+      </body>
     </html>
   );
 }
