@@ -36,13 +36,6 @@ export const THEMES: Theme[] = [
   { id: 'rose', name: 'Shalimar Rose', note: 'Garden berry and blush', swatch: ['#6B2141', '#D9718E', '#F8ECF1'] },
   { id: 'night', name: 'Karakoram Night', note: 'Midnight blue and starlight gold', swatch: ['#141A2E', '#E2B34B', '#ECEEF5'] },
   { id: 'marble', name: 'Faisal Marble', note: 'Graphite, white stone and bronze', swatch: ['#2E3440', '#B08D57', '#EFF1F3'] },
-  { id: 'hunza', name: 'Hunza Blossom', note: 'Dusk violet and apricot', swatch: ['#3D2B56', '#F4A259', '#F1EDF7'] },
-  { id: 'murree', name: 'Murree Pine', note: 'Pine forest and fresh snow', swatch: ['#1F3D36', '#7CC6D6', '#EAF2F0'] },
-  { id: 'mehndi', name: 'Mehndi', note: 'Henna orange on olive', swatch: ['#3F4A1C', '#D9822B', '#F2F3E8'] },
-  { id: 'monsoon', name: 'Monsoon', note: 'Rain-cloud slate and fresh mint', swatch: ['#263C4A', '#5CC8A0', '#ECF2F5'] },
-  { id: 'jamun', name: 'Jamun & Brass', note: 'Ripe jamun purple with old brass', swatch: ['#3B1F4A', '#D6A85A', '#F3EDF6'] },
-  { id: 'copper', name: 'Copper Bazaar', note: 'Espresso and hammered copper', swatch: ['#2F2622', '#C8743B', '#F5F0EC'] },
-  { id: 'ajrak', name: 'Ajrak', note: 'Sindhi indigo and madder red', swatch: ['#23205C', '#B3282F', '#EEEDF8'] },
 ];
 
 export interface Wallpaper {
@@ -54,25 +47,18 @@ export interface Wallpaper {
   busy: 0 | 1 | 2;
 }
 
-/* Every wallpaper moves on its own and answers the pointer; the note says how. */
 export const WALLPAPERS: Wallpaper[] = [
-  { id: 'dots', name: 'Living dots', note: 'Dots swell under the pointer; click sends a ring', tone: 'light', busy: 1 },
-  { id: 'ripples', name: 'Rawal lake', note: 'Raindrops on still water — move or click to ripple it', tone: 'light', busy: 1 },
-  { id: 'silk', name: 'Resham silk', note: 'Silk ribbons that part around the pointer', tone: 'light', busy: 1 },
-  { id: 'shisha', name: 'Shisha mirror-work', note: 'Embroidered mirrors that catch your light', tone: 'light', busy: 2 },
-  { id: 'kashi', name: 'Kashi tiles', note: 'Glazed tiles that shine under the pointer', tone: 'light', busy: 2 },
-  { id: 'mehndi', name: 'Mehndi', note: 'Henna paisleys that glow where you point', tone: 'light', busy: 2 },
-  { id: 'girih', name: 'Girih', note: 'Mughal star tiling, lit like carved stone', tone: 'light', busy: 2 },
-  { id: 'jaali', name: 'Jaali', note: 'Carved lattice with light passing through', tone: 'light', busy: 2 },
-  { id: 'contour', name: 'Margalla contours', note: 'Survey lines that flow; the hill lights up', tone: 'light', busy: 1 },
-  { id: 'marble', name: 'Marble', note: 'Gold veins that glint; polished under the pointer', tone: 'light', busy: 1 },
-  { id: 'sweep', name: 'Signature sweep', note: 'The logo’s curves, swaying with the pointer', tone: 'light', busy: 1 },
-  { id: 'dunes', name: 'Thar dunes', note: 'Drifting sand ridges in depth', tone: 'light', busy: 1 },
-  { id: 'aurora', name: 'Aurora', note: 'Drifting colour that follows you', tone: 'light', busy: 1 },
-  { id: 'lanterns', name: 'Chiraghan lights', note: 'Lamps rising over the domes — click to release more', tone: 'dark', busy: 1 },
-  { id: 'night', name: 'Karakoram sky', note: 'Twinkling stars, shooting stars, peaks in depth', tone: 'dark', busy: 1 },
-  { id: 'velvet', name: 'Velvet', note: 'Deep colour with a light that follows you', tone: 'dark', busy: 0 },
-  { id: 'clean', name: 'Clean', note: 'Plain, with a soft light under the pointer', tone: 'light', busy: 0 },
+  { id: 'dots', name: 'Living dots', note: 'Dots that follow the pointer', tone: 'light', busy: 1 },
+  { id: 'girih', name: 'Girih', note: 'Mughal star tiling', tone: 'light', busy: 2 },
+  { id: 'jaali', name: 'Jaali', note: 'Carved lattice screen', tone: 'light', busy: 2 },
+  { id: 'contour', name: 'Margalla contours', note: 'Hills drawn as a survey map', tone: 'light', busy: 1 },
+  { id: 'marble', name: 'Marble', note: 'White stone with gold veins', tone: 'light', busy: 1 },
+  { id: 'sweep', name: 'Signature sweep', note: 'The curves of the logo', tone: 'light', busy: 1 },
+  { id: 'dunes', name: 'Thar dunes', note: 'Sand ridges at sunset', tone: 'light', busy: 1 },
+  { id: 'aurora', name: 'Aurora', note: 'Soft drifting colour', tone: 'light', busy: 1 },
+  { id: 'night', name: 'Karakoram sky', note: 'Stars over the peaks', tone: 'dark', busy: 1 },
+  { id: 'velvet', name: 'Velvet', note: 'Deep colour with a grain', tone: 'dark', busy: 0 },
+  { id: 'clean', name: 'Clean', note: 'Plain, nothing behind the icons', tone: 'light', busy: 0 },
 ];
 
 export interface IconPack {
@@ -87,13 +73,8 @@ export const ICON_PACKS: IconPack[] = [
   { id: 'jewel', name: 'Jewel', note: 'Polished tiles in the theme colour' },
   { id: 'glass', name: 'Glass', note: 'Frosted, the wallpaper shows through' },
   { id: 'pastel', name: 'Pastel', note: 'Soft colours on round tiles' },
-  { id: 'mono', name: 'Graphite ink', note: 'Grey ink that blooms into colour' },
-  { id: 'neon', name: 'Neon', note: 'Glowing colours that pulse' },
-  { id: 'zari', name: 'Zari gold', note: 'Gold thread that shimmers' },
-  { id: 'sheesh', name: 'Sheesh Mahal', note: 'Stained glass lit by the pointer' },
-  { id: 'blueprint', name: 'Blueprint', note: 'Architect’s drawing, traced on hover' },
-  { id: 'clay', name: 'Clay', note: 'Soft terracotta that squishes' },
-  { id: 'letterpress', name: 'Letterpress', note: 'Pressed into paper, with a wax-red seal' },
+  { id: 'mono', name: 'Graphite ink', note: 'Grey ink with one accent' },
+  { id: 'neon', name: 'Neon', note: 'Glowing colours on dark tiles' },
 ];
 
 /** Designer-matched combinations. */
@@ -115,13 +96,6 @@ export const PRESETS: Preset[] = [
   { id: 'shalimar', name: 'Shalimar garden', note: 'Rose lattice, pastel icons', theme: 'rose', wallpaper: 'jaali', icons: 'pastel' },
   { id: 'indus', name: 'Indus delta', note: 'Teal dunes behind glass', theme: 'indus', wallpaper: 'dunes', icons: 'glass' },
   { id: 'lapis', name: 'Lapis velvet', note: 'Deep blue with gold jewels', theme: 'lapis', wallpaper: 'velvet', icons: 'jewel' },
-  { id: 'sheesh', name: 'Sheesh Mahal', note: 'Mirror-work and stained glass', theme: 'jamun', wallpaper: 'shisha', icons: 'sheesh' },
-  { id: 'chiraghan', name: 'Chiraghan night', note: 'Rising lamps and gold thread', theme: 'copper', wallpaper: 'lanterns', icons: 'zari' },
-  { id: 'monsoon', name: 'Monsoon', note: 'Rain on the lake, glass icons', theme: 'monsoon', wallpaper: 'ripples', icons: 'glass' },
-  { id: 'mehndi', name: 'Mehndi raat', note: 'Henna paisleys and clay', theme: 'mehndi', wallpaper: 'mehndi', icons: 'clay' },
-  { id: 'architect', name: 'Architect’s desk', note: 'Survey lines and blueprints', theme: 'murree', wallpaper: 'contour', icons: 'blueprint' },
-  { id: 'hunza', name: 'Hunza spring', note: 'Apricot silk, pastel icons', theme: 'hunza', wallpaper: 'silk', icons: 'pastel' },
-  { id: 'ajrak', name: 'Ajrak', note: 'Kashi tiles in indigo and red', theme: 'ajrak', wallpaper: 'kashi', icons: 'jewel' },
 ];
 
 /* --------------------------------------------------------------------------------------
@@ -245,13 +219,8 @@ const pick = <T,>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 /** Icon packs that suit a wallpaper. */
 export function packsFor(w: Wallpaper) {
-  if (w.tone === 'dark') return ['classic', 'jewel', 'glass', 'neon', 'duotone', 'zari', 'sheesh', 'blueprint'];
-  return [
-    'classic', 'duotone', 'jewel', 'pastel', 'mono', 'zari', 'sheesh', 'blueprint', 'clay',
-    // Frosted glass needs something behind it; pressed paper needs a calm one.
-    ...(w.busy >= 1 ? ['glass'] : []),
-    ...(w.busy <= 1 ? ['letterpress'] : []),
-  ];
+  if (w.tone === 'dark') return ['classic', 'jewel', 'glass', 'neon', 'duotone'];
+  return ['classic', 'duotone', 'jewel', 'pastel', 'mono', ...(w.busy >= 1 ? ['glass'] : [])];
 }
 
 export function surpriseLook(prev: Look): Look {

@@ -513,7 +513,8 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   box-shadow: var(--tile-shadow); -webkit-backdrop-filter: var(--tile-blur); backdrop-filter: var(--tile-blur);
   transition: transform .2s var(--ease), box-shadow .2s;
 }
-.tile-ic svg { position: relative; z-index: 1; filter: var(--ic-filter); transition: filter .45s var(--ease); }
+.tile-ic svg { filter: var(--ic-glow); }
+.tile:hover .tile-ic { transform: translateY(-4px) scale(1.04); box-shadow: var(--tile-shadow), 0 16px 26px -12px rgba(17,24,39,.34); }
 .tile:active .tile-ic { transform: scale(.96); }
 .tile-l { font-size: 14px; font-weight: 500; color: var(--tile-label, var(--ink)); text-shadow: var(--tile-label-shadow, none); line-height: 1.25; }
 @media (max-width: 1180px) { .launch { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -1478,7 +1479,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   flex: 0 0 46px; display: grid; place-items: center; width: 46px; height: 46px;
   border-radius: min(var(--tile-radius), 14px); background: var(--tile-bg); border: var(--tile-border); box-shadow: 0 2px 6px rgba(0,0,0,.18);
 }
-.sc-ic svg { filter: var(--ic-filter); }
+.sc-ic svg { filter: var(--ic-glow); }
 .shortcut .sc-ic { border: 1.5px solid rgba(255,255,255,.6); }
 .sc-t { flex: 1 1 auto; min-width: 0; }
 .sc-t b { display: block; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
@@ -1669,7 +1670,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   --ic-blue: #2EBCFA; --ic-coral: #FC868B; --ic-red: #F9464C; --ic-navy: #1A2F70; --ic-paper: #fff;
   --tile-bg: #fff; --tile-border: 1px solid rgba(17,24,39,.07); --tile-radius: 10px;
   --tile-shadow: 0 1px 2px rgba(17,24,39,.06), 0 4px 10px -6px rgba(17,24,39,.18);
-  --tile-blur: none; --ic-filter: none;
+  --tile-blur: none; --ic-glow: none;
 }
 [data-icons="duotone"] {
   --ic-orange: var(--hl); --ic-amber: color-mix(in srgb, var(--hl) 50%, #fff); --ic-teal: var(--brand-2);
@@ -1677,7 +1678,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   --ic-coral: color-mix(in srgb, var(--hl) 66%, #fff); --ic-red: var(--hl-dk); --ic-navy: var(--brand-dk); --ic-paper: #fff;
   --tile-bg: #fff; --tile-border: 1px solid var(--brand-edge); --tile-radius: 20px;
   --tile-shadow: 0 1px 2px rgba(17,24,39,.05), 0 10px 20px -12px color-mix(in srgb, var(--brand) 55%, transparent);
-  --tile-blur: none; --ic-filter: none;
+  --tile-blur: none; --ic-glow: none;
 }
 [data-icons="jewel"] {
   --ic-orange: color-mix(in srgb, var(--hl) 78%, #fff); --ic-amber: #fff; --ic-teal: rgba(255,255,255,.88);
@@ -1686,7 +1687,7 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   --tile-bg: radial-gradient(120% 95% at 28% 12%, color-mix(in srgb, var(--brand) 62%, #fff) 0%, var(--brand) 46%, var(--brand-dk) 100%);
   --tile-border: 1px solid color-mix(in srgb, var(--hl) 60%, transparent); --tile-radius: 22px;
   --tile-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -8px 14px rgba(0,0,0,.22), 0 12px 22px -12px rgba(0,0,0,.6);
-  --tile-blur: none; --ic-filter: none;
+  --tile-blur: none; --ic-glow: none;
 }
 [data-icons="glass"] {
   --ic-orange: #F58220; --ic-amber: #FBB945; --ic-teal: #1AD3BB; --ic-deep: #005E7A; --ic-purple: #985184;
@@ -1694,34 +1695,32 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   --tile-bg: linear-gradient(150deg, rgba(255,255,255,.62), rgba(255,255,255,.22));
   --tile-border: 1px solid rgba(255,255,255,.75); --tile-radius: 22px;
   --tile-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 10px 26px -12px rgba(17,24,39,.4);
-  --tile-blur: blur(14px) saturate(1.6); --ic-filter: none;
+  --tile-blur: blur(14px) saturate(1.6); --ic-glow: none;
 }
 [data-icons="pastel"] {
   --ic-orange: #F4AE74; --ic-amber: #F9D58A; --ic-teal: #8EDBCC; --ic-deep: #739FB2; --ic-purple: #C79DC0;
   --ic-blue: #96D1EF; --ic-coral: #F6B1B6; --ic-red: #EE969D; --ic-navy: #8794C3; --ic-paper: #fff;
   --tile-bg: color-mix(in srgb, var(--brand-wash) 55%, #fff); --tile-border: 1px solid color-mix(in srgb, var(--brand-edge) 70%, transparent);
   --tile-radius: 50%; --tile-shadow: 0 8px 18px -12px rgba(17,24,39,.3);
-  --tile-blur: none; --ic-filter: none;
+  --tile-blur: none; --ic-glow: none;
 }
 [data-icons="mono"] {
   --ic-orange: #1F2937; --ic-amber: #A3A9B3; --ic-teal: #4B5563; --ic-deep: #111827; --ic-purple: #374151;
   --ic-blue: #6B7280; --ic-coral: #D1D5DB; --ic-red: var(--hl); --ic-navy: #1F2937; --ic-paper: #fff;
   --tile-bg: #fff; --tile-border: 1px solid #E3E5E9; --tile-radius: 14px;
   --tile-shadow: 0 1px 1px rgba(17,24,39,.04), 0 6px 14px -12px rgba(17,24,39,.3);
-  --tile-blur: none; --ic-filter: none;
+  --tile-blur: none; --ic-glow: none;
 }
 [data-icons="neon"] {
   --ic-orange: #FF9F43; --ic-amber: #FFE066; --ic-teal: #2EF2D0; --ic-deep: #3AA6FF; --ic-purple: #C77DFF;
   --ic-blue: #4CC9F0; --ic-coral: #FF7AA2; --ic-red: #FF4D6D; --ic-navy: #8B9BFF; --ic-paper: #0E1120;
   --tile-bg: linear-gradient(160deg, #1B2038 0%, #0B0E1A 100%); --tile-border: 1px solid rgba(140,160,255,.28); --tile-radius: 18px;
   --tile-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 12px 24px -12px rgba(0,0,0,.7);
-  --tile-blur: none; --ic-filter: drop-shadow(0 0 4px rgba(120,200,255,.55));
+  --tile-blur: none; --ic-glow: drop-shadow(0 0 4px rgba(120,200,255,.55));
 }
 
 /* ---- wallpapers ---- */
 .wallpaper { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-/* On Home the wallpaper is pinned to the screen: a backdrop that stays put while the icons scroll. */
-.o-home > .wallpaper { position: fixed; inset: var(--nav-h) 0 0 0; }
 .wp-svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 .wp-svg .s-a, .wp-svg.s-a { stroke: var(--wp-a); }
 .wp-svg .s-b { stroke: var(--wp-b); }
@@ -1740,14 +1739,14 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 }
 .wp-clean { background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%); }
 .wp-girih { background: radial-gradient(ellipse 80% 70% at 50% 40%, var(--paper) 0%, var(--brand-wash) 100%); }
-.wp-girih .wp-base .wp-svg, .wp-jaali .wp-base .wp-svg, .wp-contour .wp-base .wp-svg, .wp-mehndi .wp-base .wp-svg {
+.wp-girih .wp-svg, .wp-jaali .wp-svg, .wp-contour .wp-svg {
   /* Strong patterns frame the icons: full at the edges, faint where the icons and labels sit. */
   -webkit-mask-image: radial-gradient(ellipse 58% 62% at 50% 46%, rgba(0,0,0,.18) 0%, rgba(0,0,0,.45) 55%, #000 100%);
   mask-image: radial-gradient(ellipse 58% 62% at 50% 46%, rgba(0,0,0,.18) 0%, rgba(0,0,0,.45) 55%, #000 100%);
 }
-.wp-girih .wp-base .wp-svg { opacity: .55; }
+.wp-girih .wp-svg { opacity: .55; }
 .wp-jaali { background: linear-gradient(160deg, var(--paper) 0%, var(--brand-wash) 100%); }
-.wp-jaali .wp-base .wp-svg { opacity: .3; }
+.wp-jaali .wp-svg { opacity: .3; }
 .wp-contour { background: linear-gradient(170deg, var(--paper) 0%, var(--brand-wash) 100%); }
 .wp-marble { background: linear-gradient(135deg, #fff 0%, var(--paper) 50%, var(--paper-2) 100%); }
 .wp-sweep { background: linear-gradient(165deg, var(--paper) 35%, var(--brand-wash) 100%); }
@@ -1758,7 +1757,6 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .wp-blob.c-a { background: radial-gradient(closest-side, color-mix(in srgb, var(--wp-a) 52%, transparent), transparent); }
 .wp-blob.c-b { background: radial-gradient(closest-side, color-mix(in srgb, var(--wp-b) 48%, transparent), transparent); }
 .wp-blob.c-c { background: radial-gradient(closest-side, color-mix(in srgb, var(--wp-c) 60%, transparent), transparent); }
-.wp-blob.follow { left: var(--px, 50%); top: var(--py, 42%); width: 34%; translate: -50% -50%; animation: none; opacity: .5; }
 @keyframes wp-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(12%, 9%) scale(1.14); } }
 .wp-night { background: linear-gradient(180deg, #04060D 0%, color-mix(in srgb, var(--brand-dk) 70%, #04060D) 55%, color-mix(in srgb, var(--brand) 80%, #04060D) 100%); }
 .wp-glow { position: absolute; border-radius: 50%; filter: blur(42px); }
@@ -1777,8 +1775,6 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 
 /* A dark wallpaper turns the home screen's own words light. */
 [data-tone="dark"] { --tile-label: #fff; --tile-label-shadow: 0 1px 3px rgba(0,0,0,.65); }
-/* On a strong light pattern, labels sit on a soft halo of the page colour. */
-.o-home[data-busy="2"]:not([data-tone="dark"]) { --tile-label-shadow: 0 0 3px var(--paper), 0 0 8px var(--paper), 0 0 14px var(--paper); }
 .o-home[data-tone="dark"] .launch-bar .kicker { color: rgba(255,255,255,.82); }
 .o-home[data-tone="dark"] .launch-bar .btn:not(.pri) { background: rgba(255,255,255,.14); color: #fff; }
 .o-home[data-tone="dark"] .launch-bar .btn:not(.pri):hover { background: rgba(255,255,255,.24); }
@@ -1936,314 +1932,3 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .ap-sc-add .sc-pick:hover:not(:disabled) { border-color: var(--brand-2); background: var(--brand-wash); }
 .ap-sc-add .sc-pick:disabled { opacity: .45; cursor: default; }
 .ap-sc-add .sc-pick .sc-ic, .picker-grid .sc-pick .sc-ic { width: 34px; height: 34px; flex-basis: 34px; box-shadow: 0 1px 3px rgba(17,24,39,.15); }
-
-/* =====================================================================
-   MOTION — themes morph, icons tilt and breathe, wallpapers move
-   ===================================================================== */
-
-/* Registered colours can be animated, so switching theme cross-fades the whole app. */
-@property --brand { syntax: '<color>'; inherits: true; initial-value: #1F2456; }
-@property --brand-dk { syntax: '<color>'; inherits: true; initial-value: #151938; }
-@property --brand-2 { syntax: '<color>'; inherits: true; initial-value: #2B4C9B; }
-@property --brand-wash { syntax: '<color>'; inherits: true; initial-value: #EEF0F8; }
-@property --brand-edge { syntax: '<color>'; inherits: true; initial-value: #CDD2E6; }
-@property --hl { syntax: '<color>'; inherits: true; initial-value: #D7262E; }
-@property --hl-dk { syntax: '<color>'; inherits: true; initial-value: #A3161D; }
-@property --paper { syntax: '<color>'; inherits: true; initial-value: #F9FAFB; }
-@property --paper-2 { syntax: '<color>'; inherits: true; initial-value: #F1F2F4; }
-@property --wp-a { syntax: '<color>'; inherits: true; initial-value: #2B4C9B; }
-@property --wp-b { syntax: '<color>'; inherits: true; initial-value: #D7262E; }
-@property --wp-c { syntax: '<color>'; inherits: true; initial-value: #8FA3D9; }
-:root {
-  transition: --brand .8s ease, --brand-dk .8s ease, --brand-2 .8s ease, --brand-wash .8s ease, --brand-edge .8s ease,
-    --hl .8s ease, --hl-dk .8s ease, --paper .8s ease, --paper-2 .8s ease, --wp-a .8s ease, --wp-b .8s ease, --wp-c .8s ease;
-}
-
-/* ---- seven more themes ---- */
-[data-theme="hunza"] {
-  --brand: #3D2B56; --brand-dk: #291C3B; --brand-2: #6B4FA0; --brand-wash: #F1EDF7; --brand-edge: #D6CCE6;
-  --hl: #F4A259; --hl-dk: #C26F22; --paper: #FAF9FC; --paper-2: #F0EDF4;
-  --wp-a: #6B4FA0; --wp-b: #F4A259; --wp-c: #E8A6C0;
-}
-[data-theme="murree"] {
-  --brand: #1F3D36; --brand-dk: #142824; --brand-2: #2E6B5E; --brand-wash: #EAF2F0; --brand-edge: #C6DAD5;
-  --hl: #5DB3C6; --hl-dk: #2F7F92; --paper: #F8FAFA; --paper-2: #EDF2F1;
-  --wp-a: #2E6B5E; --wp-b: #7CC6D6; --wp-c: #A9C9B8;
-}
-[data-theme="mehndi"] {
-  --brand: #3F4A1C; --brand-dk: #2A3212; --brand-2: #66772D; --brand-wash: #F2F3E8; --brand-edge: #D7DCC0;
-  --hl: #D9822B; --hl-dk: #A55A12; --paper: #FAFAF5; --paper-2: #F0F1E6;
-  --wp-a: #66772D; --wp-b: #D9822B; --wp-c: #B8A35A;
-}
-[data-theme="monsoon"] {
-  --brand: #263C4A; --brand-dk: #182833; --brand-2: #3D6A80; --brand-wash: #ECF2F5; --brand-edge: #CBD9E0;
-  --hl: #4FBF95; --hl-dk: #2B8A66; --paper: #F7FAFB; --paper-2: #EBF0F3;
-  --wp-a: #3D6A80; --wp-b: #5CC8A0; --wp-c: #9DB7C7;
-}
-[data-theme="jamun"] {
-  --brand: #3B1F4A; --brand-dk: #261330; --brand-2: #6A3C82; --brand-wash: #F3EDF6; --brand-edge: #DCCBE4;
-  --hl: #D6A85A; --hl-dk: #9C7429; --paper: #FBF9FC; --paper-2: #F1ECF3;
-  --wp-a: #6A3C82; --wp-b: #D6A85A; --wp-c: #B48CC8;
-}
-[data-theme="copper"] {
-  --brand: #2F2622; --brand-dk: #1E1815; --brand-2: #6B4A3A; --brand-wash: #F5F0EC; --brand-edge: #E0D3C9;
-  --hl: #C8743B; --hl-dk: #94501F; --paper: #FBF9F7; --paper-2: #F2EDE8;
-  --wp-a: #8A5A40; --wp-b: #C8743B; --wp-c: #D9B79A;
-}
-[data-theme="ajrak"] {
-  --brand: #23205C; --brand-dk: #16143E; --brand-2: #3F3A9E; --brand-wash: #EEEDF8; --brand-edge: #CFCDE8;
-  --hl: #B3282F; --hl-dk: #861A20; --paper: #F9F9FC; --paper-2: #EFEEF5;
-  --wp-a: #3F3A9E; --wp-b: #B3282F; --wp-c: #8E8AD0;
-}
-
-/* A slow sheen runs along the navbar's highlight line. */
-.o-nav::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent) no-repeat;
-  background-size: 22% 100%; background-position: -40% 0; animation: nav-sheen 9s ease-in-out infinite;
-}
-@keyframes nav-sheen { 0%, 55% { background-position: -40% 0; } 100% { background-position: 140% 0; } }
-
-/* ---- icon tiles: tilt and glare follow the pointer; each pack adds its own motion ----
-   The pointer position inside a tile arrives as --tx/--ty (0–1). Packs only set variables:
-   --tile-idle    ambient animation of the tile          --tile-glint  a light sweep across it
-   --tile-hover-anim  what hovering plays                 --tile-glare  strength of the glare
-   --ic-filter / --ic-hover-filter   the artwork's filter at rest / on hover
-   --ic-line, --ic-line-w, --ic-fill-op   outline drawing (stained glass, blueprint)
-   --ic-hover-anim  an animation for each shape on hover (blueprint traces itself)     */
-.tile-ic {
-  position: relative; overflow: hidden;
-  animation: var(--tile-idle, none); animation-delay: calc(var(--i, 0) * -0.53s);
-}
-.tile-ic::before, .tile-ic::after {
-  content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; pointer-events: none;
-}
-.tile-ic::before {
-  background: linear-gradient(115deg, transparent 38%, rgba(255,255,255,var(--glint-a, .5)) 50%, transparent 62%) no-repeat;
-  background-size: 260% 100%; background-position: 160% 0;
-  animation: var(--tile-glint, none); animation-delay: calc(var(--i, 0) * -0.71s);
-}
-.tile-ic::after {
-  background: radial-gradient(circle at calc(var(--tx, .5) * 100%) calc(var(--ty, .3) * 100%), rgba(255,255,255,var(--tile-glare, .5)), transparent 58%);
-  opacity: 0; transition: opacity .3s;
-}
-.tile:hover .tile-ic {
-  transform: perspective(320px) translateY(-4px) rotateX(calc((.5 - var(--ty, .5)) * 18deg)) rotateY(calc((var(--tx, .5) - .5) * 18deg)) scale(1.05);
-  box-shadow: var(--tile-hover-shadow, var(--tile-shadow)), 0 16px 26px -12px rgba(17,24,39,.34);
-}
-:is(.tile:hover, .ap-pack:hover) .tile-ic::after { opacity: 1; }
-:is(.tile:hover, .ap-pack:hover) .tile-ic svg { filter: var(--ic-hover-filter, var(--ic-filter)); }
-:is(.tile:hover, .ap-pack:hover) .tile-ic { animation: var(--tile-hover-anim, var(--tile-idle, none)); }
-:is(.tile:hover, .ap-pack:hover) .tile-ic svg :is(path, rect, circle, ellipse, polygon) { animation: var(--ic-hover-anim, none); }
-:is(.tile-ic, .sc-ic) svg :is(path, rect, circle, ellipse, polygon):not([fill="none"]) {
-  stroke: var(--ic-line, none); stroke-width: var(--ic-line-w, 0); fill-opacity: var(--ic-fill-op, 1); stroke-linejoin: round;
-}
-
-@keyframes ic-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -2.5px; } }
-@keyframes ic-halo {
-  0%, 100% { box-shadow: var(--tile-shadow), 0 0 0 0 transparent; }
-  50% { box-shadow: var(--tile-shadow), 0 0 0 4px color-mix(in srgb, var(--hl) 30%, transparent); }
-}
-@keyframes ic-glint { 0%, 62% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
-@keyframes ic-neon {
-  0%, 100% { box-shadow: var(--tile-shadow), 0 0 0 0 rgba(90,170,255,0); }
-  50% { box-shadow: var(--tile-shadow), 0 0 18px -2px rgba(90,170,255,.55); }
-}
-@keyframes ic-bounce { 0% { scale: 1; } 35% { scale: 1.14 .9; } 65% { scale: .95 1.06; } 100% { scale: 1; } }
-@keyframes ic-squish { 0% { scale: 1; } 30% { scale: 1.12 .86; } 60% { scale: .94 1.07; } 100% { scale: 1; } }
-@keyframes ic-draw { from { stroke-dasharray: 180; stroke-dashoffset: 180; } to { stroke-dasharray: 180; stroke-dashoffset: 0; } }
-@keyframes ic-grid { to { background-position: 8px 8px, 8px 8px, 0 0; } }
-
-/* What each of the first seven packs does. */
-:root, [data-icons="classic"] { --tile-idle: ic-float 6s ease-in-out infinite; --tile-glare: .55; }
-[data-icons="duotone"] {
-  --tile-idle: ic-halo 5.5s ease-in-out infinite; --ic-hover-filter: saturate(1.3);
-  --tile-hover-shadow: 0 0 0 2px color-mix(in srgb, var(--hl) 60%, transparent), 0 10px 20px -10px color-mix(in srgb, var(--brand) 60%, transparent);
-}
-[data-icons="jewel"] { --tile-idle: none; --tile-glint: ic-glint 6s ease-in-out infinite; --glint-a: .55; --ic-hover-filter: brightness(1.15); --tile-glare: .4; }
-[data-icons="glass"] { --tile-idle: ic-float 7s ease-in-out infinite; --tile-glint: ic-glint 9s ease-in-out infinite; --glint-a: .75; --tile-glare: .9; }
-[data-icons="pastel"] { --tile-idle: ic-float 7s ease-in-out infinite; --tile-hover-anim: ic-bounce .7s cubic-bezier(.3,1.6,.5,1) both; }
-[data-icons="mono"] {
-  /* Grey ink at rest; the colour comes through on hover. */
-  --ic-orange: #F58220; --ic-amber: #FBB945; --ic-teal: #1AD3BB; --ic-deep: #005E7A; --ic-purple: #985184;
-  --ic-blue: #2EBCFA; --ic-coral: #FC868B; --ic-red: #F9464C; --ic-navy: #1A2F70;
-  --ic-filter: grayscale(1) contrast(1.25) brightness(.78); --ic-hover-filter: grayscale(0) saturate(1.1);
-  --tile-idle: ic-float 8s ease-in-out infinite;
-}
-[data-icons="neon"] {
-  --tile-idle: ic-neon 3.4s ease-in-out infinite;
-  --ic-hover-filter: drop-shadow(0 0 7px rgba(140,220,255,.9)) brightness(1.15); --tile-glare: .25;
-}
-
-/* ---- five more packs ---- */
-[data-icons="zari"] {
-  /* Gold thread: gradients from <IconDefs>, shimmering on their own. */
-  --ic-orange: url(#zari-gold); --ic-amber: url(#zari-pale); --ic-teal: url(#zari-gold); --ic-deep: url(#zari-rose);
-  --ic-purple: url(#zari-rose); --ic-blue: url(#zari-pale); --ic-coral: url(#zari-rose); --ic-red: url(#zari-gold); --ic-navy: url(#zari-gold);
-  --ic-paper: var(--brand-dk);
-  --tile-bg: radial-gradient(120% 95% at 30% 15%, color-mix(in srgb, var(--brand) 70%, #000) 0%, color-mix(in srgb, var(--brand-dk) 70%, #000) 60%, #08080C 100%);
-  --tile-border: 1px solid rgba(222,186,104,.6); --tile-radius: 16px;
-  --tile-shadow: inset 0 0 0 3px rgba(222,186,104,.12), 0 12px 22px -12px rgba(0,0,0,.6);
-  --tile-blur: none; --ic-filter: drop-shadow(0 1px 0 rgba(0,0,0,.5)); --ic-hover-filter: drop-shadow(0 0 5px rgba(255,214,120,.6)) brightness(1.15);
-  --tile-idle: none; --tile-glint: ic-glint 7s ease-in-out infinite; --glint-a: .35; --tile-glare: .3;
-  --ic-line: none; --ic-line-w: 0; --ic-fill-op: 1;
-}
-[data-icons="sheesh"] {
-  /* Stained glass: jewel colours, dark leading, lit from where the pointer is. */
-  --ic-orange: #E8772E; --ic-amber: #F2C14E; --ic-teal: #1FA187; --ic-deep: #1D4E89; --ic-purple: #7B2D8E;
-  --ic-blue: #2E86DE; --ic-coral: #E9546B; --ic-red: #C0392B; --ic-navy: #22306E; --ic-paper: #FFF7E0;
-  --ic-line: #1B1B24; --ic-line-w: 1.6px; --ic-fill-op: .9;
-  --tile-bg: radial-gradient(circle at calc(var(--tx, .35) * 100%) calc(var(--ty, .25) * 100%), #FFFEF6 0%, #F7ECCF 45%, #E2CFA6 100%);
-  --tile-border: 2px solid #2A2A33; --tile-radius: 18px 18px 8px 8px;
-  --tile-shadow: inset 0 0 0 2px rgba(255,255,255,.5), 0 10px 20px -12px rgba(17,24,39,.45);
-  --tile-blur: none; --ic-filter: none; --ic-hover-filter: saturate(1.35) brightness(1.06);
-  --tile-idle: none; --tile-glint: ic-glint 10s ease-in-out infinite; --glint-a: .6; --tile-glare: .7;
-}
-[data-icons="blueprint"] {
-  /* An architect's drawing: white outlines on blue grid paper; traced in on hover. */
-  --ic-orange: #FFFFFF; --ic-amber: #CFE3FF; --ic-teal: #A6E3FF; --ic-deep: #FFFFFF; --ic-purple: #DDE8FF;
-  --ic-blue: #A6D8FF; --ic-coral: #FFFFFF; --ic-red: #FFD27A; --ic-navy: #CFE3FF; --ic-paper: #E9F1FF;
-  --ic-line: #EAF2FF; --ic-line-w: 1.25px; --ic-fill-op: .12;
-  --tile-bg:
-    linear-gradient(rgba(255,255,255,.09) 1px, transparent 1px) 0 0 / 8px 8px,
-    linear-gradient(90deg, rgba(255,255,255,.09) 1px, transparent 1px) 0 0 / 8px 8px,
-    linear-gradient(160deg, #2156AB 0%, #133673 100%);
-  --tile-border: 1px solid rgba(166,216,255,.5); --tile-radius: 6px;
-  --tile-shadow: 0 10px 20px -12px rgba(10,30,70,.55);
-  --tile-blur: none; --ic-filter: none; --ic-hover-filter: drop-shadow(0 0 3px rgba(166,216,255,.8));
-  --tile-idle: ic-grid 6s linear infinite; --ic-hover-anim: ic-draw 1.1s ease both; --tile-glare: .25;
-}
-[data-icons="clay"] {
-  --ic-orange: #D9774B; --ic-amber: #E7B75F; --ic-teal: #6FA79A; --ic-deep: #3E6A74; --ic-purple: #9C6B8E;
-  --ic-blue: #7FB3C9; --ic-coral: #E79A86; --ic-red: #C65A46; --ic-navy: #4C5A7A; --ic-paper: #FFF6EE;
-  --tile-bg: linear-gradient(145deg, #FFF4EB 0%, #F1DBCB 100%); --tile-border: 0 solid transparent; --tile-radius: 24px;
-  --tile-shadow: inset 4px 4px 8px rgba(255,255,255,.85), inset -5px -6px 10px rgba(166,110,82,.22), 0 12px 20px -12px rgba(140,80,50,.45);
-  --tile-blur: none; --ic-filter: drop-shadow(0 2px 1.5px rgba(120,60,30,.28));
-  --tile-idle: ic-float 6.5s ease-in-out infinite; --tile-hover-anim: ic-squish .55s cubic-bezier(.3,1.5,.5,1) both; --tile-glare: .45;
-  --ic-line: none; --ic-line-w: 0; --ic-fill-op: 1;
-}
-[data-icons="letterpress"] {
-  /* Pressed into paper: shapes in tints of the page, one wax-red detail. */
-  --ic-orange: color-mix(in srgb, var(--brand) 38%, var(--paper)); --ic-amber: color-mix(in srgb, var(--brand) 20%, var(--paper));
-  --ic-teal: color-mix(in srgb, var(--brand) 30%, var(--paper)); --ic-deep: color-mix(in srgb, var(--brand) 55%, var(--paper));
-  --ic-purple: color-mix(in srgb, var(--brand) 44%, var(--paper)); --ic-blue: color-mix(in srgb, var(--brand) 25%, var(--paper));
-  --ic-coral: color-mix(in srgb, var(--brand) 28%, var(--paper)); --ic-red: var(--hl); --ic-navy: color-mix(in srgb, var(--brand) 60%, var(--paper));
-  --ic-paper: var(--paper);
-  --tile-bg: var(--paper-2); --tile-border: 0 solid transparent; --tile-radius: 16px;
-  --tile-shadow: 6px 6px 12px rgba(17,24,39,.13), -6px -6px 12px rgba(255,255,255,.95);
-  --tile-hover-shadow: inset 4px 4px 8px rgba(17,24,39,.14), inset -4px -4px 8px rgba(255,255,255,.9);
-  --tile-blur: none; --ic-filter: drop-shadow(1px 1px 0 rgba(255,255,255,.95)) drop-shadow(-1px -1px .6px rgba(0,0,0,.22));
-  --tile-idle: ic-float 9s ease-in-out infinite; --tile-glare: .3;
-  --ic-line: none; --ic-line-w: 0; --ic-fill-op: 1;
-}
-/* Every pack states every effect, including "none", so a preview of one pack shown inside a
-   page set to another never inherits the wrong motion. Each list names the packs that do NOT
-   set that effect in their own block above. (Not :root — the page root carries the active
-   pack's own attribute, and these rules come later.) */
-[data-icons="classic"], [data-icons="duotone"], [data-icons="jewel"], [data-icons="glass"],
-[data-icons="pastel"], [data-icons="mono"], [data-icons="neon"] { --ic-line: none; --ic-line-w: 0; --ic-fill-op: 1; }
-[data-icons="classic"], [data-icons="duotone"], [data-icons="pastel"], [data-icons="mono"], [data-icons="neon"],
-[data-icons="blueprint"], [data-icons="clay"], [data-icons="letterpress"] { --tile-glint: none; }
-[data-icons="classic"], [data-icons="duotone"], [data-icons="jewel"], [data-icons="glass"], [data-icons="mono"],
-[data-icons="neon"], [data-icons="zari"], [data-icons="sheesh"], [data-icons="blueprint"], [data-icons="letterpress"] { --tile-hover-anim: initial; }
-[data-icons="classic"], [data-icons="jewel"], [data-icons="glass"], [data-icons="pastel"], [data-icons="mono"],
-[data-icons="neon"], [data-icons="zari"], [data-icons="sheesh"], [data-icons="blueprint"], [data-icons="clay"] { --tile-hover-shadow: initial; }
-[data-icons="classic"], [data-icons="duotone"], [data-icons="jewel"], [data-icons="glass"], [data-icons="pastel"],
-[data-icons="mono"], [data-icons="neon"], [data-icons="zari"], [data-icons="sheesh"], [data-icons="clay"], [data-icons="letterpress"] { --ic-hover-anim: initial; }
-[data-icons="classic"], [data-icons="glass"], [data-icons="pastel"], [data-icons="clay"], [data-icons="letterpress"] { --ic-hover-filter: initial; }
-[data-icons="duotone"], [data-icons="pastel"], [data-icons="mono"] { --tile-glare: .5; }
-
-/* ---- wallpapers in motion ---- */
-.wp-layer { position: absolute; inset: 0; }
-.wp-svg .s-hl { stroke: var(--hl); }
-.wp-svg .f-hl { fill: var(--hl); }
-/* The lit copy of a pattern shows in a soft circle around the pointer... */
-.wp-spot {
-  -webkit-mask-image: radial-gradient(circle 240px at var(--px, 50%) var(--py, 42%), #000 0%, rgba(0,0,0,.55) 40%, transparent 100%);
-  mask-image: radial-gradient(circle 240px at var(--px, 50%) var(--py, 42%), #000 0%, rgba(0,0,0,.55) 40%, transparent 100%);
-  opacity: .85;
-}
-/* ...and in a band of light that sweeps across now and then. */
-.wp-sheen {
-  -webkit-mask-image: linear-gradient(115deg, transparent 42%, #000 50%, transparent 58%);
-  mask-image: linear-gradient(115deg, transparent 42%, #000 50%, transparent 58%);
-  -webkit-mask-size: 300% 100%; mask-size: 300% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  opacity: .45; animation: wp-sheen 11s ease-in-out infinite;
-}
-@keyframes wp-sheen { 0%, 30% { -webkit-mask-position: 120% 0; mask-position: 120% 0; } 100% { -webkit-mask-position: -20% 0; mask-position: -20% 0; } }
-.wp-contour .wp-spot { opacity: 1; }
-.wp-contour .flow { stroke-dasharray: 5 7; animation: wp-flow 16s linear infinite; }
-@keyframes wp-flow { to { stroke-dashoffset: -120; } }
-
-.wp-marble .glint { stroke: #FFF6D5; stroke-dasharray: 70 1800; stroke-linecap: round; opacity: .9; animation: wp-glint 8s ease-in-out infinite; }
-@keyframes wp-glint { from { stroke-dashoffset: 1870; } to { stroke-dashoffset: 0; } }
-.wp-polish {
-  position: absolute; inset: 0; mix-blend-mode: soft-light;
-  background: radial-gradient(circle 300px at var(--px, 50%) var(--py, 40%), rgba(255,255,255,.9), transparent 70%);
-}
-
-.wp-sweep .sway { transform-box: fill-box; transform-origin: 100% 0; animation: wp-sway 14s ease-in-out infinite alternate; }
-.wp-sweep .sway.s2 { animation-duration: 19s; animation-delay: -6s; }
-.wp-sweep .sway.s3 { transform-origin: 0 100%; animation-duration: 23s; animation-delay: -9s; }
-@keyframes wp-sway { from { transform: rotate(-1.4deg); } to { transform: rotate(1.6deg) translateY(-10px); } }
-
-.wp-dunes .drift { animation: wp-dune 44s ease-in-out infinite alternate; }
-.wp-dunes .drift.d1 { animation-duration: 36s; animation-delay: -10s; }
-.wp-dunes .drift.d2 { animation-duration: 29s; animation-delay: -4s; }
-.wp-dunes .drift.d3 { animation-duration: 23s; animation-delay: -15s; }
-@keyframes wp-dune { from { transform: translateX(-70px); } to { transform: translateX(70px); } }
-.wp-dunes .sun { transform-box: fill-box; transform-origin: center; animation: wp-pulse 9s ease-in-out infinite; }
-@keyframes wp-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-
-.shoot {
-  position: absolute; top: 10%; left: -12%; width: 170px; height: 1.6px; border-radius: 2px; opacity: 0;
-  background: linear-gradient(90deg, transparent, #fff); transform: rotate(18deg); animation: wp-shoot 12s linear infinite;
-}
-.shoot.s2 { top: 26%; left: 22%; width: 120px; animation-duration: 19s; animation-delay: -7s; }
-@keyframes wp-shoot { 0% { translate: 0 0; opacity: 0; } 1.5% { opacity: 1; } 7% { translate: 60vw 20vw; opacity: 0; } 100% { translate: 60vw 20vw; opacity: 0; } }
-
-.wp-light {
-  position: absolute; inset: 0; mix-blend-mode: screen; animation: wp-breathe 7s ease-in-out infinite;
-  background: radial-gradient(circle 380px at var(--px, 70%) var(--py, 30%), color-mix(in srgb, var(--hl) 38%, transparent), transparent 70%);
-}
-.wp-clean .wp-light {
-  mix-blend-mode: multiply;
-  background: radial-gradient(circle 440px at var(--px, 50%) var(--py, 40%), color-mix(in srgb, var(--brand-wash) 75%, var(--wp-c) 25%), transparent 72%);
-}
-@keyframes wp-breathe { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
-
-.wp-canvas { position: absolute; inset: 0; }
-.wp-canvas canvas { display: block; width: 100%; height: 100%; }
-.wp-ripples { background: linear-gradient(180deg, var(--paper) 0%, color-mix(in srgb, var(--brand-wash) 70%, var(--wp-c) 30%) 100%); }
-.wp-silk { background: linear-gradient(160deg, var(--paper) 0%, var(--brand-wash) 100%); }
-.wp-shisha {
-  background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,.02) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, rgba(0,0,0,.02) 0 1px, transparent 1px 4px),
-    linear-gradient(160deg, var(--brand-wash) 0%, color-mix(in srgb, var(--brand-wash) 80%, var(--wp-c) 20%) 100%);
-}
-.wp-kashi { background: var(--paper-2); }
-.wp-kashi .wp-canvas { opacity: .78; }
-.wp-mehndi { background: radial-gradient(ellipse 80% 70% at 50% 40%, var(--paper) 0%, color-mix(in srgb, var(--brand-wash) 88%, var(--hl) 12%) 100%); }
-.wp-mehndi .wp-base .wp-svg { opacity: .55; }
-.wp-lanterns {
-  background:
-    radial-gradient(ellipse 90% 55% at 50% 100%, color-mix(in srgb, var(--hl) 24%, transparent), transparent 70%),
-    linear-gradient(180deg, #05060C 0%, color-mix(in srgb, var(--brand-dk) 75%, #05060C) 60%, color-mix(in srgb, var(--brand) 60%, #05060C) 100%);
-}
-
-/* A preview card shows the wallpaper at rest; hovering it brings it to life. */
-.wallpaper.still :is(.wp-spot, .wp-sheen, .wp-polish, .follow, .shoot) { display: none; }
-/* A small card has no icons to keep clear, so it shows the pattern at full strength. */
-.wallpaper.still .wp-base .wp-svg { -webkit-mask-image: none; mask-image: none; }
-.wp-contour.still .wp-base .wp-svg path { stroke-width: 3; }
-
-@media (prefers-reduced-motion: reduce) {
-  :root { transition: none; }
-  .o-nav::after, .tile-ic, .tile-ic::before, .tile-ic svg *, .wallpaper * { animation: none !important; }
-  .tile:hover .tile-ic { transform: translateY(-3px); }
-}
-
-/* Theme cards come alive on hover. */
-.ap-swatch i { transition: flex-grow .45s var(--ease); }
-.ap-theme:hover .ap-swatch i:nth-child(2) { flex-grow: 2.4; }

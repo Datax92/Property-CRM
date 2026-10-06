@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAppearance } from '../../context/AppearanceContext';
 import { AppIcon } from '../AppIcons';
@@ -32,9 +32,6 @@ export function AppearancePage() {
   const { look, update, surprise, undo, canUndo, reset } = useAppearance();
   const { denied, toast, goto } = useApp();
   const wall = findWallpaper(look.wallpaper);
-  // The card under the pointer plays its wallpaper; the rest stay still.
-  const [hot, setHot] = useState<string | null>(null);
-  const hover = (key: string) => ({ onMouseEnter: () => setHot(key), onMouseLeave: () => setHot((h) => (h === key ? null : h)) });
   const themeKey = look.theme + (look.uniqueName || '');
 
   const chosen = look.shortcuts
@@ -145,7 +142,7 @@ export function AppearancePage() {
       {/* READY-MADE LOOKS */}
       <section className="ap-sec">
         <h3>Ready-made looks</h3>
-        <p className="ap-sub">Combinations put together by hand. Point at one to see it move; one click sets all three.</p>
+        <p className="ap-sub">Combinations put together by hand. One click sets all three.</p>
         <div className="ap-grid looks">
           {PRESETS.map((p) => (
             <button
@@ -154,10 +151,9 @@ export function AppearancePage() {
               className={`ap-card ap-look ${presetOn(p) ? 'on' : ''}`}
               aria-pressed={presetOn(p)}
               onClick={() => update({ theme: p.theme, wallpaper: p.wallpaper, icons: p.icons })}
-              {...hover('look-' + p.id)}
             >
               <span className="ap-look-art" data-theme={p.theme} data-icons={p.icons} data-tone={findWallpaper(p.wallpaper).tone}>
-                <Wallpaper id={p.wallpaper} seed={11} still={hot !== 'look-' + p.id} />
+                <Wallpaper id={p.wallpaper} seed={11} still />
                 <span className="ap-look-nav" />
                 <MiniTiles count={4} />
               </span>
@@ -213,7 +209,7 @@ export function AppearancePage() {
       {/* WALLPAPERS */}
       <section className="ap-sec">
         <h3>Wallpaper</h3>
-        <p className="ap-sub">Behind the icons on Home, drawn in your theme’s colours. Each one moves and answers the pointer — point at a card to try it.</p>
+        <p className="ap-sub">Behind the icons on Home, drawn in your theme’s colours.</p>
         <div className="ap-grid walls">
           {WALLPAPERS.map((w) => (
             <button
@@ -222,10 +218,9 @@ export function AppearancePage() {
               className={`ap-card ap-wall ${look.wallpaper === w.id ? 'on' : ''}`}
               aria-pressed={look.wallpaper === w.id}
               onClick={() => update({ wallpaper: w.id })}
-              {...hover('wall-' + w.id)}
             >
               <span className="ap-wall-art">
-                <Wallpaper id={w.id} seed={look.seed} still={hot !== 'wall-' + w.id} themeKey={look.theme + (look.uniqueName || '')} />
+                <Wallpaper id={w.id} seed={look.seed} still />
               </span>
               <span className="ap-card-t">
                 <b>
@@ -242,7 +237,7 @@ export function AppearancePage() {
       {/* ICON PACKS */}
       <section className="ap-sec">
         <h3>Icon pack</h3>
-        <p className="ap-sub">The same icons, finished differently. Point at a pack to see how it moves.</p>
+        <p className="ap-sub">The same icons, finished differently. Shown on your wallpaper.</p>
         <div className="ap-grid packs">
           {ICON_PACKS.map((p) => (
             <button
