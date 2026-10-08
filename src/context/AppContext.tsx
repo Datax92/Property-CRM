@@ -55,7 +55,6 @@ interface AppContextType {
   closeMenu: () => void;
   openModal: (id: string, preset?: Record<string, any>) => void;
   openEdit: (coll: string, id: string) => void;
-  openMirror: (invoiceId: string) => void;
   closeModal: () => void;
   openAttachments: (coll: string, id: string) => void;
   closeAttachments: () => void;
@@ -462,9 +461,9 @@ export const FORMS_DEF: Record<string, any> = {
     fields: invoiceFields('sale'),
     calc: invoiceCalc,
     validate: invoiceValidate,
-    submit: (v: any, mirrorOf?: string) => {
-      const inv = M.addInvoice({ ...v, type: 'sale', mirrorOf });
-      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorSaleInvoices' : 'sales/saleInvoices' };
+    submit: (v: any) => {
+      const inv = M.addInvoice({ ...v, type: 'sale' });
+      return { id: inv.id, msg: 'Sale invoice ' + inv.id + ' created', go: 'sales/saleInvoices' };
     },
   },
   proformaInvoice: {
@@ -476,9 +475,9 @@ export const FORMS_DEF: Record<string, any> = {
     fields: invoiceFields('proforma'),
     calc: invoiceCalc,
     validate: invoiceValidate,
-    submit: (v: any, mirrorOf?: string) => {
-      const inv = M.addInvoice({ ...v, type: 'proforma', mirrorOf });
-      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/proformaInvoices' };
+    submit: (v: any) => {
+      const inv = M.addInvoice({ ...v, type: 'proforma' });
+      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + ' created', go: 'sales/proformaInvoices' };
     },
   },
   purchaseInvoice: {
@@ -490,9 +489,9 @@ export const FORMS_DEF: Record<string, any> = {
     fields: invoiceFields('purchase'),
     calc: invoiceCalc,
     validate: invoiceValidate,
-    submit: (v: any, mirrorOf?: string) => {
-      const inv = M.addInvoice({ ...v, type: 'purchase', mirrorOf });
-      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorPurchaseInvoices' : 'sales/purchaseInvoices' };
+    submit: (v: any) => {
+      const inv = M.addInvoice({ ...v, type: 'purchase' });
+      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + ' created', go: 'sales/purchaseInvoices' };
     },
   },
   task: {
@@ -994,15 +993,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMenu(null);
   }, []);
 
-  /** Start a new invoice as a copy of an existing one; nothing is saved until the form is. */
-  const openMirror = useCallback((invoiceId: string) => {
-    const rec = M.DATA.invoices.find((x: any) => x.id === invoiceId);
-    const id = rec ? editFormFor('invoices', rec) : null;
-    if (!id) return;
-    setModal({ id, values: { ...editValues(id, rec), attachments: [] }, errors: {}, mirrorOf: invoiceId });
-    setMenu(null);
-  }, []);
-
   const closeModal = useCallback(() => setModal(null), []);
 
   const openAttachments = useCallback((coll: string, id: string) => {
@@ -1031,7 +1021,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const submitModal = useCallback(() => {
     if (!modal) return;
-    const { id, values, editId, mirrorOf } = modal;
+    const { id, values, editId } = modal;
     const F = FORMS_DEF[id];
     if (!F) return;
 
@@ -1089,7 +1079,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toast(editId + ' updated');
         return;
       }
-      const res = F.submit(values, mirrorOf);
+      const res = F.submit(values);
       const created = LEDGERS.flatMap((key) => (M.DATA as any)[key].slice(before[key]).map((x: any) => x.id));
       setFresh((prev) => [res.id, ...created, ...prev].slice(0, 24));
       setModal(null);
@@ -1299,7 +1289,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         closeMenu,
         openModal,
         openEdit,
-        openMirror,
         closeModal,
         openAttachments,
         closeAttachments,

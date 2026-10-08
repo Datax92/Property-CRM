@@ -96,7 +96,6 @@ const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
 export function TradingPage() {
   const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet, toast, refreshData } = useApp();
   const [printing, setPrinting] = useState<CostSheet | null>(null);
-  const [mirrorPick, setMirrorPick] = useState('');
 
   const resetMirror = (cs: CostSheet) => {
     if (!ledgersReady() || ledgerError()) {
@@ -112,8 +111,13 @@ export function TradingPage() {
   // MIRROR COST SHEETS — editable copies, kept apart from the real deals
   // =========================================================================
   if (tab === 'mirrors') {
-    const rows: CostSheet[] = M.mirrorSheets();
-    const deals: CostSheet[] = M.dealSheets();
+    // Listed in the same order as the deals in the register.
+    const order = new Map(M.dealSheets().map((d: CostSheet, i: number) => [openKey(d), i]));
+    const place = (m: CostSheet) => {
+      const s: any = M.realSheet(m.mirrorOf);
+      return order.get(s ? s.id || s.propertyId : m.mirrorOf) ?? order.size;
+    };
+    const rows: CostSheet[] = M.mirrorSheets().sort((a: CostSheet, b: CostSheet) => place(a) - place(b));
     const sum = (fn: (cs: CostSheet) => number) => rows.reduce((a: number, cs: CostSheet) => a + (fn(cs) || 0), 0);
 
     const summaryPairs: [string, string][] = [
@@ -185,44 +189,14 @@ export function TradingPage() {
       <PageShell
         title="Mirror cost sheets"
         u="نقل لاگت شیٹ"
-        p="Copies that follow their original: only the lines you change on a mirror differ from it. A mirror never changes a property or the trading figures."
-        acts={
-          <>
-            <select
-              className="fldsel"
-              aria-label="Cost sheet to copy"
-              style={{ minWidth: '240px', height: '30px', padding: '2px 8px' }}
-              value={mirrorPick}
-              onChange={(e) => setMirrorPick(e.target.value)}
-            >
-              <option value="">Pick a cost sheet to copy…</option>
-              {deals.map((s) => (
-                <option key={openKey(s)} value={openKey(s)}>
-                  {openKey(s)} — {s.name} ({s.project})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn pri"
-              disabled={!mirrorPick}
-              onClick={() => {
-                openCostSheet('mirror:' + mirrorPick);
-                setMirrorPick('');
-              }}
-              title="Make an editable copy of the picked cost sheet, saved as a new sheet"
-            >
-              <Icon name="copy" /> Mirror cost sheet
-            </button>
-          </>
-        }
+        p="Every deal's cost sheet has a mirror that follows it: only the lines you change on a mirror differ. A mirror never changes a property or the trading figures."
       >
         <SummaryKpis pairs={summaryPairs} />
         {rows.length === 0 ? (
           <div className="empty">
             <Icon name="empty" />
             <h3>No mirror cost sheets yet</h3>
-            <p>Pick a cost sheet above and press “Mirror cost sheet” to make an editable copy. The original is not touched.</p>
+            <p>Every deal gets a mirror cost sheet automatically.</p>
           </div>
         ) : (
           <div style={{ marginTop: '14px' }}>
@@ -536,12 +510,6 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   const initialSheet = (): CostSheet => {
     const key = activeCostSheetId || '';
     if (key === 'new') return blankDeal();
-    if (key.startsWith('mirror:')) {
-      const src = findSheet(key.slice(7));
-      if (!src) return blankDeal();
-      const mirrorOf = src.fromRecords || !src.id ? src.propertyId : src.id;
-      return M.calculateCostSheet({ ...src, id: '', fromRecords: false, attachments: [], mirrorOf, mirrorEdits: [] });
-    }
     if (key) {
       const found = findSheet(key);
       if (found) return found.fromRecords ? { ...found, id: '' } : found;

@@ -12,10 +12,9 @@ import { InvoiceReceiptModal, PrintInvoiceNow } from '../InvoiceReceiptModal';
 import type { Invoice } from '../../lib/types';
 
 export function SalesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet, toast, refreshData } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet, toast, refreshData } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
-  const [mirrorPick, setMirrorPick] = useState('');
   const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
@@ -162,10 +161,10 @@ export function SalesPage() {
   // Mirror sale invoices and mirror purchase invoices: each kind on a tab of its own.
   if (tab === 'mirrorSaleInvoices' || tab === 'mirrorPurchaseInvoices') {
     const type = tab === 'mirrorSaleInvoices' ? 'sale' : 'purchase';
-    const mirrors = M.DATA.invoices.filter((i: any) => i.mirrorOf && i.type === type && M.inRange(i.receiptDate, r));
-    const originals = M.DATA.invoices.filter((i: any) => !i.mirrorOf && i.type === type);
-    const party = (i: any) => (type === 'purchase' ? i.sellerName || i.buyerName : i.buyerName) || 'No name';
-    const btnLabel = `Mirror ${type} invoice`;
+    // Every invoice gets its mirror automatically; listed in the same order as the invoices.
+    const mirrors = M.DATA.invoices
+      .filter((i: any) => i.mirrorOf && i.type === type && M.inRange(i.receiptDate, r))
+      .sort((a: any, b: any) => (a.srNo || 0) - (b.srNo || 0));
     const formFields: any[] = FORMS_DEF[type + 'Invoice'].fields;
     const fieldLabel = (k: string) => String((formFields.find((fd) => fd.k === k) || { l: k }).l).replace(/ \(PKR\)$/, '');
     const resetMirror = (i: any) => {
@@ -228,43 +227,13 @@ export function SalesPage() {
         title={meta.t}
         u={meta.u}
         p={meta.p}
-        acts={
-          <>
-            <select
-              className="fldsel"
-              aria-label={`${type === 'sale' ? 'Sale' : 'Purchase'} invoice to copy`}
-              style={{ minWidth: '220px', height: '30px', padding: '2px 8px' }}
-              value={originals.some((i: any) => i.id === mirrorPick) ? mirrorPick : ''}
-              onChange={(e) => setMirrorPick(e.target.value)}
-            >
-              <option value="">Pick a {type} invoice to copy…</option>
-              {originals.map((i: any) => (
-                <option key={i.id} value={i.id}>
-                  {i.id} — {party(i)} · {M.fmt(i.totalAmount, 'full')}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="btn pri"
-              disabled={!originals.some((i: any) => i.id === mirrorPick)}
-              onClick={() => {
-                openMirror(mirrorPick);
-                setMirrorPick('');
-              }}
-              title={`Make an editable copy of the picked ${type} invoice, kept apart from the original`}
-            >
-              <Icon name="copy" /> {btnLabel}
-            </button>
-          </>
-        }
       >
         <SummaryKpis pairs={summaryPairs} />
         {mirrors.length === 0 ? (
           <div className="empty">
             <Icon name="empty" />
-            <h3>No mirror {type} invoices yet</h3>
-            <p>Pick a {type} invoice above and press “{btnLabel}” to make an editable copy. The original is not touched.</p>
+            <h3>No mirror {type} invoices in this period</h3>
+            <p>Every {type} invoice gets a mirror automatically the moment it is saved.</p>
           </div>
         ) : (
           <DataTable cols={cols} rows={mirrors} totals={true} attach="invoices" />

@@ -20,7 +20,7 @@ export function Modals() {
 
   if (!modal) return null;
 
-  const { id, values, errors, editId, mirrorOf } = modal;
+  const { id, values, errors, editId } = modal;
   const F = FORMS_DEF[id];
   if (!F) return null;
 
@@ -28,14 +28,10 @@ export function Modals() {
   const fields = editId ? F.fields.filter((fd: any) => !fd.addOnly) : F.fields;
   // A saved mirror being edited: the change stays on the mirror.
   const editingMirror = editId && F.coll === 'invoices' ? (M.DATA.invoices.find((i: any) => i.id === editId) || {}).mirrorOf : null;
-  const title = editId
-    ? `${editingMirror ? F.editTitle.replace(/^Edit /, 'Edit mirror ') : F.editTitle} · ${editId}`
-    : mirrorOf
-    ? `${F.title.replace(/^Create /, 'Mirror ')} · copy of ${mirrorOf}`
-    : F.title;
+  const title = editId ? `${editingMirror ? F.editTitle.replace(/^Edit /, 'Edit mirror ') : F.editTitle} · ${editId}` : F.title;
 
-  // A mirror, being made or edited: fields that differ from its original are its own changes.
-  const mirrorSrcId = F.coll === 'invoices' ? mirrorOf || editingMirror : null;
+  // A mirror being edited: fields that differ from its original are its own changes.
+  const mirrorSrcId = editingMirror || null;
   const mirrorSrc: any = mirrorSrcId ? M.DATA.invoices.find((i: any) => i.id === mirrorSrcId) : null;
   const mirrorDiff = (k: string) => !!mirrorSrc && M.INVOICE_MIRROR_KEYS.includes(k) && !M.sameValue(values[k], mirrorSrc[k]);
   const original = (fd: any) => {

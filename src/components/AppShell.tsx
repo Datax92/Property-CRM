@@ -10,7 +10,7 @@ import { Menus } from './Menus';
 import { Modals } from './Modals';
 import { AttachmentsModal } from './Attachments';
 import { TooltipToast } from './TooltipToast';
-import { syncFirestoreData, onFirestoreSaveError, onFirestoreReadError } from '../lib/firestore-service';
+import { syncFirestoreData, onFirestoreSaveError, onFirestoreReadError, ledgersLoaded } from '../lib/firestore-service';
 import { BrandMark } from './Brand';
 import * as M from '../lib/re-data';
 
@@ -37,6 +37,8 @@ export function AppShell() {
   useEffect(() => {
     if (!authUser) return;
     const unsubscribe = syncFirestoreData(() => {
+      // Every invoice and deal gets its mirror; once all of them have one this does nothing.
+      if (ledgersLoaded()) M.ensureMirrors();
       refreshData();
     });
     return () => unsubscribe();

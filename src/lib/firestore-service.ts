@@ -170,6 +170,12 @@ export function ledgersReady(): boolean {
   return activeUnsubscribers.length === 0 || loaded.size >= COLLECTIONS.length;
 }
 
+/** True only once every ledger has actually arrived from the database without an error —
+    safe for work that creates records from what is (or is not) already there. */
+export function ledgersLoaded(): boolean {
+  return activeUnsubscribers.length > 0 && loaded.size >= COLLECTIONS.length && !readError;
+}
+
 export function syncFirestoreData(onUpdate: () => void): () => void {
   const db = getFirebaseFirestore();
   if (!db) {

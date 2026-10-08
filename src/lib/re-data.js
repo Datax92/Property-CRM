@@ -893,28 +893,17 @@ export const INVOICE_LABEL = { sale: 'Sale Invoice', purchase: 'Purchase Invoice
 
 export function addInvoice(v) {
   const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
-  // A mirror is a separate invoice started as a copy of another one; it keeps a link to its source.
-  const source = v.mirrorOf ? DATA.invoices.find((i) => i.id === v.mirrorOf) : null;
-  // Mirrors are numbered in a series of their own, so they never take a number from the real
-  // invoices. (Older mirrors carry INV- numbers, so the real series still counts past them.)
-  const prefix = source ? 'MIR-' : 'INV-';
-  const series = DATA.invoices.filter((i) => !i.mirrorOf === !source && i.type === v.type);
+  // Mirrors are named after their original (M-INV-…), so only real invoices count towards the
+  // next number. (An older mirror carries an INV- number, so the series still counts past it.)
   const inv = {
-    id: nextId(DATA.invoices.filter((i) => String(i.id).startsWith(prefix)), prefix, 5),
-    srNo: series.reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
+    id: nextId(DATA.invoices.filter((i) => String(i.id).startsWith('INV-')), 'INV-', 5),
+    srNo: DATA.invoices.filter((i) => !i.mirrorOf && i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
     type: v.type, // 'sale' or 'purchase'
     ...invoiceBody(v),
     propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
-    // A mirror stays unlinked from the real sale, so nothing looks it up in place of the original.
-    saleId: source ? null : v.saleId || null,
-    mirrorOf: source ? source.id : null,
+    saleId: v.saleId || null,
     manual: true,
   };
-  // A mirror keeps only what was changed on it; the rest follows the original from now on.
-  if (source) {
-    inv.mirrorEdits = invoiceEdits(inv, source);
-    syncInvoiceMirror(inv);
-  }
   DATA.invoices.push(inv);
   saveRecordToFirestore('invoices', inv.id, inv);
 
@@ -927,8 +916,7 @@ export function addInvoice(v) {
     entity: INVOICE_LABEL[inv.type] || 'Invoice',
     prevAmount: null,
     newAmount: inv.totalAmount,
-    note: `${INVOICE_LABEL[inv.type] || 'Invoice'} ${inv.id} created for ${inv.type === 'purchase' ? inv.sellerName || inv.buyerName : inv.buyerName}` +
-      (inv.mirrorOf ? ` (mirror of ${inv.mirrorOf})` : ''),
+    note: `${INVOICE_LABEL[inv.type] || 'Invoice'} ${inv.id} created for ${inv.type === 'purchase' ? inv.sellerName || inv.buyerName : inv.buyerName}`,
     manual: true,
   };
   DATA.audit.unshift(au);
@@ -999,6 +987,8 @@ function syncInvoiceMirror(m, list = DATA.invoices) {
   const edits = m.mirrorEdits || [];
   INVOICE_MIRROR_KEYS.forEach((k) => { if (edits.indexOf(k) < 0) m[k] = src[k]; });
   if (edits.indexOf('propertyId') < 0) m.propertyName = src.propertyName;
+  // A mirror prints its original's serial, marked as a mirror (MSI-0003 for SI-0003).
+  m.srNo = src.srNo;
   m.balanceAmount = Math.max(0, (m.totalAmount || 0) - (m.tokenAmount || 0));
   return m;
 }
@@ -1791,7 +1781,8 @@ export function saveCostSheet(raw, user) {
   const src = cs.mirrorOf ? realSheet(cs.mirrorOf) : null;
   if (src) cs.mirrorEdits = sheetEdits(cs, src);
   if (!cs.id) {
-    cs.id = nextId(DATA.costSheets, 'CS-', 4);
+    // Mirrors are named after their deal (M-P-0001), so only CS- numbers count here.
+    cs.id = nextId(DATA.costSheets.filter((s) => String(s.id).startsWith('CS-')), 'CS-', 4);
   }
   const idx = DATA.costSheets.findIndex((x) => x.id === cs.id);
   if (idx >= 0) {
@@ -1961,6 +1952,42 @@ export function syncSheetMirror(m) {
   const next = { ...m };
   SHEET_MIRROR_KEYS.forEach((k) => { if (edits.indexOf(k) < 0) next[k] = src[k]; });
   return calculateCostSheet(next);
+}
+
+/** Every sale and purchase invoice, and every deal's cost sheet, has a mirror. Missing ones are
+    made here, named after their original (M-INV-00003, M-P-0001), so the same mirror can never
+    be made twice — not even by two devices at once. Run only once every ledger has loaded.
+    Returns how many mirrors were made. */
+export function ensureMirrors() {
+  let made = 0;
+  const mirroredInvoices = new Set(DATA.invoices.filter((i) => i.mirrorOf).map((i) => i.mirrorOf));
+  DATA.invoices
+    .filter((i) => !i.mirrorOf && (i.type === 'sale' || i.type === 'purchase') && !mirroredInvoices.has(i.id))
+    .forEach((src) => {
+      const id = 'M-' + src.id;
+      if (DATA.invoices.some((i) => i.id === id)) return;
+      const m = { ...src, id, mirrorOf: src.id, mirrorEdits: [], saleId: null, attachments: [], manual: true };
+      DATA.invoices.push(m);
+      saveRecordToFirestore('invoices', id, m);
+      made++;
+    });
+
+  // A deal is known by its saved sheet's number, else by its property (a sheet read from records).
+  const dealKey = (s) => (s ? s.id || s.propertyId : null);
+  const mirroredDeals = new Set(DATA.costSheets.filter((s) => s.mirrorOf).map((m) => dealKey(realSheet(m.mirrorOf))));
+  dealSheets().forEach((deal) => {
+    const key = deal.fromRecords ? deal.propertyId : deal.id;
+    if (!key || mirroredDeals.has(key)) return;
+    const id = 'M-' + key;
+    const src = realSheet(key);
+    if (!src || DATA.costSheets.some((s) => s.id === id)) return;
+    const { sources, fromRecords, ...rest } = src;
+    const m = calculateCostSheet({ ...rest, id, mirrorOf: key, mirrorEdits: [], attachments: [] });
+    DATA.costSheets.unshift(m);
+    saveRecordToFirestore('costSheets', id, m);
+    made++;
+  });
+  return made;
 }
 
 /** Drop every change made on a mirror cost sheet, so it matches its original again. */
