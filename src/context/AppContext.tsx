@@ -114,7 +114,7 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
     { k: 'totalAmount', l: 'Total amount (PKR)', type: 'money', req: true, min: 1 },
     { k: 'tokenAmount', l: 'Token / advance (PKR)', type: 'money' },
     { k: 'tokenDate', l: 'Token date', type: 'date' },
-    { k: 'balanceAmount', l: 'Balance amount (PKR)', type: 'money', hint: 'Blank = total less token.' },
+    { k: 'balanceAmount', l: 'Balance amount (PKR)', compute: (v: any) => invoiceBalance(v), hint: 'Worked out automatically: total less token.' },
     { k: 'transferDate', l: 'Transfer date', type: 'date' },
     { g: 'Signatories' },
     { k: 'receivedByName', l: 'Received by — name', req: true, ph: sale ? 'Company representative' : 'Seller / vendor name' },
@@ -126,8 +126,11 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
     { k: 'attachments', l: 'Attachments', type: 'files', full: true },
   ];
 }
-const invoiceBalance = (v: any) =>
-  v.balanceAmount === '' || v.balanceAmount == null ? Math.max(0, n(v.totalAmount) - n(v.tokenAmount)) : n(v.balanceAmount);
+/** Withholding tax on a sale: what was typed, else 1% of the selling price. */
+const saleTax = (v: any) => (v.tax === '' || v.tax == null ? Math.round(n(v.sellingPrice) * 0.01) : n(v.tax));
+
+/** The balance is always the total less the token, worked out as either is typed. */
+const invoiceBalance = (v: any) => Math.max(0, n(v.totalAmount) - n(v.tokenAmount));
 const invoiceCalc = (v: any) => [
   ['Total amount', n(v.totalAmount)],
   ['Token / advance', n(v.tokenAmount)],
@@ -136,7 +139,6 @@ const invoiceCalc = (v: any) => [
 const invoiceValidate = (v: any) => {
   const e: Record<string, string> = {};
   if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
-  if (n(v.balanceAmount) > n(v.totalAmount)) e.balanceAmount = 'Balance cannot exceed total amount.';
   return e;
 };
 
@@ -145,7 +147,14 @@ export const FORMS_DEF: Record<string, any> = {
     title: 'Add a property',
     editTitle: 'Edit property',
     coll: 'properties',
-    load: (p: any) => ({ registration: p.extras.registration, legal: p.extras.legal, development: p.extras.development, otherCost: p.extras.other }),
+    load: (p: any) => ({
+      registration: p.extras.registration,
+      legal: p.extras.legal,
+      development: p.extras.development,
+      otherCost: p.extras.other,
+      // Still at the purchase price: open blank, so it follows the price if that is changed.
+      currentValue: p.currentValue === p.price ? '' : p.currentValue,
+    }),
     update: (id: string, v: any) => M.updateProperty(id, v),
     sub: 'Records a purchase. Acquisition costs are added to the price to give total cost (§6).',
     fields: [
@@ -169,7 +178,13 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Payment & valuation' },
       { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
-      { k: 'currentValue', l: 'Current market value', type: 'money', hint: 'Defaults to the purchase price.' },
+      {
+        k: 'currentValue',
+        l: 'Current market value',
+        type: 'money',
+        auto: (v: any) => `Auto: ${M.fmt(n(v.price), 'full')} (purchase price)`,
+        hint: 'Leave blank to use the purchase price.',
+      },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => {
@@ -197,6 +212,14 @@ export const FORMS_DEF: Record<string, any> = {
     title: 'Record a sale',
     editTitle: 'Edit sale',
     coll: 'sales',
+    // Amounts still at their automatic figure open blank, so they keep following the price.
+    load: (s: any) => {
+      const ag = M.DATA.agents.find((a: any) => a.id === s.agentId);
+      return {
+        tax: s.tax === Math.round(s.sellingPrice * 0.01) ? '' : s.tax,
+        commissionPct: !ag || s.commissionPct === ag.rate ? '' : s.commissionPct,
+      };
+    },
     update: (id: string, v: any) => M.updateSale(id, v),
     sub: 'Creates the sale, the agent commission entry and the receipt (§7, §10, §26).',
     fields: [
@@ -222,8 +245,23 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'sellingPrice', l: 'Selling price (PKR)', type: 'money', req: true, min: 1 },
       { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true, addOnly: true },
-      { k: 'commissionPct', l: 'Commission %', type: 'number', hint: 'Blank uses the agent’s standard rate. Ignored for a direct sale.' },
-      { k: 'tax', l: 'Withholding tax', type: 'money', hint: 'Blank uses 1% of the selling price.' },
+      {
+        k: 'commissionPct',
+        l: 'Commission %',
+        type: 'number',
+        auto: (v: any) => {
+          const ag = M.DATA.agents.find((a: any) => a.id === v.agentId);
+          return ag ? `Auto: ${ag.rate}% (agent’s rate)` : 'Direct sale — no commission';
+        },
+        hint: 'Leave blank to use the agent’s standard rate.',
+      },
+      {
+        k: 'tax',
+        l: 'Withholding tax',
+        type: 'money',
+        auto: (v: any) => `Auto: ${M.fmt(saleTax(v), 'full')} (1%)`,
+        hint: 'Leave blank for 1% of the selling price.',
+      },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -233,7 +271,7 @@ export const FORMS_DEF: Record<string, any> = {
       const ag = M.DATA.agents.find((a: any) => a.id === v.agentId);
       const rate = !ag ? 0 : v.commissionPct === '' || v.commissionPct == null ? ag.rate : n(v.commissionPct);
       const comm = Math.round((price * rate) / 100);
-      const tax = v.tax === '' || v.tax == null ? Math.round(price * 0.01) : n(v.tax);
+      const tax = saleTax(v);
       const cost = p ? p.totalCost : 0;
       return [
         ['Property cost', cost],
@@ -426,7 +464,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'sale', mirrorOf });
-      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/saleInvoices' };
+      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorSaleInvoices' : 'sales/saleInvoices' };
     },
   },
   proformaInvoice: {
@@ -440,7 +478,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'proforma', mirrorOf });
-      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/proformaInvoices' };
+      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/proformaInvoices' };
     },
   },
   purchaseInvoice: {
@@ -454,7 +492,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'purchase', mirrorOf });
-      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/purchaseInvoices' };
+      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorPurchaseInvoices' : 'sales/purchaseInvoices' };
     },
   },
   task: {

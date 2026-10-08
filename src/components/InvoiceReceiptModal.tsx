@@ -59,7 +59,8 @@ function voucherInfo(invoice: Invoice) {
     title: proforma ? 'Proforma Invoice' : isSale ? 'Sale Receipt Voucher' : 'Purchase Payment Voucher',
     heading: proforma ? 'Proforma Invoice' : isSale ? 'Receipt' : 'Payment Voucher',
     copy: proforma ? 'Quotation · not a receipt' : isSale ? 'Customer copy' : 'Company record copy',
-    serial: `${proforma ? 'PF' : isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`,
+    // Mirrors have a serial series of their own (MSI-, MPI-), never a real receipt's number.
+    serial: `${invoice.mirrorOf ? 'M' : ''}${proforma ? 'PF' : isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`,
     // The other party to the payment: the buyer who paid us, or the seller we paid.
     partyName: isSale ? invoice.receivedFromName || invoice.buyerName : sellerName,
     partyCnic: isSale ? invoice.receivedFromCnic || invoice.buyerCnic : invoice.sellerCnic,

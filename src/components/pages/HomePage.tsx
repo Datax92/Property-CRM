@@ -23,18 +23,22 @@ interface Tile {
 /* The home layout is a list of grid cells, each holding a tile ID or nothing. Dragging a tile
    drops it into the cell under the pointer (swapping with whatever was there), so tiles always
    sit on the grid. The layout is kept in this browser. */
-const LAYOUT_KEY = 'home-layout-v4';
+const LAYOUT_KEY = 'home-layout-v5';
+const MIRROR_TILES = ['mirrorSaleInvoices', 'mirrorPurchaseInvoices', 'mirrorSheets'];
 /** Icons added since a layout was saved, placed in the first free spot of an older layout. */
 const NEW_TILES: Record<string, string[]> = {
-  'home-layout-v3': ['mirrorInvoices', 'mirrorSheets'],
-  'home-layout-v2': ['appearance', 'mirrorInvoices', 'mirrorSheets'],
+  'home-layout-v4': MIRROR_TILES,
+  'home-layout-v3': MIRROR_TILES,
+  'home-layout-v2': ['appearance', ...MIRROR_TILES],
 };
+/** Tiles that were renamed: an older layout keeps the tile where it was put. */
+const RENAMED: Record<string, string> = { mirrorInvoices: 'mirrorSaleInvoices' };
 const DEFAULT_LAYOUT = [
   'dashboard', 'pnl', 'sales', 'purchase', 'cash', 'expenses',
   'tasks', 'proforma', 'saleInvoice', 'purchaseInvoice', 'costSheets', 'projects',
   'tax', 'zakat', 'charity', 'commission', 'inventory', 'assets',
   'gross', 'net', 'receivables', 'agents', 'finance', 'admin',
-  'fiscal', 'appearance', 'account', 'mirrorInvoices', 'mirrorSheets',
+  'fiscal', 'appearance', 'account', ...MIRROR_TILES,
 ];
 /** Cells kept free at the end, so there is always room to drop or add a tile. */
 const SPARE = 6;
@@ -44,7 +48,7 @@ function loadLayout(): (string | null)[] {
     const read = (key: string): (string | null)[] | null => {
       const raw = window.localStorage.getItem(key);
       const parsed = raw ? JSON.parse(raw) : null;
-      return Array.isArray(parsed) ? parsed.map((x: any) => (typeof x === 'string' ? x : null)) : null;
+      return Array.isArray(parsed) ? parsed.map((x: any) => (typeof x === 'string' ? RENAMED[x] || x : null)) : null;
     };
     const now = read(LAYOUT_KEY);
     if (now) return now;
@@ -98,7 +102,7 @@ export function HomePage() {
   const grossPct = sheetSales > 0 ? M.pctOf(sheetGross, sheetSales) : bv.grossMargin;
   const charity = M.charityRows(r).reduce((a: number, x: any) => a + x.amount, 0);
   const invoices = (kind: string) => M.DATA.invoices.filter((i: any) => i.type === kind && !i.mirrorOf).length;
-  const mirrorInvoices = M.DATA.invoices.filter((i: any) => i.mirrorOf).length;
+  const mirrorInvoices = (kind: string) => M.DATA.invoices.filter((i: any) => i.type === kind && i.mirrorOf).length;
   const projects = M.projectSummary(r, f).filter((p: any) => p.total > 0).length;
   const alerts = M.alerts().filter((a: any) => !denied(a.view));
   const openTasks = M.DATA.tasks.filter((t: any) => ['Completed', 'Cancelled'].indexOf(M.taskStatus(t)) < 0).length;
@@ -120,7 +124,8 @@ export function HomePage() {
     saleInvoice: { icon: 'saleInvoice', label: 'Sale Invoices', value: count(invoices('sale'), 'invoice', 'invoices'), go: 'sales/saleInvoices' },
     purchaseInvoice: { icon: 'purchaseInvoice', label: 'Purchase Invoices', value: count(invoices('purchase'), 'invoice', 'invoices'), go: 'sales/purchaseInvoices' },
     costSheets: { icon: 'landed', label: 'Cost Sheets', value: count(sheets.length, 'deal', 'deals'), go: 'trading/sheets' },
-    mirrorInvoices: { icon: 'mirrorInvoice', label: 'Mirror Invoices', value: count(mirrorInvoices, 'copy', 'copies'), go: 'sales/mirrorInvoices' },
+    mirrorSaleInvoices: { icon: 'mirrorSale', label: 'Mirror Sale Invoices', value: count(mirrorInvoices('sale'), 'copy', 'copies'), go: 'sales/mirrorSaleInvoices' },
+    mirrorPurchaseInvoices: { icon: 'mirrorPurchase', label: 'Mirror Purchase Invoices', value: count(mirrorInvoices('purchase'), 'copy', 'copies'), go: 'sales/mirrorPurchaseInvoices' },
     mirrorSheets: { icon: 'mirrorSheet', label: 'Mirror Cost Sheets', value: count(M.mirrorSheets().length, 'copy', 'copies'), go: 'trading/mirrors' },
     projects: { icon: 'projects', label: 'Projects', value: count(projects, 'active project', 'active projects'), go: 'properties/projects' },
     tax: { icon: 'tax', label: 'Taxes & CGT', value: money(k.tax), go: 'costs/tax', need: 'tax' },

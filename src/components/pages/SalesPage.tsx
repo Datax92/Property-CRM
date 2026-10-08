@@ -158,17 +158,16 @@ export function SalesPage() {
     },
   ];
 
-  if (tab === 'mirrorInvoices') {
-    const mirrors = M.DATA.invoices.filter((i: any) => i.mirrorOf && M.inRange(i.receiptDate, r));
-    const originals = M.DATA.invoices.filter((i: any) => !i.mirrorOf);
-    const kinds: [string, string][] = [
-      ['sale', 'Sale invoices'],
-      ['proforma', 'Proforma invoices'],
-      ['purchase', 'Purchase invoices'],
-    ];
+  // Mirror sale invoices and mirror purchase invoices: each kind on a tab of its own.
+  if (tab === 'mirrorSaleInvoices' || tab === 'mirrorPurchaseInvoices') {
+    const type = tab === 'mirrorSaleInvoices' ? 'sale' : 'purchase';
+    const mirrors = M.DATA.invoices.filter((i: any) => i.mirrorOf && i.type === type && M.inRange(i.receiptDate, r));
+    const originals = M.DATA.invoices.filter((i: any) => !i.mirrorOf && i.type === type);
+    const party = (i: any) => (type === 'purchase' ? i.sellerName || i.buyerName : i.buyerName) || 'No name';
+    const btnLabel = `Mirror ${type} invoice`;
 
     const summaryPairs: [string, string][] = [
-      ['Mirror invoices', M.fmtNum(mirrors.length)],
+      [`Mirror ${type} invoices`, M.fmtNum(mirrors.length)],
       ['Total value', M.fmt(mirrors.reduce((a: number, i: any) => a + i.totalAmount, 0), numbers)],
       ['Token', M.fmt(mirrors.reduce((a: number, i: any) => a + i.tokenAmount, 0), numbers)],
       ['Balance', M.fmt(mirrors.reduce((a: number, i: any) => a + i.balanceAmount, 0), numbers)],
@@ -182,11 +181,11 @@ export function SalesPage() {
         label: 'Copy of',
         render: (i: any) => <span className="tag mute" title={`Created as a copy of ${i.mirrorOf}`}>{i.mirrorOf}</span>,
       },
-      { key: 'type', label: 'Type', render: (i: any) => (M.INVOICE_LABEL as any)[i.type] || i.type },
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },
       { key: 'sellerName', label: 'Seller name' },
       { key: 'propertyName', label: 'Property' },
+      { key: 'paymentMode', label: 'Payment mode' },
       { key: 'totalAmount', label: 'Total amount', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.totalAmount, numbers) },
       { key: 'tokenAmount', label: 'Token', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.tokenAmount, numbers) },
       { key: 'balanceAmount', label: 'Balance', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.balanceAmount, numbers) },
@@ -201,36 +200,29 @@ export function SalesPage() {
           <>
             <select
               className="fldsel"
-              aria-label="Invoice to copy"
+              aria-label={`${type === 'sale' ? 'Sale' : 'Purchase'} invoice to copy`}
               style={{ minWidth: '220px', height: '30px', padding: '2px 8px' }}
-              value={mirrorPick}
+              value={originals.some((i: any) => i.id === mirrorPick) ? mirrorPick : ''}
               onChange={(e) => setMirrorPick(e.target.value)}
             >
-              <option value="">Pick an invoice to copy…</option>
-              {kinds.map(([type, label]) => {
-                const list = originals.filter((i: any) => i.type === type);
-                return list.length ? (
-                  <optgroup key={type} label={label}>
-                    {list.map((i: any) => (
-                      <option key={i.id} value={i.id}>
-                        {i.id} — {(type === 'purchase' ? i.sellerName || i.buyerName : i.buyerName) || 'No name'}
-                      </option>
-                    ))}
-                  </optgroup>
-                ) : null;
-              })}
+              <option value="">Pick a {type} invoice to copy…</option>
+              {originals.map((i: any) => (
+                <option key={i.id} value={i.id}>
+                  {i.id} — {party(i)} · {M.fmt(i.totalAmount, 'full')}
+                </option>
+              ))}
             </select>
             <button
               type="button"
               className="btn pri"
-              disabled={!mirrorPick}
+              disabled={!originals.some((i: any) => i.id === mirrorPick)}
               onClick={() => {
                 openMirror(mirrorPick);
                 setMirrorPick('');
               }}
-              title="Make an editable copy of the picked invoice, saved as a new invoice"
+              title={`Make an editable copy of the picked ${type} invoice, kept apart from the original`}
             >
-              <Icon name="copy" /> Mirror invoice
+              <Icon name="copy" /> {btnLabel}
             </button>
           </>
         }
@@ -239,8 +231,8 @@ export function SalesPage() {
         {mirrors.length === 0 ? (
           <div className="empty">
             <Icon name="empty" />
-            <h3>No mirror invoices yet</h3>
-            <p>Pick an invoice above and press “Mirror invoice” to make an editable copy. The original is not touched.</p>
+            <h3>No mirror {type} invoices yet</h3>
+            <p>Pick a {type} invoice above and press “{btnLabel}” to make an editable copy. The original is not touched.</p>
           </div>
         ) : (
           <DataTable cols={cols} rows={mirrors} totals={true} attach="invoices" />

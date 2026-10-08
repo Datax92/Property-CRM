@@ -228,14 +228,24 @@ const ART: Record<string, React.ReactNode> = {
       <circle cx="31" cy="35" r="5" fill={C.navy} />
     </>
   ),
-  mirrorInvoice: (
+  mirrorSale: (
     <>
       <path d="M6 9h17l7 7v23H6z" fill={C.teal} />
-      <path d="M18 5h17l7 7v29H18z" fill={C.orange} />
+      <path d="M18 5h17l7 7v29H18z" fill={C.purple} />
       <path d="M35 5v7h7z" fill={C.amber} />
-      <rect x="23" y="19" width="14" height="3" rx="1.5" fill="var(--ic-paper)" />
-      <rect x="23" y="26" width="10" height="3" rx="1.5" fill="var(--ic-paper)" />
-      <rect x="23" y="33" width="12" height="3" rx="1.5" fill="var(--ic-paper)" />
+      <rect x="22" y="18" width="2.6" height="17" rx="1" fill="var(--ic-paper)" />
+      <rect x="26.4" y="18" width="1.6" height="17" rx=".8" fill="var(--ic-paper)" />
+      <rect x="29.8" y="18" width="3.2" height="17" rx="1" fill="var(--ic-paper)" />
+      <rect x="34.8" y="18" width="1.6" height="17" rx=".8" fill="var(--ic-paper)" />
+    </>
+  ),
+  mirrorPurchase: (
+    <>
+      <path d="M6 9h17l7 7v23H6z" fill={C.amber} />
+      <path d="M18 5h17l7 7v29H18z" fill={C.deep} />
+      <path d="M35 5v7h7z" fill={C.teal} />
+      <path d="M22 30c2-1.5 3.6-5.5 3.6-8.5 0-2.5-2-2.5-2 .5 0 4 1.2 9.5 2.4 9.5s.8-4.5 2.4-4.5.8 3 2 3 1.6-2.5 3.2-2.5" fill="none" stroke="var(--ic-paper)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="22" y="34" width="16" height="2.2" rx="1.1" fill={C.teal} />
     </>
   ),
   mirrorSheet: (

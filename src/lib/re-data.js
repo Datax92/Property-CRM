@@ -681,7 +681,8 @@ export function sourceCount(view, r, f) {
     invoices: () => DATA.invoices.length,
     saleInvoices: () => DATA.invoices.filter((i) => i.type === 'sale' && !i.mirrorOf).length,
     purchaseInvoices: () => DATA.invoices.filter((i) => i.type === 'purchase' && !i.mirrorOf).length,
-    mirrorInvoices: () => DATA.invoices.filter((i) => i.mirrorOf).length,
+    mirrorSaleInvoices: () => DATA.invoices.filter((i) => i.mirrorOf && i.type === 'sale').length,
+    mirrorPurchaseInvoices: () => DATA.invoices.filter((i) => i.mirrorOf && i.type === 'purchase').length,
   }[view];
   return n ? n() : 0;
 }
@@ -871,8 +872,8 @@ function invoiceBody(v) {
     bankDetailsSeller: v.bankDetailsSeller || '',
 
     totalAmount: total,
-    // A blank balance means "whatever the token did not cover".
-    balanceAmount: v.balanceAmount === '' || v.balanceAmount == null ? Math.max(0, total - token) : Math.round(+v.balanceAmount || 0),
+    // The balance is always whatever the token did not cover.
+    balanceAmount: Math.max(0, total - token),
     tokenAmount: token,
     tokenDate: v.tokenDate ? parseDate(v.tokenDate) : null,
     transferDate: v.transferDate ? parseDate(v.transferDate) : null,
@@ -894,13 +895,18 @@ export function addInvoice(v) {
   const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
   // A mirror is a separate invoice started as a copy of another one; it keeps a link to its source.
   const source = v.mirrorOf ? DATA.invoices.find((i) => i.id === v.mirrorOf) : null;
+  // Mirrors are numbered in a series of their own, so they never take a number from the real
+  // invoices. (Older mirrors carry INV- numbers, so the real series still counts past them.)
+  const prefix = source ? 'MIR-' : 'INV-';
+  const series = DATA.invoices.filter((i) => !i.mirrorOf === !source && i.type === v.type);
   const inv = {
-    id: nextId(DATA.invoices, 'INV-', 5),
-    srNo: DATA.invoices.filter((i) => i.type === v.type).reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
+    id: nextId(DATA.invoices.filter((i) => String(i.id).startsWith(prefix)), prefix, 5),
+    srNo: series.reduce((m, i) => Math.max(m, +i.srNo || 0), 0) + 1,
     type: v.type, // 'sale' or 'purchase'
     ...invoiceBody(v),
     propertyName: v.propertyName || (prop ? prop.name + ' · ' + prop.project : ''),
-    saleId: v.saleId || (source ? source.saleId : null) || null,
+    // A mirror stays unlinked from the real sale, so nothing looks it up in place of the original.
+    saleId: source ? null : v.saleId || null,
     mirrorOf: source ? source.id : null,
     manual: true,
   };
@@ -1411,6 +1417,8 @@ export function normalizeLedger(name, rows) {
   if (name === 'commissions') rows.forEach((c) => { if (c.outstanding > 0 && isDate(c.date) && c.date < addDays(TODAY, -30)) c.status = 'Overdue'; });
   if (name === 'projects') syncProjects(rows);
   if (name === 'payments') rows.sort((a, b) => b.date - a.date);
+  // A balance saved before it was worked out automatically may not match its total and token.
+  if (name === 'invoices') rows.forEach((i) => { i.balanceAmount = Math.max(0, (i.totalAmount || 0) - (i.tokenAmount || 0)); });
   if (name === 'audit' || name === 'costSheets') rows.sort((a, b) => String(b.id).localeCompare(String(a.id)));
   return rows;
 }

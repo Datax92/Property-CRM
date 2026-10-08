@@ -74,6 +74,12 @@ const LINES: Line[] = [
 ];
 
 const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);
+
+/** The rate lines of a sheet that stand exactly at their rate. */
+const atRate = (form: any): string[] => {
+  const cs = M.calculateCostSheet(form);
+  return LINES.filter((l) => l.rate && l.k && (+form[l.k] || 0) > 0 && Math.round(+form[l.k]) === l.rate(cs)[1]).map((l) => l.k as string);
+};
 const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
 
 /** The deal a register row or a link points at, as the calculator should open it. */
@@ -498,7 +504,7 @@ function findSheet(key: string): CostSheet | null {
 }
 
 function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
-  const { numbers, toast, setActiveCostSheetId } = useApp();
+  const { toast, setActiveCostSheetId } = useApp();
   const allSheets: CostSheet[] = M.dealSheets();
   const mirrors: CostSheet[] = M.mirrorSheets();
   const [printing, setPrinting] = useState(false);
@@ -522,28 +528,52 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   };
 
   const [form, setForm] = useState<any>(initialSheet);
+  // Rate lines (1% stamp duty, 3% advance tax, 15% CGT) that follow their rate: as the amounts
+  // they are based on change, so do they. Typing an amount of your own into one stops it.
+  const [following, setFollowing] = useState<string[]>(() => atRate(form));
+  const load = (next: any) => {
+    setForm(next);
+    setFollowing(atRate(next));
+  };
 
   // Reload only when a different deal is asked for (or the records it is read from first
   // arrive) — never just because a ledger refreshed, which would wipe unsaved edits.
   const loadKey = `${activeCostSheetId || ''}|${M.DATA.properties.length}|${M.DATA.costSheets.length}`;
   useEffect(() => {
-    setForm(initialSheet());
+    load(initialSheet());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadKey]);
 
   const live: CostSheet = useMemo(() => M.calculateCostSheet(form), [form]);
-  const outOfDate = !!live.id && M.sheetOutOfDate(live);
-  const sources: any[] = live.propertyId ? (M.sheetFromRecords(live.propertyId) || { sources: [] }).sources : [];
+  // A mirror is meant to differ from the records, so it is never offered the real figures.
+  const outOfDate = !!live.id && !live.mirrorOf && M.sheetOutOfDate(live);
+  const sources: any[] = live.propertyId && !live.mirrorOf ? (M.sheetFromRecords(live.propertyId) || { sources: [] }).sources : [];
 
-  const updateField = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
-  const setAmount = (key: string, raw: string) => updateField(key, raw === '' ? 0 : Math.max(0, +raw || 0));
+  const withRates = (next: any, keys: string[]) => {
+    let out = next;
+    LINES.forEach((l) => {
+      if (l.rate && l.k && keys.includes(l.k)) out = { ...out, [l.k]: l.rate(M.calculateCostSheet(out))[1] };
+    });
+    return out;
+  };
+  const updateField = (key: string, val: any) => setForm((prev: any) => withRates({ ...prev, [key]: val }, following));
+  const setAmount = (key: string, raw: string) => {
+    const keys = following.filter((k) => k !== key);
+    if (keys.length !== following.length) setFollowing(keys);
+    setForm((prev: any) => withRates({ ...prev, [key]: raw === '' ? 0 : Math.max(0, +raw || 0) }, keys));
+  };
+  const applyRate = (key: string) => {
+    const keys = following.filter((k) => k !== key).concat(key);
+    setFollowing(keys);
+    setForm((prev: any) => withRates(prev, keys));
+  };
 
   const linkProperty = (pid: string) => {
     // A new sheet linked to a property is filled from that property's records straight away.
     if (pid && !form.id) {
       const fromRecords = M.sheetFromRecords(pid);
       if (fromRecords) {
-        setForm({ ...fromRecords, attachments: form.attachments || [], mirrorOf: form.mirrorOf });
+        load({ ...fromRecords, attachments: form.attachments || [], mirrorOf: form.mirrorOf });
         toast('Filled in from the records of ' + fromRecords.name);
         return;
       }
@@ -552,7 +582,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   };
 
   const refresh = () => {
-    setForm(M.refreshSheetFromRecords(form));
+    load(M.refreshSheetFromRecords(form));
     toast('Updated from the latest records — press Save to keep it');
   };
 
@@ -646,11 +676,12 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
         )}
 
         {/* HEADLINE FIGURES */}
+        {/* Every digit, so each figure moves the moment an amount is typed. */}
         <div className="kpis cs-kpis">
-          <div className="kpi"><span className="k">Purchase price (landed)</span><span className="v">{M.fmt(live.purchasePrice, numbers)}</span></div>
-          <div className="kpi"><span className="k">Sale / current value</span><span className="v">{M.fmt(live.grossSalePrice, numbers)}</span></div>
-          <div className="kpi"><span className="k">Gross profit</span><span className={`v ${live.grossProfit < 0 ? 'neg' : ''}`}>{M.fmt(live.grossProfit, numbers)}</span></div>
-          <div className="kpi hi"><span className="k">Net margin</span><span className={`v ${live.netMargin < 0 ? 'neg' : 'pos'}`}>{M.fmt(live.netMargin, numbers)}</span></div>
+          <div className="kpi"><span className="k">Purchase price (landed)</span><span className="v">{M.fmt(live.purchasePrice, 'full')}</span></div>
+          <div className="kpi"><span className="k">Sale / current value</span><span className="v">{M.fmt(live.grossSalePrice, 'full')}</span></div>
+          <div className="kpi"><span className="k">Gross profit</span><span className={`v ${live.grossProfit < 0 ? 'neg' : ''}`}>{M.fmt(live.grossProfit, 'full')}</span></div>
+          <div className="kpi hi"><span className="k">Net margin</span><span className={`v ${live.netMargin < 0 ? 'neg' : 'pos'}`}>{M.fmt(live.netMargin, 'full')}</span></div>
           <div className="kpi"><span className="k">Net margin %</span><span className="v">{pctText(live.netMarginPct)}</span></div>
           <div className="kpi"><span className="k">Return on cost</span><span className="v">{pctText(live.roiPct)}</span></div>
         </div>
@@ -695,7 +726,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                           <button
                             type="button"
                             className="ratebtn"
-                            onClick={() => updateField(l.k as string, rate[1])}
+                            onClick={() => applyRate(l.k as string)}
                             title={`Fill in ${rate[0]} = ${M.fmt(rate[1], 'full')}`}
                           >
                             use {rate[0]}
@@ -799,7 +830,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
               </div>
             </div>
 
-            {live.propertyId && (
+            {live.propertyId && !live.mirrorOf && (
               <div className="panel" data-noprint="1">
                 <div className="panel-h">
                   <h3>From the records</h3>

@@ -9,7 +9,7 @@ import { AttachmentsField } from './Attachments';
 const dstr = (d: Date | string) => (d instanceof Date ? M.dateInput(d) : d);
 
 export function Modals() {
-  const { modal, closeModal, setModalField, submitModal, numbers } = useApp();
+  const { modal, closeModal, setModalField, submitModal } = useApp();
   const firstInputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
 
   useEffect(() => {
@@ -26,7 +26,13 @@ export function Modals() {
 
   // Editing a saved record: amounts already posted to the cash ledger are not on the form.
   const fields = editId ? F.fields.filter((fd: any) => !fd.addOnly) : F.fields;
-  const title = editId ? `${F.editTitle} · ${editId}` : mirrorOf ? `${F.title.replace(/^Create /, 'Mirror ')} · copy of ${mirrorOf}` : F.title;
+  // A saved mirror being edited: the change stays on the mirror.
+  const editingMirror = editId && F.coll === 'invoices' ? (M.DATA.invoices.find((i: any) => i.id === editId) || {}).mirrorOf : null;
+  const title = editId
+    ? `${editingMirror ? F.editTitle.replace(/^Edit /, 'Edit mirror ') : F.editTitle} · ${editId}`
+    : mirrorOf
+    ? `${F.title.replace(/^Create /, 'Mirror ')} · copy of ${mirrorOf}`
+    : F.title;
 
   // Group fields into fieldsets
   const groups: { name: string; fields: any[] }[] = [];
@@ -73,10 +79,12 @@ export function Modals() {
           <div>
             <h2>{title}</h2>
             <p>
-              {editId
+              {editingMirror
+                ? `The change is saved to this mirror only. ${editingMirror}, the invoice it was copied from, is not touched.`
+                : editId
                 ? 'The change is saved to this record and logged in the audit trail. Amounts already paid or received are changed by recording or voiding a payment.'
                 : mirrorOf
-                ? `A copy of ${mirrorOf}, saved as a new invoice with its own number. Change anything you need before saving; ${mirrorOf} itself is not touched.`
+                ? `A copy of ${mirrorOf}, saved as a separate mirror with a number of its own. Change anything you need before saving; ${mirrorOf} itself is not touched.`
                 : F.sub}
             </p>
           </div>
@@ -96,7 +104,10 @@ export function Modals() {
                   const inputRef = fd.k === firstKey ? (el: any) => { firstInputRef.current = el; } : undefined;
 
                   let ctl: React.ReactNode;
-                  if (fd.type === 'files') {
+                  if (fd.compute) {
+                    // Worked out from the other fields on every keystroke; never typed.
+                    ctl = <input type="text" readOnly tabIndex={-1} value={M.fmt(fd.compute(values), 'full')} />;
+                  } else if (fd.type === 'files') {
                     ctl = <AttachmentsField value={values[fd.k] || []} onChange={(next) => setModalField(fd.k, next)} />;
                   } else if (fd.type === 'select') {
                     const rawOpts = fd.opts();
@@ -127,7 +138,8 @@ export function Modals() {
                         type={type}
                         value={val}
                         list={suggest ? `dl-${fd.k}` : undefined}
-                        placeholder={fd.ph}
+                        // A field left blank is worked out automatically; its placeholder shows the live figure.
+                        placeholder={fd.auto ? fd.auto(values) : fd.ph}
                         max={fd.maxToday ? dstr(M.TODAY) : undefined}
                         min={fd.min != null ? fd.min : fd.type === 'money' ? '0' : undefined}
                         step={fd.type === 'money' ? '1000' : fd.type === 'number' ? '0.25' : undefined}
@@ -169,7 +181,8 @@ export function Modals() {
               {calc.map(([l, v, tot]: [string, number, boolean], idx: number) => (
                 <div key={idx} className={`row ${tot ? 'tot' : ''}`}>
                   <span>{l}</span>
-                  <b>{M.fmt(v, numbers)}</b>
+                  {/* Every digit, so the figure visibly moves with each keystroke. */}
+                  <b>{M.fmt(v, 'full')}</b>
                 </div>
               ))}
             </div>
