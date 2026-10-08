@@ -14,6 +14,7 @@ export function SalesPage() {
   const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
+  const [mirrorPick, setMirrorPick] = useState('');
   const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
   const meta = PAGE_META[`sales/${tab}`] || { t: 'Sales' };
@@ -123,11 +124,139 @@ export function SalesPage() {
     );
   }
 
+  // Print and View lead every invoice row so they are never hidden behind a sideways scroll.
+  const voucherCols: any[] = [
+    {
+      key: 'voucher',
+      label: 'Voucher',
+      render: (i: any) => (
+        <button
+          type="button"
+          className="btn sm pri"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => setPrinting(i)}
+          title="Print this invoice now (A4)"
+        >
+          <Icon name="print" size={12} /> Print
+        </button>
+      ),
+    },
+    {
+      key: 'view',
+      label: 'View',
+      render: (i: any) => (
+        <button
+          type="button"
+          className="btn sm"
+          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+          onClick={() => setSelectedInvoice(i)}
+          title="Preview the voucher, or print it on an 80 mm thermal roll"
+        >
+          View
+        </button>
+      ),
+    },
+  ];
+
+  if (tab === 'mirrorInvoices') {
+    const mirrors = M.DATA.invoices.filter((i: any) => i.mirrorOf && M.inRange(i.receiptDate, r));
+    const originals = M.DATA.invoices.filter((i: any) => !i.mirrorOf);
+    const kinds: [string, string][] = [
+      ['sale', 'Sale invoices'],
+      ['proforma', 'Proforma invoices'],
+      ['purchase', 'Purchase invoices'],
+    ];
+
+    const summaryPairs: [string, string][] = [
+      ['Mirror invoices', M.fmtNum(mirrors.length)],
+      ['Total value', M.fmt(mirrors.reduce((a: number, i: any) => a + i.totalAmount, 0), numbers)],
+      ['Token', M.fmt(mirrors.reduce((a: number, i: any) => a + i.tokenAmount, 0), numbers)],
+      ['Balance', M.fmt(mirrors.reduce((a: number, i: any) => a + i.balanceAmount, 0), numbers)],
+    ];
+
+    const cols = [
+      ...voucherCols,
+      { key: 'id', label: 'Mirror #' },
+      {
+        key: 'mirrorOf',
+        label: 'Copy of',
+        render: (i: any) => <span className="tag mute" title={`Created as a copy of ${i.mirrorOf}`}>{i.mirrorOf}</span>,
+      },
+      { key: 'type', label: 'Type', render: (i: any) => (M.INVOICE_LABEL as any)[i.type] || i.type },
+      { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
+      { key: 'buyerName', label: 'Buyer name' },
+      { key: 'sellerName', label: 'Seller name' },
+      { key: 'propertyName', label: 'Property' },
+      { key: 'totalAmount', label: 'Total amount', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.totalAmount, numbers) },
+      { key: 'tokenAmount', label: 'Token', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.tokenAmount, numbers) },
+      { key: 'balanceAmount', label: 'Balance', a: 'r' as const, sum: true, cls: 'mono', render: (i: any) => M.fmt(i.balanceAmount, numbers) },
+    ];
+
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <>
+            <select
+              className="fldsel"
+              aria-label="Invoice to copy"
+              style={{ minWidth: '220px', height: '30px', padding: '2px 8px' }}
+              value={mirrorPick}
+              onChange={(e) => setMirrorPick(e.target.value)}
+            >
+              <option value="">Pick an invoice to copy…</option>
+              {kinds.map(([type, label]) => {
+                const list = originals.filter((i: any) => i.type === type);
+                return list.length ? (
+                  <optgroup key={type} label={label}>
+                    {list.map((i: any) => (
+                      <option key={i.id} value={i.id}>
+                        {i.id} — {(type === 'purchase' ? i.sellerName || i.buyerName : i.buyerName) || 'No name'}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null;
+              })}
+            </select>
+            <button
+              type="button"
+              className="btn pri"
+              disabled={!mirrorPick}
+              onClick={() => {
+                openMirror(mirrorPick);
+                setMirrorPick('');
+              }}
+              title="Make an editable copy of the picked invoice, saved as a new invoice"
+            >
+              <Icon name="copy" /> Mirror invoice
+            </button>
+          </>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
+        {mirrors.length === 0 ? (
+          <div className="empty">
+            <Icon name="empty" />
+            <h3>No mirror invoices yet</h3>
+            <p>Pick an invoice above and press “Mirror invoice” to make an editable copy. The original is not touched.</p>
+          </div>
+        ) : (
+          <DataTable cols={cols} rows={mirrors} totals={true} attach="invoices" />
+        )}
+        <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
+        {printing && <PrintInvoiceNow invoice={printing} onDone={() => setPrinting(null)} />}
+      </PageShell>
+    );
+  }
+
   if (tab === 'saleInvoices' || tab === 'purchaseInvoices' || tab === 'proformaInvoices') {
     const invoiceType = tab === 'saleInvoices' ? 'sale' : tab === 'proformaInvoices' ? 'proforma' : 'purchase';
     const kindWord = invoiceType === 'sale' ? 'sale' : invoiceType === 'proforma' ? 'proforma' : 'purchase';
+    // Mirrors are kept on their own tab.
     const invRows = M.DATA.invoices.filter(
-      (i: any) => i.type === invoiceType && M.inRange(i.receiptDate, r)
+      (i: any) => i.type === invoiceType && !i.mirrorOf && M.inRange(i.receiptDate, r)
     );
 
     const summaryPairs: [string, string][] = [
@@ -138,20 +267,8 @@ export function SalesPage() {
     ];
 
     const invCols = [
-      {
-        key: 'id',
-        label: 'Invoice #',
-        render: (i: any) => (
-          <>
-            {i.id}
-            {i.mirrorOf && (
-              <span className="tag mute" style={{ marginLeft: '6px' }} title={`Created as a copy of ${i.mirrorOf}`}>
-                Mirror of {i.mirrorOf}
-              </span>
-            )}
-          </>
-        ),
-      },
+      ...voucherCols,
+      { key: 'id', label: 'Invoice #' },
       { key: 'srNo', label: 'Sr No.' },
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },
@@ -167,52 +284,6 @@ export function SalesPage() {
       { key: 'receivedByName', label: 'Received by' },
       { key: 'receivedFromName', label: 'Received from' },
     ];
-    // The print action leads the row so it is never hidden behind a sideways scroll.
-    invCols.unshift({
-      key: 'voucher',
-      label: 'Voucher',
-      render: (i: any) => (
-        <button
-          type="button"
-          className="btn sm pri"
-          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-          onClick={() => setPrinting(i)}
-          title="Print this invoice now (A4)"
-        >
-          <Icon name="print" size={12} /> Print
-        </button>
-      ),
-    } as any);
-    invCols.splice(1, 0, {
-      key: 'view',
-      label: 'View',
-      render: (i: any) => (
-        <button
-          type="button"
-          className="btn sm"
-          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-          onClick={() => setSelectedInvoice(i)}
-          title="Preview the voucher, or print it on an 80 mm thermal roll"
-        >
-          View
-        </button>
-      ),
-    } as any);
-    invCols.splice(2, 0, {
-      key: 'mirror',
-      label: 'Mirror',
-      render: (i: any) => (
-        <button
-          type="button"
-          className="btn sm"
-          style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
-          onClick={() => openMirror(i.id)}
-          title="Make an editable copy of this invoice, saved as a new invoice"
-        >
-          Mirror
-        </button>
-      ),
-    } as any);
 
     const modalType = invoiceType + 'Invoice';
     const btnLabel = 'Create ' + kindWord + ' invoice';
@@ -297,7 +368,7 @@ export function SalesPage() {
           className="btn pri sm"
           style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
           onClick={() => {
-            let inv = M.DATA.invoices.find((i: any) => i.saleId === s.id && i.type === 'sale');
+            let inv = M.DATA.invoices.find((i: any) => i.saleId === s.id && i.type === 'sale' && !i.mirrorOf);
             if (!inv) {
               inv = M.generateInvoiceFromSale(s.id);
             }

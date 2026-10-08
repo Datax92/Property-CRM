@@ -426,7 +426,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'sale', mirrorOf });
-      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/saleInvoices' };
+      return { id: inv.id, msg: 'Sale invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/saleInvoices' };
     },
   },
   proformaInvoice: {
@@ -440,7 +440,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'proforma', mirrorOf });
-      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/proformaInvoices' };
+      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/proformaInvoices' };
     },
   },
   purchaseInvoice: {
@@ -454,7 +454,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any, mirrorOf?: string) => {
       const inv = M.addInvoice({ ...v, type: 'purchase', mirrorOf });
-      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: 'sales/purchaseInvoices' };
+      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + (mirrorOf ? ' created as a mirror of ' + mirrorOf : ' created'), go: mirrorOf ? 'sales/mirrorInvoices' : 'sales/purchaseInvoices' };
     },
   },
   task: {

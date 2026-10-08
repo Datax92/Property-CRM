@@ -82,6 +82,127 @@ const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
 export function TradingPage() {
   const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet } = useApp();
   const [printing, setPrinting] = useState<CostSheet | null>(null);
+  const [mirrorPick, setMirrorPick] = useState('');
+
+  // =========================================================================
+  // MIRROR COST SHEETS — editable copies, kept apart from the real deals
+  // =========================================================================
+  if (tab === 'mirrors') {
+    const rows: CostSheet[] = M.mirrorSheets();
+    const deals: CostSheet[] = M.dealSheets();
+    const sum = (fn: (cs: CostSheet) => number) => rows.reduce((a: number, cs: CostSheet) => a + (fn(cs) || 0), 0);
+
+    const summaryPairs: [string, string][] = [
+      ['Mirror sheets', M.fmtNum(rows.length)],
+      ['Purchase price (landed)', M.fmt(sum((cs) => cs.purchasePrice), numbers)],
+      ['Sale / value', M.fmt(sum((cs) => cs.grossSalePrice), numbers)],
+      ['Net margin', M.fmt(sum((cs) => cs.netMargin), numbers)],
+    ];
+
+    const cols = [
+      {
+        key: 'id',
+        label: 'Sheet',
+        render: (cs: CostSheet) => (
+          <span className="mono" style={{ fontWeight: 700, color: 'var(--brand)' }}>
+            {cs.id}
+          </span>
+        ),
+      },
+      {
+        key: 'mirrorOf',
+        label: 'Copy of',
+        render: (cs: CostSheet) => <span className="tag mute">{cs.mirrorOf}</span>,
+      },
+      { key: 'name', label: 'Property', render: (cs: CostSheet) => <b>{cs.name}</b> },
+      { key: 'project', label: 'Project' },
+      { key: 'status', label: 'Status' },
+      { key: 'purchasePrice', label: 'Purchase price', a: 'r' as const, sum: true, cls: 'mono', render: (cs: CostSheet) => M.fmt(cs.purchasePrice, numbers) },
+      { key: 'grossSalePrice', label: 'Sale / value', a: 'r' as const, sum: true, cls: 'mono', render: (cs: CostSheet) => M.fmt(cs.grossSalePrice, numbers) },
+      {
+        key: 'netMargin',
+        label: 'Net margin',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (cs: CostSheet) => (
+          <span className={cs.netMargin >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
+            {M.fmt(cs.netMargin, numbers)}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        label: '',
+        render: (cs: CostSheet) => (
+          <span className="rowacts">
+            <button type="button" className="btn sm pri" onClick={() => openCostSheet(cs.id)}>
+              <Icon name="calculator" size={12} /> Open
+            </button>
+            <button type="button" className="btn sm" onClick={() => setPrinting(cs)} title="Print this cost sheet now">
+              <Icon name="print" size={12} /> Print
+            </button>
+          </span>
+        ),
+      },
+    ];
+
+    return (
+      <PageShell
+        title="Mirror cost sheets"
+        u="نقل لاگت شیٹ"
+        p="Editable copies of cost sheets, kept apart from the real deals. They never change a property or the trading figures."
+        acts={
+          <>
+            <select
+              className="fldsel"
+              aria-label="Cost sheet to copy"
+              style={{ minWidth: '240px', height: '30px', padding: '2px 8px' }}
+              value={mirrorPick}
+              onChange={(e) => setMirrorPick(e.target.value)}
+            >
+              <option value="">Pick a cost sheet to copy…</option>
+              {deals.map((s) => (
+                <option key={openKey(s)} value={openKey(s)}>
+                  {openKey(s)} — {s.name} ({s.project})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn pri"
+              disabled={!mirrorPick}
+              onClick={() => {
+                openCostSheet('mirror:' + mirrorPick);
+                setMirrorPick('');
+              }}
+              title="Make an editable copy of the picked cost sheet, saved as a new sheet"
+            >
+              <Icon name="copy" /> Mirror cost sheet
+            </button>
+          </>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
+        {rows.length === 0 ? (
+          <div className="empty">
+            <Icon name="empty" />
+            <h3>No mirror cost sheets yet</h3>
+            <p>Pick a cost sheet above and press “Mirror cost sheet” to make an editable copy. The original is not touched.</p>
+          </div>
+        ) : (
+          <div style={{ marginTop: '14px' }}>
+            <DataTable cols={cols} rows={rows} totals={true} />
+          </div>
+        )}
+        {printing && (
+          <PrintNow onDone={() => setPrinting(null)} margin="8mm">
+            <PrintableCostSheetDoc sheet={printing} />
+          </PrintNow>
+        )}
+      </PageShell>
+    );
+  }
 
   // =========================================================================
   // COST SHEET REGISTER — one row per deal, read from the records
@@ -132,11 +253,6 @@ export function TradingPage() {
                 Records changed
               </span>
             ) : null}
-            {cs.mirrorOf && (
-              <span className="tag mute" style={{ marginLeft: 6 }}>
-                Mirror of {cs.mirrorOf}
-              </span>
-            )}
           </>
         ),
       },
@@ -177,14 +293,6 @@ export function TradingPage() {
             </button>
             <button type="button" className="btn sm" onClick={() => setPrinting(cs)} title="Print this cost sheet now">
               <Icon name="print" size={12} /> Print
-            </button>
-            <button
-              type="button"
-              className="btn sm"
-              onClick={() => openCostSheet('mirror:' + openKey(cs))}
-              title="Make an editable copy of this cost sheet, saved as a new sheet"
-            >
-              Mirror
             </button>
           </span>
         ),
@@ -379,9 +487,12 @@ function blankDeal(over: Record<string, any> = {}) {
   });
 }
 
-/** Find a sheet by its own ID, or a property's sheet (saved, else read from its records). */
+/** Find a sheet by its own ID, or a property's sheet (saved, else read from its records).
+    A mirror shares its property with the real sheet, so it is only ever found by its own ID. */
 function findSheet(key: string): CostSheet | null {
-  const saved = M.DATA.costSheets.find((s: any) => s.id === key || s.propertyId === key);
+  const saved =
+    M.DATA.costSheets.find((s: any) => s.id === key) ||
+    M.DATA.costSheets.find((s: any) => s.propertyId === key && !s.mirrorOf);
   if (saved) return saved;
   return M.sheetFromRecords(key);
 }
@@ -389,6 +500,7 @@ function findSheet(key: string): CostSheet | null {
 function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
   const { numbers, toast, setActiveCostSheetId } = useApp();
   const allSheets: CostSheet[] = M.dealSheets();
+  const mirrors: CostSheet[] = M.mirrorSheets();
   const [printing, setPrinting] = useState(false);
 
   const initialSheet = (): CostSheet => {
@@ -492,12 +604,16 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                   {s.fromRecords ? s.propertyId : s.id} — {s.name} ({s.project})
                 </option>
               ))}
+              {mirrors.length > 0 && (
+                <optgroup label="Mirror cost sheets">
+                  {mirrors.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.id} — {s.name} (copy of {s.mirrorOf})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
-            {live.id && (
-              <button type="button" className="btn" onClick={() => setActiveCostSheetId('mirror:' + live.id)} title="Copy this sheet into a new one">
-                Mirror
-              </button>
-            )}
             <button type="button" className="btn" onClick={() => setPrinting(true)} title="Print this cost sheet now">
               <Icon name="print" /> Print
             </button>
@@ -546,6 +662,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
               <h3>{live.name || 'New deal'}</h3>
               <span className="sub">{live.project}</span>
               <span className="spacer" />
+              {live.mirrorOf && <span className="tag mute">Mirror of {live.mirrorOf}</span>}
               <span className="tag ok">{live.id || (live.propertyId ? 'Not saved yet' : 'Draft')}</span>
             </div>
             <table className="cs-table">

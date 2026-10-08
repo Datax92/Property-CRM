@@ -635,7 +635,7 @@ export function charityRows(r) {
   const rows = [];
   // A sheet's charity line is listed only for the part not already booked as an expense of that
   // property — a charity expense linked to a deal is on its sheet too, and must not show twice.
-  DATA.costSheets.filter((cs) => cs.charity > 0).forEach((cs) => {
+  DATA.costSheets.filter((cs) => cs.charity > 0 && !cs.mirrorOf).forEach((cs) => {
     const booked = cs.propertyId
       ? DATA.expenses.filter((e) => e.propertyId === cs.propertyId && CHARITY_RE.test(e.category + ' ' + e.note)).reduce((a, e) => a + e.amount, 0)
       : 0;
@@ -674,12 +674,14 @@ export function sourceCount(view, r, f) {
     sheets: () => dealSheets().length,
     calculator: () => dealSheets().length,
     analytics: () => dealSheets().length,
-    proformaInvoices: () => DATA.invoices.filter((i) => i.type === 'proforma').length,
+    mirrors: () => mirrorSheets().length,
+    proformaInvoices: () => DATA.invoices.filter((i) => i.type === 'proforma' && !i.mirrorOf).length,
     assets: () => DATA.expenses.filter((e) => e.group === 'Assets').length,
     tasks: () => DATA.tasks.length,
     invoices: () => DATA.invoices.length,
-    saleInvoices: () => DATA.invoices.filter((i) => i.type === 'sale').length,
-    purchaseInvoices: () => DATA.invoices.filter((i) => i.type === 'purchase').length,
+    saleInvoices: () => DATA.invoices.filter((i) => i.type === 'sale' && !i.mirrorOf).length,
+    purchaseInvoices: () => DATA.invoices.filter((i) => i.type === 'purchase' && !i.mirrorOf).length,
+    mirrorInvoices: () => DATA.invoices.filter((i) => i.mirrorOf).length,
   }[view];
   return n ? n() : 0;
 }
@@ -1709,7 +1711,8 @@ export function saveCostSheet(raw, user) {
   // A linked property takes the sheet's base price and, while unsold, its expected sale value.
   // Nothing else is written back: the other lines of a linked sheet are read from the expense,
   // tax and sale records, so copying them onto the property would count them twice.
-  const p = DATA.properties.find((x) => x.id === cs.propertyId);
+  // A mirror is only a copy, so it never writes anything back to the property.
+  const p = cs.mirrorOf ? null : DATA.properties.find((x) => x.id === cs.propertyId);
   if (p) {
     p.price = cs.netBuyCost;
     recomputeProperty(p);
@@ -1820,16 +1823,22 @@ export function refreshSheetFromRecords(cs) {
 }
 
 /** Every deal: the saved cost sheets, plus a sheet read from the records for each property
-    that has none saved yet. */
+    that has none saved yet. Mirrors are copies, not deals, so they are left out. */
 export function dealSheets() {
-  const out = DATA.costSheets.slice();
-  const covered = new Set(DATA.costSheets.map((s) => s.propertyId).filter(Boolean));
+  const real = DATA.costSheets.filter((s) => !s.mirrorOf);
+  const out = real.slice();
+  const covered = new Set(real.map((s) => s.propertyId).filter(Boolean));
   DATA.properties.forEach((p) => {
     if (covered.has(p.id)) return;
     const cs = sheetFromRecords(p.id);
     if (cs) out.push({ ...cs, id: p.id, fromRecords: true });
   });
   return out;
+}
+
+/** The saved mirrors: cost sheets started as a copy of another one. */
+export function mirrorSheets() {
+  return DATA.costSheets.filter((s) => s.mirrorOf);
 }
 
 /* ====================================================================

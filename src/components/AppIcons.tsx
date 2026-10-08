@@ -228,6 +228,27 @@ const ART: Record<string, React.ReactNode> = {
       <circle cx="31" cy="35" r="5" fill={C.navy} />
     </>
   ),
+  mirrorInvoice: (
+    <>
+      <path d="M6 9h17l7 7v23H6z" fill={C.teal} />
+      <path d="M18 5h17l7 7v29H18z" fill={C.orange} />
+      <path d="M35 5v7h7z" fill={C.amber} />
+      <rect x="23" y="19" width="14" height="3" rx="1.5" fill="var(--ic-paper)" />
+      <rect x="23" y="26" width="10" height="3" rx="1.5" fill="var(--ic-paper)" />
+      <rect x="23" y="33" width="12" height="3" rx="1.5" fill="var(--ic-paper)" />
+    </>
+  ),
+  mirrorSheet: (
+    <>
+      <rect x="6" y="10" width="22" height="30" rx="3" fill={C.purple} />
+      <rect x="20" y="6" width="22" height="30" rx="3" fill={C.teal} />
+      <rect x="24" y="11" width="14" height="5" rx="1.5" fill="var(--ic-paper)" opacity=".9" />
+      <rect x="24" y="19" width="6" height="4" rx="1.2" fill={C.deep} />
+      <rect x="32" y="19" width="6" height="4" rx="1.2" fill={C.deep} />
+      <rect x="24" y="26" width="6" height="4" rx="1.2" fill={C.deep} />
+      <rect x="32" y="26" width="6" height="4" rx="1.2" fill={C.amber} />
+    </>
+  ),
   assets: (
     <>
       <rect x="6" y="20" width="36" height="20" rx="3" fill={C.navy} />

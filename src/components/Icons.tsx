@@ -175,6 +175,13 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M9.2 4.2l2.6 2.6" />
         </svg>
       );
+    case 'copy':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="5.4" y="5.4" width="8" height="8" rx="1.6" />
+          <path d="M10.6 5.4V3.8a1.2 1.2 0 0 0-1.2-1.2H3.8a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.6" />
+        </svg>
+      );
     case 'trash':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
