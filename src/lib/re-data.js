@@ -2071,12 +2071,40 @@ export function deleteTask(id) {
   return true;
 }
 
+export const PROJECT_STATUSES = ['Open', 'Completed', 'Cancelled'];
+export const PROJECT_PRIORITIES = ['Low', 'Medium', 'High'];
+
+/** The fields of a project that come straight from its form. */
+const taskProjectBody = (v) => ({
+  type: v.type || '',
+  status: PROJECT_STATUSES.indexOf(v.status) >= 0 ? v.status : 'Open',
+  priority: PROJECT_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Medium',
+  expectedStart: v.expectedStart ? parseDate(v.expectedStart) : null,
+  expectedEnd: v.expectedEnd ? parseDate(v.expectedEnd) : null,
+  notes: v.notes || '',
+});
+
 export function addTaskProject(v) {
   const name = String(v.name || '').trim();
   if (!name) throw new Error('Enter the project name.');
   if (DATA.taskProjects.some((p) => p.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
-  const p = { id: nextId(DATA.taskProjects, 'TP-', 3), name, type: v.type || '', notes: v.notes || '', createdAt: new Date() };
+  const p = { id: nextId(DATA.taskProjects, 'TP-', 3), name, ...taskProjectBody(v), liked: false, createdAt: new Date() };
   DATA.taskProjects.push(p);
+  saveRecordToFirestore('taskProjects', p.id, p);
+  return p;
+}
+
+/** A favourite project is kept at the top of the list. */
+export function toggleTaskProjectLike(id) {
+  const p = mustFind(DATA.taskProjects, id, 'Project');
+  p.liked = !p.liked;
+  saveRecordToFirestore('taskProjects', p.id, p);
+  return p;
+}
+
+export function setTaskProjectStatus(id, status) {
+  const p = mustFind(DATA.taskProjects, id, 'Project');
+  p.status = PROJECT_STATUSES.indexOf(status) >= 0 ? status : 'Open';
   saveRecordToFirestore('taskProjects', p.id, p);
   return p;
 }
@@ -2086,7 +2114,7 @@ export function updateTaskProject(id, v) {
   const name = String(v.name || '').trim();
   if (!name) throw new Error('Enter the project name.');
   if (DATA.taskProjects.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
-  Object.assign(p, { name, type: v.type || '', notes: v.notes || '' });
+  Object.assign(p, { name, ...taskProjectBody(v) });
   saveRecordToFirestore('taskProjects', p.id, p);
   // Tasks carry the project's name for their list.
   DATA.tasks.filter((t) => t.projectId === id).forEach((t) => { t.project = name; saveRecordToFirestore('tasks', t.id, t); });
@@ -2109,6 +2137,17 @@ export function taskProjectStats() {
     const ts = DATA.tasks.filter((t) => t.projectId === p.id && taskStatus(t) !== 'Cancelled');
     const completed = ts.filter((t) => taskStatus(t) === 'Completed').length;
     const overdue = ts.filter((t) => taskStatus(t) === 'Overdue').length;
-    return { ...p, total: ts.length, completed, overdue, open: ts.length - completed - overdue, pct: ts.length ? (completed / ts.length) * 100 : 0 };
+    return {
+      ...p, status: p.status || 'Open', priority: p.priority || 'Medium',
+      total: ts.length, completed, overdue, open: ts.length - completed - overdue, pct: ts.length ? (completed / ts.length) * 100 : 0,
+    };
   });
+}
+
+/** Tasks not in any project, counted the same way as a project's. */
+export function looseTaskStats() {
+  const ts = DATA.tasks.filter((t) => !t.projectId && taskStatus(t) !== 'Cancelled');
+  const completed = ts.filter((t) => taskStatus(t) === 'Completed').length;
+  const overdue = ts.filter((t) => taskStatus(t) === 'Overdue').length;
+  return { total: ts.length, completed, overdue, open: ts.length - completed - overdue, pct: ts.length ? (completed / ts.length) * 100 : 0 };
 }

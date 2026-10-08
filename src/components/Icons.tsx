@@ -175,6 +175,24 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M9.2 4.2l2.6 2.6" />
         </svg>
       );
+    case 'comment':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <path d="M2.6 3.6h10.8v7H7.2l-3 2.4v-2.4H2.6z" />
+        </svg>
+      );
+    case 'heart':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+          <path d="M8 13.4S2.4 10.2 2.4 6.2A2.9 2.9 0 0 1 8 5a2.9 2.9 0 0 1 5.6 1.2c0 4-5.6 7.2-5.6 7.2z" />
+        </svg>
+      );
+    case 'sort':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 4h7M3 8h5M3 12h3M12 3.5v9M10 10.5l2 2 2-2" />
+        </svg>
+      );
     case 'trash':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

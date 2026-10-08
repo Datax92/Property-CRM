@@ -1584,7 +1584,8 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .tproj { text-transform: uppercase; color: var(--ink-2); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tnone { padding: 28px 12px !important; text-align: center; color: var(--ink-3); }
 .tpill { display: inline-block; padding: 2px 10px; border-radius: 7px; font-size: 13.5px; font-weight: 500; white-space: nowrap; }
-.st-open { background: #FDECEA; color: #C2410C; }
+.st-open { background: #FFF0F0; color: #DC3B3B; }
+.st-progress { background: #FFF1E6; color: #DD6512; font-variant-numeric: tabular-nums; }
 .st-working { background: #E7EEFC; color: #1D4ED8; }
 .st-review { background: #FEF3C7; color: #92400E; }
 .st-done { background: #DCFCE7; color: #15803D; }
@@ -1596,32 +1597,85 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
 .pr-high { color: #B91C1C; } .pr-high::before { background: #DC2626; }
 .pr-urgent { color: #fff; background: #B91C1C; } .pr-urgent::before { background: #fff; }
 .tbar { height: 12px; border-radius: 99px; background: #EBECEF; overflow: hidden; min-width: 160px; }
-.tbar i { display: block; height: 100%; border-radius: 99px; background: #58B98A; }
+.tbar i { display: block; height: 100%; border-radius: 99px; background: #58B98A; transition: width .5s var(--ease); }
 .tfoot { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid #ECEEF1; }
 
+/* Project list: filter count, sort control, progress, and the quiet column on the right. */
+.tname.calm { font-weight: 500; }
+.tfilter-count, .tsort {
+  display: inline-flex; align-items: center; height: 34px; border-radius: 8px; background: #EEF0F3; font-size: 14px; color: var(--ink-2);
+}
+.tfilter-count { gap: 6px; padding: 0 10px; }
+.tfilter-count.on { background: var(--brand-wash); color: var(--brand); font-weight: 500; }
+.tfilter-count button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; color: inherit; }
+.tfilter-count button:hover { background: rgba(17,24,39,.08); }
+.tfilter-count svg, .tsort svg { width: 15px; height: 15px; }
+.tsort button { display: grid; place-items: center; width: 34px; height: 34px; color: var(--ink-2); border-right: 1px solid #DCDFE4; }
+.tsort button:hover { color: var(--ink); }
+.tfilters .tsort select { min-width: 0; background: transparent; padding: 0 10px; }
+.tsort .flip { transform: scaleY(-1); }
+.pbar { display: flex; align-items: center; gap: 10px; }
+.pbar .tbar { flex: 1 1 auto; height: 10px; }
+.pbar span { min-width: 36px; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ttable .meta { width: 1%; white-space: nowrap; color: var(--ink-3); font-size: 13.5px; }
+.rowmeta { display: inline-flex; align-items: center; gap: 10px; }
+.rowtools { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; transition: opacity .15s; }
+/* Row actions show on the row being pointed at; a touch screen always shows them. */
+.ttable tbody tr .rowtools { opacity: 0; }
+.ttable tbody tr:hover .rowtools, .ttable tbody tr .rowtools:focus-within { opacity: 1; }
+@media (hover: none) { .ttable tbody tr .rowtools { opacity: 1; } }
+.ago { min-width: 28px; text-align: right; }
+.pnote { display: inline-flex; align-items: center; gap: 3px; }
+.pnote.on { color: var(--ink-2); }
+.pnote svg { width: 15px; height: 15px; }
+.plike { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; color: #A3A9B3; transition: color .15s, background .15s, transform .15s; }
+.plike:hover { background: var(--paper-2); color: #E0475B; }
+.plike:active { transform: scale(.88); }
+.plike svg { width: 16px; height: 16px; }
+.plike.on { color: #E0475B; }
+.plike.on svg path { fill: currentColor; }
+.iconbtn.on { background: var(--brand-wash); color: var(--brand); }
+
+/* Project summary: four figures, then a bar per project. */
 .tsum .panel-b { padding: 18px 22px 22px; }
-.tsum-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; margin: 10px 0 30px; }
+.tsum-filters { padding: 12px 16px 0; margin: 0; }
+.tsum-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center; margin: 10px 0 34px; }
 .tsum-kpis span { display: block; font-size: 15px; color: var(--ink-2); }
 .tsum-kpis b { display: block; margin-top: 6px; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.c-avg { color: #C8323A; } .c-total { color: #2378D0; } .c-done { color: #2E9E5B; } .c-over { color: #C82333; }
-@media (max-width: 700px) { .tsum-kpis { grid-template-columns: repeat(2, 1fr); } }
-.tchart { display: flex; gap: 8px; height: 280px; padding-bottom: 28px; }
+.c-avg { color: #E24C4C; } .c-mid { color: #DD8A12; } .c-total { color: #2490EF; } .c-done { color: #2FA84F; } .c-over { color: #E24C4C; }
+@media (max-width: 700px) { .tsum-kpis { grid-template-columns: repeat(2, 1fr); row-gap: 22px; } }
+.tchart { display: flex; gap: 8px; height: 300px; padding: 22px 0 30px; overflow-x: auto; }
 .tchart-y { position: relative; width: 28px; flex: 0 0 28px; }
 .tchart-y span { position: absolute; right: 0; transform: translateY(50%); font-size: 12px; color: var(--ink-3); }
-.tchart-plot { position: relative; flex: 1 1 auto; display: flex; align-items: flex-end; gap: 4%; padding: 0 2%; border-bottom: 1px solid var(--rule-2); }
-.tchart-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid #EEF0F2; }
-.tchart-col { position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; min-width: 0; cursor: default; }
-.tchart-stack { width: 100%; max-width: 120px; display: flex; flex-direction: column; gap: 2px; }
-.tchart-stack i { display: block; min-height: 3px; flex-basis: 0; }
-.tchart-stack i:first-child { border-radius: 4px 4px 0 0; }
-.tchart-col:hover .tchart-stack { filter: brightness(1.05); outline: 2px solid rgba(17,24,39,.08); outline-offset: 2px; }
-.seg-done { background: #2E9E5B; }
-.seg-open { background: #7C93D6; }
-.seg-over { background: #C82333; }
+.tchart-plot {
+  position: relative; flex: 1 1 auto; display: flex; align-items: flex-end; gap: 3%; padding: 0 2%;
+  border-bottom: 1px solid var(--rule-2); min-width: 420px;
+}
+.tchart-grid { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed #E6E8EC; }
+.tchart-col {
+  position: relative; flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; min-width: 0;
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+}
+.tchart-col.loose { cursor: default; }
+.tchart-bar {
+  position: relative; display: block; width: 100%; max-width: 64px; border-radius: 5px 5px 0 0; background: #7575FF;
+  transform-origin: bottom; animation: tbar-grow .65s var(--ease) both; transition: filter .15s, box-shadow .15s;
+}
+.tchart-fill { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+.tchart-fill i { position: absolute; left: 0; right: 0; bottom: 0; display: block; }
+.tchart-val { position: absolute; top: -19px; left: 0; right: 0; text-align: center; font-style: normal; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.tchart-col:hover .tchart-bar, .tchart-col:focus-visible .tchart-bar { filter: brightness(1.07); box-shadow: 0 0 0 3px rgba(117,117,255,.2); }
+.tchart-col.loose .tchart-bar { background: #B9BDC8; box-shadow: none; }
+.seg-total { background: #7575FF; }
+.seg-done { background: #5ED3EA; }
+.seg-over { background: #F0454F; }
+@keyframes tbar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .tchart-bar { animation: none; } }
 .tchart-x {
-  position: absolute; bottom: -24px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: var(--ink-2);
+  position: absolute; bottom: -24px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--ink-2);
   text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.tchart-col.loose .tchart-x { text-transform: none; font-style: italic; color: var(--ink-3); }
 .tchart-legend { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 14px; font-size: 14.5px; color: var(--ink); }
 .tchart-legend span { display: inline-flex; align-items: center; gap: 8px; }
 .tchart-legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }

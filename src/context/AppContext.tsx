@@ -530,13 +530,22 @@ export const FORMS_DEF: Record<string, any> = {
     fields: [
       { g: 'Project' },
       { k: 'name', l: 'Project name', req: true, ph: 'PROPERTY BUSINESS', full: true },
+      { k: 'status', l: 'Status', type: 'select', opts: () => M.PROJECT_STATUSES, def: 'Open', req: true },
       { k: 'type', l: 'Project type', type: 'select', opts: () => [['', '— None —'], ...M.PROJECT_TYPES.map((t: string) => [t, t])] },
+      { k: 'priority', l: 'Priority', type: 'select', opts: () => M.PROJECT_PRIORITIES, def: 'Medium', req: true },
+      { g: 'Dates' },
+      { k: 'expectedStart', l: 'Expected start date', type: 'date' },
+      { k: 'expectedEnd', l: 'Expected end date', type: 'date' },
       { k: 'notes', l: 'Notes', ph: 'Optional', full: true },
     ],
-    validate: (v: any, editId?: string) =>
-      M.DATA.taskProjects.some((p: any) => p.id !== editId && p.name.toLowerCase() === String(v.name || '').trim().toLowerCase())
-        ? { name: 'A project with this name already exists.' }
-        : {},
+    validate: (v: any, editId?: string) => {
+      const e: Record<string, string> = {};
+      if (M.DATA.taskProjects.some((p: any) => p.id !== editId && p.name.toLowerCase() === String(v.name || '').trim().toLowerCase()))
+        e.name = 'A project with this name already exists.';
+      if (v.expectedStart && v.expectedEnd && M.parseDate(v.expectedEnd) < M.parseDate(v.expectedStart))
+        e.expectedEnd = 'The end date is before the start date.';
+      return e;
+    },
     submit: (v: any) => {
       const p = M.addTaskProject(v);
       return { id: p.id, msg: 'Project ' + p.name + ' added', go: 'tasks/projects' };

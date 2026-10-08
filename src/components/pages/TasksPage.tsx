@@ -40,9 +40,395 @@ function PriorityPill({ p }: { p: string }) {
 
 const PAGE_SIZES = [20, 100, 500, 2500];
 
+/** A project's status as its list shows it: how far along while open, else its status. */
+function ProjectStatusPill({ p }: { p: any }) {
+  if (p.status === 'Completed') return <span className="tpill st-done">Completed</span>;
+  if (p.status === 'Cancelled') return <span className="tpill st-cancel">Cancelled</span>;
+  if (p.pct > 0) return <span className="tpill st-progress">{Math.round(p.pct)}%</span>;
+  return <span className="tpill st-open">Open</span>;
+}
+
+/** An average completion like the client's tracker shows it: up to three decimals. */
+const pctLabel = (n: number) => `${+n.toFixed(3)}%`;
+
+type Run = (fn: () => void, done?: string) => void;
+
+const PROJECT_SORTS: Record<string, { label: string; key: (p: any) => any }> = {
+  created: { label: 'Created On', key: (p) => (p.createdAt instanceof Date ? p.createdAt.getTime() : String(p.id)) },
+  name: { label: 'Project Name', key: (p) => String(p.name).toLowerCase() },
+  pct: { label: '% Completed', key: (p) => p.pct },
+  start: { label: 'Expected Start Date', key: (p) => (p.expectedStart instanceof Date ? p.expectedStart.getTime() : 0) },
+};
+
+// ==========================================================================
+// PROJECTS — a list of projects, filtered and sorted like the client's tracker
+// ==========================================================================
+function ProjectsView({ run, openTasks }: { run: Run; openTasks: (id: string) => void }) {
+  const { openModal, openEdit } = useApp();
+  const [fId, setFId] = useState('');
+  const [fName, setFName] = useState('');
+  const [fStatus, setFStatus] = useState('Open');
+  const [fType, setFType] = useState('');
+  const [fPriority, setFPriority] = useState('');
+  const [sort, setSort] = useState('created');
+  const [asc, setAsc] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [confirm, setConfirm] = useState<string | null>(null);
+
+  const all = M.taskProjectStats();
+  const by = PROJECT_SORTS[sort];
+  const rows = all
+    .filter((p: any) => {
+      if (fId && !String(p.id).toLowerCase().includes(fId.trim().toLowerCase())) return false;
+      if (fName && !String(p.name).toLowerCase().includes(fName.trim().toLowerCase())) return false;
+      if (fStatus && p.status !== fStatus) return false;
+      if (fType && p.type !== fType) return false;
+      if (fPriority && p.priority !== fPriority) return false;
+      return true;
+    })
+    .sort((a: any, b: any) => {
+      // Favourites stay on top; within them, the chosen order.
+      if (!!a.liked !== !!b.liked) return a.liked ? -1 : 1;
+      const x = by.key(a), y = by.key(b);
+      const d = x < y ? -1 : x > y ? 1 : 0;
+      return asc ? d : -d;
+    });
+  const active = [fId, fName, fStatus, fType, fPriority].filter(Boolean).length;
+  const clear = () => {
+    setFId('');
+    setFName('');
+    setFStatus('');
+    setFType('');
+    setFPriority('');
+  };
+  const allPicked = rows.length > 0 && rows.every((p: any) => picked.includes(p.id));
+  const toggle = (id: string) => setPicked((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
+
+  return (
+    <PageShell
+      title="Projects"
+      u="پراجیکٹس"
+      p="Groups of tasks and how far each one has got."
+      tools={false}
+      acts={
+        <button type="button" className="btn pri" onClick={() => openModal('taskProject')}>
+          <Icon name="plus" /> Add Project
+        </button>
+      }
+    >
+      <div className="tfilters">
+        <input className="f-id" value={fId} onChange={(e) => setFId(e.target.value)} placeholder="ID" aria-label="Filter by ID" />
+        <input className="f-text" value={fName} onChange={(e) => setFName(e.target.value)} placeholder="Project Name" aria-label="Filter by project name" />
+        <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} aria-label="Filter by status">
+          <option value="">Status</option>
+          {M.PROJECT_STATUSES.map((s: string) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <select value={fType} onChange={(e) => setFType(e.target.value)} aria-label="Filter by project type">
+          <option value="">Project Type</option>
+          {M.PROJECT_TYPES.map((s: string) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <select value={fPriority} onChange={(e) => setFPriority(e.target.value)} aria-label="Filter by priority">
+          <option value="">Priority</option>
+          {M.PROJECT_PRIORITIES.map((s: string) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <span className="spacer" />
+        <span className={`tfilter-count ${active ? 'on' : ''}`}>
+          <Icon name="filter" /> {active ? `${active} ${active === 1 ? 'filter' : 'filters'}` : 'Filter'}
+          {active > 0 && (
+            <button type="button" onClick={clear} title="Clear all filters" aria-label="Clear all filters">
+              <Icon name="x" />
+            </button>
+          )}
+        </span>
+        <span className="tsort">
+          <button type="button" onClick={() => setAsc(!asc)} title={asc ? 'Ascending — click for descending' : 'Descending — click for ascending'} aria-label="Change sort direction">
+            <Icon name="sort" className={`ic ${asc ? 'flip' : ''}`} />
+          </button>
+          <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort by">
+            {Object.keys(PROJECT_SORTS).map((k) => (
+              <option key={k} value={k}>{PROJECT_SORTS[k].label}</option>
+            ))}
+          </select>
+        </span>
+      </div>
+
+      {picked.length > 0 && (
+        <div className="tbulk">
+          <b>{picked.length} selected</b>
+          <button type="button" className="btn sm" onClick={() => run(() => { picked.forEach((id) => M.setTaskProjectStatus(id, 'Completed')); setPicked([]); }, 'Marked as completed')}>
+            <Icon name="ok" /> Mark completed
+          </button>
+          {confirm === 'bulk' ? (
+            <span className="task-confirm">
+              Delete {picked.length} {picked.length === 1 ? 'project' : 'projects'}? Their tasks are kept.
+              <button type="button" className="btn sm bad" onClick={() => run(() => { picked.forEach((id) => M.deleteTaskProject(id)); setPicked([]); setConfirm(null); }, 'Deleted')}>
+                Yes, delete
+              </button>
+              <button type="button" className="btn sm" onClick={() => setConfirm(null)}>No</button>
+            </span>
+          ) : (
+            <button type="button" className="btn sm" onClick={() => setConfirm('bulk')}>
+              <Icon name="trash" /> Delete
+            </button>
+          )}
+          <button type="button" className="btn sm gh" onClick={() => setPicked([])}>Unselect</button>
+        </div>
+      )}
+
+      <div className="tlist">
+        <table className="ttable plist">
+          <thead>
+            <tr>
+              <th className="chk">
+                <input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? [] : rows.map((p: any) => p.id))} aria-label="Select all" />
+              </th>
+              <th>Project Name</th>
+              <th>Status</th>
+              <th>Project Type</th>
+              <th className="wide">% Completed</th>
+              <th>Expected Start Date</th>
+              <th className="r meta">{all.length ? `${rows.length} of ${all.length}` : ''}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="tnone">
+                  {all.length === 0 ? (
+                    <>No projects yet — add one, for example “Personal”, “A&amp;Sons Work” or “Property Business”.</>
+                  ) : (
+                    <>
+                      No project matches these filters.{' '}
+                      <button type="button" className="linkbtn" onClick={clear}>Clear filters</button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ) : (
+              rows.map((p: any) => (
+                <tr key={p.id} className={picked.includes(p.id) ? 'on' : ''}>
+                  <td className="chk">
+                    <input type="checkbox" checked={picked.includes(p.id)} onChange={() => toggle(p.id)} aria-label={`Select ${p.name}`} />
+                  </td>
+                  <td>
+                    <button type="button" className={`tname ${p.overdue ? '' : 'calm'}`} onClick={() => openTasks(p.id)} title="Show this project's tasks">
+                      {p.name}
+                    </button>
+                  </td>
+                  <td><ProjectStatusPill p={p} /></td>
+                  <td className="muted">{p.type || ''}</td>
+                  <td>
+                    <div className="pbar" title={`${p.completed} of ${p.total} tasks completed`}>
+                      <div className="tbar"><i style={{ width: `${p.pct}%` }} /></div>
+                      <span>{p.total ? `${p.completed}/${p.total}` : '—'}</span>
+                    </div>
+                  </td>
+                  <td className="muted mono">{p.expectedStart ? M.fmtDate(p.expectedStart) : ''}</td>
+                  <td className="r meta">
+                    {confirm === p.id ? (
+                      <span className="task-confirm">
+                        Delete project? Its tasks are kept.
+                        <button type="button" className="btn sm bad" onClick={() => run(() => { M.deleteTaskProject(p.id); setConfirm(null); }, 'Project deleted')}>
+                          Yes, delete
+                        </button>
+                        <button type="button" className="btn sm" onClick={() => setConfirm(null)}>No</button>
+                      </span>
+                    ) : (
+                      <span className="rowmeta">
+                        <span className="rowtools">
+                          <button type="button" className="iconbtn" title="Edit" aria-label={`Edit ${p.name}`} onClick={() => openEdit('taskProjects', p.id)}>
+                            <Icon name="edit" />
+                          </button>
+                          <button type="button" className="iconbtn" title="Delete" aria-label={`Delete ${p.name}`} onClick={() => setConfirm(p.id)}>
+                            <Icon name="trash" />
+                          </button>
+                        </span>
+                        <span className="ago" title={p.createdAt ? 'Created ' + M.fmtDate(p.createdAt) : ''}>{ago(p.createdAt)}</span>
+                        <span className={`pnote ${p.notes ? 'on' : ''}`} title={p.notes || 'No notes'}>
+                          <Icon name="comment" /> {p.notes ? 1 : 0}
+                        </span>
+                        <button
+                          type="button"
+                          className={`plike ${p.liked ? 'on' : ''}`}
+                          aria-pressed={!!p.liked}
+                          title={p.liked ? 'Favourite — kept at the top. Click to unpin.' : 'Mark as favourite to keep it at the top'}
+                          onClick={() => run(() => M.toggleTaskProjectLike(p.id))}
+                        >
+                          <Icon name="heart" />
+                        </button>
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </PageShell>
+  );
+}
+
+// ==========================================================================
+// SUMMARY — completion, totals and a bar per project
+// ==========================================================================
+function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
+  const { showTip, hideTip } = useApp();
+  const [showFilters, setShowFilters] = useState(false);
+  const [fStatus, setFStatus] = useState('Open');
+  const [fType, setFType] = useState('');
+
+  const projects = M.taskProjectStats().filter((p: any) => (!fStatus || p.status === fStatus) && (!fType || p.type === fType));
+  // Tasks outside any project still count, under "No project", while no project type is picked.
+  const loose = M.looseTaskStats();
+  const bars = loose.total && !fType ? [...projects, { id: '', name: 'No project', ...loose, loose: true }] : projects;
+
+  const total = bars.reduce((a: number, p: any) => a + p.total, 0);
+  const completed = bars.reduce((a: number, p: any) => a + p.completed, 0);
+  const overdue = bars.reduce((a: number, p: any) => a + p.overdue, 0);
+  const avg = projects.length ? projects.reduce((a: number, p: any) => a + p.pct, 0) / projects.length : 0;
+  const avgTone = avg >= 80 ? 'c-done' : avg >= 50 ? 'c-mid' : 'c-avg';
+
+  const max = Math.max(1, ...bars.map((p: any) => p.total));
+  const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 50 ? 10 : Math.ceil(max / 50) * 10;
+  const top = Math.ceil(max / step) * step;
+  const ticks = Array.from({ length: top / step + 1 }, (_, i) => i * step);
+  const filtered = fStatus !== 'Open' || !!fType;
+
+  const tip = (e: React.MouseEvent, p: any) =>
+    showTip(
+      `<b>${p.name}</b><br>Total tasks: ${p.total}<br>Completed: ${p.completed} (${Math.round(p.pct)}%)<br>Overdue: ${p.overdue}<br>Still open: ${p.open}` +
+        (p.loose ? '' : '<br><i>Click to see its tasks</i>'),
+      e.clientX,
+      e.clientY
+    );
+
+  return (
+    <PageShell title="Project summary" u="خلاصہ" p="Completion, overdue work and tasks per project." tools={false}>
+      <div className="panel tsum">
+        <div className="panel-h">
+          <h3>Project Summary</h3>
+          {filtered && (
+            <span className="sub">
+              {[fStatus ? fStatus + ' projects' : 'All projects', fType].filter(Boolean).join(' · ')}
+            </span>
+          )}
+          <span className="spacer" />
+          <button
+            type="button"
+            className={`iconbtn ${showFilters || filtered ? 'on' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+            title="Filter the summary"
+            aria-label="Filter the summary"
+            aria-expanded={showFilters}
+          >
+            <Icon name="filter" />
+          </button>
+        </div>
+        {showFilters && (
+          <div className="tfilters tsum-filters">
+            <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} aria-label="Project status">
+              <option value="">All statuses</option>
+              {M.PROJECT_STATUSES.map((s: string) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select value={fType} onChange={(e) => setFType(e.target.value)} aria-label="Project type">
+              <option value="">All project types</option>
+              {M.PROJECT_TYPES.map((s: string) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            {filtered && (
+              <button type="button" className="btn sm" onClick={() => { setFStatus('Open'); setFType(''); }}>
+                Reset
+              </button>
+            )}
+          </div>
+        )}
+        <div className="panel-b">
+          <div className="tsum-kpis">
+            <div>
+              <span>Average Completion</span>
+              <b className={avgTone}>{pctLabel(avg)}</b>
+            </div>
+            <div>
+              <span>Total Tasks</span>
+              <b className="c-total">{total}</b>
+            </div>
+            <div>
+              <span>Completed Tasks</span>
+              <b className="c-done">{completed}</b>
+            </div>
+            <div>
+              <span>Overdue Tasks</span>
+              <b className={overdue ? 'c-over' : 'c-done'}>{overdue}</b>
+            </div>
+          </div>
+
+          {bars.length === 0 ? (
+            <p className="muted" style={{ textAlign: 'center' }}>
+              {filtered ? 'No project matches this filter.' : 'Add projects and tasks to see them here.'}
+            </p>
+          ) : (
+            <>
+              <div className="tchart" role="img" aria-label="Tasks per project: total, completed and overdue">
+                <div className="tchart-y">
+                  {ticks.map((v) => (
+                    <span key={v} style={{ bottom: `${(v / top) * 100}%` }}>
+                      {v}
+                    </span>
+                  ))}
+                </div>
+                <div className="tchart-plot">
+                  {ticks.map((v) => (
+                    <i key={v} className="tchart-grid" style={{ bottom: `${(v / top) * 100}%` }} />
+                  ))}
+                  {bars.map((p: any, i: number) => (
+                    <button
+                      type="button"
+                      key={p.id || 'loose'}
+                      className={`tchart-col ${p.loose ? 'loose' : ''}`}
+                      onMouseMove={(e) => tip(e, p)}
+                      onMouseLeave={hideTip}
+                      onClick={() => !p.loose && openTasks(p.id)}
+                      aria-label={`${p.name}: ${p.total} tasks, ${p.completed} completed, ${p.overdue} overdue`}
+                    >
+                      {/* The whole bar is the project's tasks; completed and overdue sit inside it. */}
+                      <span className="tchart-bar" style={{ height: `${(p.total / top) * 100}%`, animationDelay: `${i * 60}ms` }}>
+                        {p.total > 0 && <em className="tchart-val">{p.total}</em>}
+                        <span className="tchart-fill">
+                          {p.overdue > 0 && <i className="seg-over" style={{ height: `${(p.overdue / p.total) * 100}%`, bottom: `${(p.completed / p.total) * 100}%` }} />}
+                          {p.completed > 0 && <i className="seg-done" style={{ height: `${(p.completed / p.total) * 100}%` }} />}
+                        </span>
+                      </span>
+                      <span className="tchart-x" title={p.name}>{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="tchart-legend">
+                <span><i className="seg-over" /> Overdue</span>
+                <span><i className="seg-done" /> Completed</span>
+                <span><i className="seg-total" /> Total Tasks</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </PageShell>
+  );
+}
+
 /** Tasks: a list of tasks, the projects they belong to, and a summary of both. */
 export function TasksPage() {
-  const { tab, toast, refreshData, openModal, openEdit, goto, showTip, hideTip } = useApp();
+  const { tab, toast, refreshData, openModal, openEdit, goto } = useApp();
 
   // Filters live here so "Tasks" from a project row lands on that project's tasks.
   const [fId, setFId] = useState('');
@@ -70,230 +456,15 @@ export function TasksPage() {
     }
   };
 
-  // ========================================================================
-  // PROJECTS
-  // ========================================================================
-  if (tab === 'projects') {
-    const rows = M.taskProjectStats().sort((a: any, b: any) => String(b.id).localeCompare(String(a.id)));
-    return (
-      <PageShell
-        title="Projects"
-        u="پراجیکٹس"
-        p="Groups of tasks and how far each one has got."
-        tools={false}
-        acts={
-          <button type="button" className="btn pri" onClick={() => openModal('taskProject')}>
-            <Icon name="plus" /> Add Project
-          </button>
-        }
-      >
-        {rows.length === 0 ? (
-          <div className="empty">
-            <Icon name="empty" />
-            <h3>No projects yet</h3>
-            <p>Add one, for example “Personal”, “A&amp;Sons Work” or “Property Business”, and put tasks in it.</p>
-          </div>
-        ) : (
-          <div className="tlist">
-            <table className="ttable">
-              <thead>
-                <tr>
-                  <th>Project Name</th>
-                  <th>Status</th>
-                  <th>Project Type</th>
-                  <th className="wide">% Completed</th>
-                  <th className="r">Tasks</th>
-                  <th className="r">Created</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((p: any) => (
-                  <tr key={p.id}>
-                    <td>
-                      <button type="button" className="tname" onClick={() => { setFProject(p.id); setShown(pageSize); goto('tasks/list'); }}>
-                        {p.name}
-                      </button>
-                    </td>
-                    <td>
-                      {p.total > 0 && p.completed === p.total ? (
-                        <span className="tpill st-done">Completed</span>
-                      ) : p.completed > 0 ? (
-                        <span className="tpill st-open">{Math.round(p.pct)}%</span>
-                      ) : (
-                        <span className="tpill st-open">Open</span>
-                      )}
-                    </td>
-                    <td className="muted">{p.type || ''}</td>
-                    <td>
-                      <div className="tbar" title={`${p.completed} of ${p.total} tasks completed`}>
-                        <i style={{ width: `${p.pct}%` }} />
-                      </div>
-                    </td>
-                    <td className="r mono">
-                      {p.completed} / {p.total}
-                    </td>
-                    <td className="r muted">{ago(p.createdAt)}</td>
-                    <td className="r nowrap">
-                      {confirm === p.id ? (
-                        <span className="task-confirm">
-                          Delete project? Its tasks are kept.
-                          <button type="button" className="btn sm bad" onClick={() => run(() => { M.deleteTaskProject(p.id); setConfirm(null); }, 'Project deleted')}>
-                            Yes, delete
-                          </button>
-                          <button type="button" className="btn sm" onClick={() => setConfirm(null)}>No</button>
-                        </span>
-                      ) : (
-                        <>
-                          <button type="button" className="iconbtn" title="Edit" aria-label={`Edit ${p.name}`} onClick={() => openEdit('taskProjects', p.id)}>
-                            <Icon name="edit" />
-                          </button>
-                          <button type="button" className="iconbtn" title="Delete" aria-label={`Delete ${p.name}`} onClick={() => setConfirm(p.id)}>
-                            <Icon name="trash" />
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="tfoot">
-              <span className="spacer" />
-              <span className="muted">
-                {rows.length} of {rows.length}
-              </span>
-            </div>
-          </div>
-        )}
-      </PageShell>
-    );
-  }
+  // Opening a project's tasks lands on the task list, filtered to that project.
+  const openTasks = (projectId: string) => {
+    setFProject(projectId);
+    setShown(pageSize);
+    goto('tasks/list');
+  };
 
-  // ========================================================================
-  // SUMMARY
-  // ========================================================================
-  if (tab === 'summary') {
-    const stats = M.taskProjectStats();
-    const all = M.DATA.tasks.filter((t: any) => M.taskStatus(t) !== 'Cancelled');
-    const completed = all.filter((t: any) => M.taskStatus(t) === 'Completed').length;
-    const overdue = all.filter((t: any) => M.taskStatus(t) === 'Overdue').length;
-    const withTasks = stats.filter((p: any) => p.total > 0);
-    const avg = withTasks.length ? withTasks.reduce((a: number, p: any) => a + p.pct, 0) / withTasks.length : 0;
-    const max = Math.max(1, ...stats.map((p: any) => p.total));
-    const step = max <= 10 ? 2 : max <= 50 ? 10 : Math.ceil(max / 50) * 10;
-    const top = Math.ceil(max / step) * step;
-    const ticks = Array.from({ length: top / step + 1 }, (_, i) => i * step);
-
-    const tip = (e: React.MouseEvent, p: any) =>
-      showTip(
-        `<b>${p.name}</b><br>Total tasks: ${p.total}<br>Completed: ${p.completed}<br>Still open: ${p.open}<br>Overdue: ${p.overdue}`,
-        e.clientX,
-        e.clientY
-      );
-
-    return (
-      <PageShell title="Project summary" u="خلاصہ" p="Completion, overdue work and tasks per project." tools={false}>
-        <div className="panel tsum">
-          <div className="panel-h">
-            <h3>Project Summary</h3>
-          </div>
-          <div className="panel-b">
-            <div className="tsum-kpis">
-              <div>
-                <span>Average Completion</span>
-                <b className="c-avg">{avg.toFixed(1)}%</b>
-              </div>
-              <div>
-                <span>Total Tasks</span>
-                <b className="c-total">{all.length}</b>
-              </div>
-              <div>
-                <span>Completed Tasks</span>
-                <b className="c-done">{completed}</b>
-              </div>
-              <div>
-                <span>Overdue Tasks</span>
-                <b className={overdue ? 'c-over' : 'c-done'}>{overdue}</b>
-              </div>
-            </div>
-
-            {stats.length === 0 ? (
-              <p className="muted" style={{ textAlign: 'center' }}>
-                Add projects and tasks to see them here.
-              </p>
-            ) : (
-              <>
-                <div className="tchart" role="img" aria-label="Tasks per project: completed, still open and overdue">
-                  <div className="tchart-y">
-                    {ticks
-                      .slice()
-                      .reverse()
-                      .map((v) => (
-                        <span key={v} style={{ bottom: `${(v / top) * 100}%` }}>
-                          {v}
-                        </span>
-                      ))}
-                  </div>
-                  <div className="tchart-plot">
-                    {ticks.map((v) => (
-                      <i key={v} className="tchart-grid" style={{ bottom: `${(v / top) * 100}%` }} />
-                    ))}
-                    {stats.map((p: any) => (
-                      <div key={p.id} className="tchart-col" onMouseMove={(e) => tip(e, p)} onMouseLeave={hideTip}>
-                        <div className="tchart-stack" style={{ height: `${(p.total / top) * 100}%` }}>
-                          {p.overdue > 0 && <i className="seg-over" style={{ flexGrow: p.overdue }} />}
-                          {p.open > 0 && <i className="seg-open" style={{ flexGrow: p.open }} />}
-                          {p.completed > 0 && <i className="seg-done" style={{ flexGrow: p.completed }} />}
-                        </div>
-                        <span className="tchart-x" title={p.name}>
-                          {p.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="tchart-legend">
-                  <span><i className="seg-over" /> Overdue</span>
-                  <span><i className="seg-done" /> Completed</span>
-                  <span><i className="seg-open" /> Still open</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {stats.length > 0 && (
-          <div className="tlist" style={{ marginTop: 14 }}>
-            <table className="ttable">
-              <thead>
-                <tr>
-                  <th>Project</th>
-                  <th className="r">Total</th>
-                  <th className="r">Completed</th>
-                  <th className="r">Still open</th>
-                  <th className="r">Overdue</th>
-                  <th className="r">% Completed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.map((p: any) => (
-                  <tr key={p.id}>
-                    <td><b>{p.name}</b></td>
-                    <td className="r mono">{p.total}</td>
-                    <td className="r mono">{p.completed}</td>
-                    <td className="r mono">{p.open}</td>
-                    <td className={`r mono ${p.overdue ? 'neg' : ''}`}>{p.overdue}</td>
-                    <td className="r mono">{p.pct.toFixed(0)}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </PageShell>
-    );
-  }
+  if (tab === 'projects') return <ProjectsView run={run} openTasks={openTasks} />;
+  if (tab === 'summary') return <SummaryView openTasks={openTasks} />;
 
   // ========================================================================
   // TASK LIST
@@ -470,7 +641,7 @@ export function TasksPage() {
                           <button type="button" className="btn sm" onClick={() => setConfirm(null)}>No</button>
                         </span>
                       ) : (
-                        <>
+                        <span className="rowtools">
                           {st !== 'Completed' && (
                             <button type="button" className="iconbtn" title="Mark as completed" aria-label="Mark as completed" onClick={() => run(() => M.updateTask(t.id, { done: true }), 'Completed')}>
                               <Icon name="ok" />
@@ -482,7 +653,7 @@ export function TasksPage() {
                           <button type="button" className="iconbtn" title="Delete" aria-label="Delete task" onClick={() => setConfirm(t.id)}>
                             <Icon name="trash" />
                           </button>
-                        </>
+                        </span>
                       )}
                     </td>
                   </tr>
