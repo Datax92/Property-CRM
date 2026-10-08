@@ -68,6 +68,8 @@ export interface MenuState {
 export type FilerStatus = 'Filer' | 'Late Filer' | 'Non-Filer';
 
 export interface CostSheet {
+  /** On a mirror: the fields changed on it. Every other field follows the original. */
+  mirrorEdits?: string[];
   id: string;
   propertyId: string;
   name: string;
@@ -218,4 +220,6 @@ export interface Invoice {
   manual?: boolean;
   /** Set when this invoice was created as a copy of another one. */
   mirrorOf?: string | null;
+  /** On a mirror: the fields changed on it. Every other field follows the original. */
+  mirrorEdits?: string[];
 }

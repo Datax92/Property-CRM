@@ -101,6 +101,18 @@ export function Tag({ text }: { text: string }) {
   return <span className={`tag ${cls}`}>{text}</span>;
 }
 
+/** What a mirror changed from its original, or that it matches it. */
+export function MirrorChanges({ edits, label }: { edits?: string[]; label: (key: string) => string }) {
+  if (!edits || !edits.length) return <span className="tag ok">Same as original</span>;
+  const names = edits.map(label);
+  return (
+    <span className="tag warn" title={'Changed on this mirror: ' + names.join(', ')}>
+      {names.slice(0, 2).join(', ')}
+      {names.length > 2 ? ` +${names.length - 2} more` : ''}
+    </span>
+  );
+}
+
 export function KpiCard({
   k,
   v,

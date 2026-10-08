@@ -910,6 +910,11 @@ export function addInvoice(v) {
     mirrorOf: source ? source.id : null,
     manual: true,
   };
+  // A mirror keeps only what was changed on it; the rest follows the original from now on.
+  if (source) {
+    inv.mirrorEdits = invoiceEdits(inv, source);
+    syncInvoiceMirror(inv);
+  }
   DATA.invoices.push(inv);
   saveRecordToFirestore('invoices', inv.id, inv);
 
@@ -951,6 +956,72 @@ export function generateInvoiceFromSale(saleId) {
     receivedByName: ACTOR,
     receivedFromName: sale.buyer,
   });
+}
+
+/* ====================================================================
+   MIRRORS — a mirror invoice or cost sheet follows its original. Only the
+   fields changed on the mirror itself (listed in mirrorEdits) differ; every
+   other field is read from the original, so a change made there shows on
+   the mirror too. Nothing on a mirror is ever written back to the original.
+   ==================================================================== */
+
+/** A field value in one comparable form: dates as YYYY-MM-DD, numbers rounded, blank and 0 alike. */
+const valueKey = (x) => {
+  if (x instanceof Date) return dateInput(x);
+  if (x == null || x === '') return '';
+  const s = String(x).trim();
+  if (/^-?\d+(\.\d+)?$/.test(s)) return +s === 0 ? '' : String(Math.round(+s));
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+};
+export const sameValue = (a, b) => valueKey(a) === valueKey(b);
+
+/** The fields of an invoice a mirror follows. Its number, attachments and balance are its own. */
+export const INVOICE_MIRROR_KEYS = [
+  'receiptDate', 'propertyId', 'buyerName', 'buyerCompany', 'buyerCnic', 'bankDetailsBuyer',
+  'sellerName', 'sellerCompany', 'sellerCnic', 'bankDetailsSeller',
+  'paymentMode', 'paymentRef', 'paymentDate', 'paymentTerms',
+  'totalAmount', 'tokenAmount', 'tokenDate', 'transferDate',
+  'receivedByName', 'receivedByCnic', 'receivedFromName', 'receivedFromCnic', 'approvedByName', 'notes',
+];
+
+/** The original a mirror invoice was copied from. */
+export const invoiceSource = (m, list = DATA.invoices) =>
+  m && m.mirrorOf ? list.find((i) => i.id === m.mirrorOf && !i.mirrorOf) || null : null;
+
+/** The fields of a mirror invoice that differ from its original. */
+const invoiceEdits = (m, src) => INVOICE_MIRROR_KEYS.filter((k) => !sameValue(m[k], src[k]));
+
+/** Bring a mirror invoice up to date with its original, keeping the fields changed on the mirror.
+    A mirror saved before changes were tracked has none, so it matches its original again. */
+function syncInvoiceMirror(m, list = DATA.invoices) {
+  const src = invoiceSource(m, list);
+  if (!src) return m;
+  const edits = m.mirrorEdits || [];
+  INVOICE_MIRROR_KEYS.forEach((k) => { if (edits.indexOf(k) < 0) m[k] = src[k]; });
+  if (edits.indexOf('propertyId') < 0) m.propertyName = src.propertyName;
+  m.balanceAmount = Math.max(0, (m.totalAmount || 0) - (m.tokenAmount || 0));
+  return m;
+}
+export function syncInvoiceMirrors(list = DATA.invoices) {
+  list.forEach((i) => { if (i.mirrorOf) syncInvoiceMirror(i, list); });
+  return list;
+}
+
+/** Drop every change made on a mirror invoice, so it matches its original again. */
+export function resetInvoiceMirror(id) {
+  const m = mustFind(DATA.invoices, id, 'Invoice');
+  const dropped = (m.mirrorEdits || []).length;
+  m.mirrorEdits = [];
+  syncInvoiceMirror(m);
+  saveRecordToFirestore('invoices', m.id, m);
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: m.id, action: 'Edited', user: ACTOR,
+    entity: INVOICE_LABEL[m.type] || 'Invoice', prevAmount: null, newAmount: m.totalAmount,
+    note: `Mirror ${m.id} reset to match ${m.mirrorOf} (${dropped} change${dropped === 1 ? '' : 's'} dropped)`, manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+  return m;
 }
 
 /* ====================================================================
@@ -1402,8 +1473,16 @@ export function updateInvoice(id, v) {
     const prop = inv.propertyId ? DATA.properties.find((p) => p.id === inv.propertyId) : null;
     inv.propertyName = prop ? prop.name + ' · ' + prop.project : '';
   }
+  // An edited mirror remembers which fields now differ from its original.
+  const src = invoiceSource(inv);
+  if (src) {
+    inv.mirrorEdits = invoiceEdits(inv, src);
+    syncInvoiceMirror(inv);
+  }
   saveRecordToFirestore('invoices', inv.id, inv);
   logEdit(inv.id, INVOICE_LABEL[inv.type] || 'Invoice', prev, inv.totalAmount);
+  // An edited original shows straight away on its mirrors.
+  if (!inv.mirrorOf) syncInvoiceMirrors();
   return inv;
 }
 
@@ -1418,7 +1497,10 @@ export function normalizeLedger(name, rows) {
   if (name === 'projects') syncProjects(rows);
   if (name === 'payments') rows.sort((a, b) => b.date - a.date);
   // A balance saved before it was worked out automatically may not match its total and token.
-  if (name === 'invoices') rows.forEach((i) => { i.balanceAmount = Math.max(0, (i.totalAmount || 0) - (i.tokenAmount || 0)); });
+  if (name === 'invoices') {
+    rows.forEach((i) => { i.balanceAmount = Math.max(0, (i.totalAmount || 0) - (i.tokenAmount || 0)); });
+    syncInvoiceMirrors(rows);
+  }
   if (name === 'audit' || name === 'costSheets') rows.sort((a, b) => String(b.id).localeCompare(String(a.id)));
   return rows;
 }
@@ -1705,6 +1787,9 @@ export function computeTradingKPIs(sheets) {
 
 export function saveCostSheet(raw, user) {
   const cs = calculateCostSheet(raw);
+  // A mirror remembers which of its lines differ from the original; the rest follow it.
+  const src = cs.mirrorOf ? realSheet(cs.mirrorOf) : null;
+  if (src) cs.mirrorEdits = sheetEdits(cs, src);
   if (!cs.id) {
     cs.id = nextId(DATA.costSheets, 'CS-', 4);
   }
@@ -1737,7 +1822,8 @@ export function saveCostSheet(raw, user) {
     entity: 'Trading Cost Sheet',
     prevAmount: null,
     newAmount: cs.netProfit,
-    note: `Cost Sheet ${cs.id} (${cs.name}) ${idx >= 0 ? 'updated' : 'created'} with net margin ${cs.netMarginPct.toFixed(1)}%`,
+    note: `Cost Sheet ${cs.id} (${cs.name}) ${idx >= 0 ? 'updated' : 'created'} with net margin ${cs.netMarginPct.toFixed(1)}%` +
+      (cs.mirrorOf ? ` (mirror of ${cs.mirrorOf})` : ''),
     manual: true,
   };
   DATA.audit.unshift(au);
@@ -1844,9 +1930,55 @@ export function dealSheets() {
   return out;
 }
 
-/** The saved mirrors: cost sheets started as a copy of another one. */
+/** The saved mirrors: cost sheets started as a copy of another one, each brought up to date
+    with its original. */
 export function mirrorSheets() {
-  return DATA.costSheets.filter((s) => s.mirrorOf);
+  return DATA.costSheets.filter((s) => s.mirrorOf).map(syncSheetMirror);
+}
+
+/** The fields of a cost sheet a mirror follows. Its number and attachments are its own. */
+export const SHEET_MIRROR_KEYS = SHEET_AMOUNT_KEYS.concat([
+  'propertyId', 'name', 'project', 'city', 'type', 'size', 'status', 'office', 'seller', 'buyer', 'purchaseDate', 'saleDate',
+]);
+
+/** The real sheet of a deal: saved under its own number, else the one saved for that property,
+    else read from the property's records. */
+export function realSheet(key) {
+  return DATA.costSheets.find((s) => s.id === key && !s.mirrorOf)
+    || DATA.costSheets.find((s) => s.propertyId === key && !s.mirrorOf)
+    || sheetFromRecords(key);
+}
+
+/** The fields of a mirror cost sheet that differ from its original. */
+const sheetEdits = (cs, src) => SHEET_MIRROR_KEYS.filter((k) => !sameValue(cs[k], src[k]));
+
+/** A mirror cost sheet brought up to date with its original, keeping the lines changed on it.
+    A mirror saved before changes were tracked has none, so it matches its original again. */
+export function syncSheetMirror(m) {
+  const src = realSheet(m.mirrorOf);
+  if (!src) return m;
+  const edits = m.mirrorEdits || [];
+  const next = { ...m };
+  SHEET_MIRROR_KEYS.forEach((k) => { if (edits.indexOf(k) < 0) next[k] = src[k]; });
+  return calculateCostSheet(next);
+}
+
+/** Drop every change made on a mirror cost sheet, so it matches its original again. */
+export function resetSheetMirror(id) {
+  const idx = DATA.costSheets.findIndex((s) => s.id === id && s.mirrorOf);
+  if (idx < 0) throw new Error('Mirror cost sheet ' + id + ' not found');
+  const dropped = (DATA.costSheets[idx].mirrorEdits || []).length;
+  const cs = syncSheetMirror({ ...DATA.costSheets[idx], mirrorEdits: [] });
+  DATA.costSheets[idx] = cs;
+  saveRecordToFirestore('costSheets', cs.id, cs);
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: cs.id, action: 'Edited', user: ACTOR,
+    entity: 'Trading Cost Sheet', prevAmount: null, newAmount: cs.netProfit,
+    note: `Mirror ${cs.id} reset to match ${cs.mirrorOf} (${dropped} change${dropped === 1 ? '' : 's'} dropped)`, manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+  return cs;
 }
 
 /* ====================================================================

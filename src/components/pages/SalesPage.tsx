@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
+import { useApp, FORMS_DEF } from '../../context/AppContext';
+import { PageShell, SummaryKpis, DataTable, Tag, MirrorChanges } from '../Shared';
+import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { ShareBar, RankedList } from '../Charts';
 import { Icon } from '../Icons';
 import { PAGE_META, OC } from '../../lib/constants';
@@ -11,7 +12,7 @@ import { InvoiceReceiptModal, PrintInvoiceNow } from '../InvoiceReceiptModal';
 import type { Invoice } from '../../lib/types';
 
 export function SalesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, openMirror, numbers, openCostSheet, toast, refreshData } = useApp();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [printing, setPrinting] = useState<Invoice | null>(null);
   const [mirrorPick, setMirrorPick] = useState('');
@@ -165,6 +166,17 @@ export function SalesPage() {
     const originals = M.DATA.invoices.filter((i: any) => !i.mirrorOf && i.type === type);
     const party = (i: any) => (type === 'purchase' ? i.sellerName || i.buyerName : i.buyerName) || 'No name';
     const btnLabel = `Mirror ${type} invoice`;
+    const formFields: any[] = FORMS_DEF[type + 'Invoice'].fields;
+    const fieldLabel = (k: string) => String((formFields.find((fd) => fd.k === k) || { l: k }).l).replace(/ \(PKR\)$/, '');
+    const resetMirror = (i: any) => {
+      if (!ledgersReady() || ledgerError()) {
+        toast('Not reset — your records are not reachable right now');
+        return;
+      }
+      M.resetInvoiceMirror(i.id);
+      refreshData();
+      toast(`${i.id} now matches ${i.mirrorOf} again`);
+    };
 
     const summaryPairs: [string, string][] = [
       [`Mirror ${type} invoices`, M.fmtNum(mirrors.length)],
@@ -180,6 +192,26 @@ export function SalesPage() {
         key: 'mirrorOf',
         label: 'Copy of',
         render: (i: any) => <span className="tag mute" title={`Created as a copy of ${i.mirrorOf}`}>{i.mirrorOf}</span>,
+      },
+      {
+        key: 'mirrorEdits',
+        label: 'Changed on mirror',
+        render: (i: any) => (
+          <>
+            <MirrorChanges edits={i.mirrorEdits} label={fieldLabel} />
+            {(i.mirrorEdits || []).length > 0 && (
+              <button
+                type="button"
+                className="btn sm"
+                style={{ padding: '2px 8px', fontSize: '11px', height: '24px', marginLeft: '6px' }}
+                onClick={() => resetMirror(i)}
+                title={`Drop the changes made on this mirror so it matches ${i.mirrorOf}`}
+              >
+                Reset
+              </button>
+            )}
+          </>
+        ),
       },
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },

@@ -34,6 +34,21 @@ export function Modals() {
     ? `${F.title.replace(/^Create /, 'Mirror ')} · copy of ${mirrorOf}`
     : F.title;
 
+  // A mirror, being made or edited: fields that differ from its original are its own changes.
+  const mirrorSrcId = F.coll === 'invoices' ? mirrorOf || editingMirror : null;
+  const mirrorSrc: any = mirrorSrcId ? M.DATA.invoices.find((i: any) => i.id === mirrorSrcId) : null;
+  const mirrorDiff = (k: string) => !!mirrorSrc && M.INVOICE_MIRROR_KEYS.includes(k) && !M.sameValue(values[k], mirrorSrc[k]);
+  const original = (fd: any) => {
+    const x = mirrorSrc[fd.k];
+    if (fd.type === 'money') return M.fmt(+x || 0, 'full');
+    if (fd.type === 'date') return x ? M.fmtDate(M.parseDate(x)) : '—';
+    if (fd.type === 'select') {
+      const opt = fd.opts().map((o: any) => (Array.isArray(o) ? o : [o, o])).find((o: any) => o[0] === x);
+      return opt ? opt[1] : x || '—';
+    }
+    return x || '—';
+  };
+
   // Group fields into fieldsets
   const groups: { name: string; fields: any[] }[] = [];
   let currentGroup = { name: '', fields: [] as any[] };
@@ -79,12 +94,10 @@ export function Modals() {
           <div>
             <h2>{title}</h2>
             <p>
-              {editingMirror
-                ? `The change is saved to this mirror only. ${editingMirror}, the invoice it was copied from, is not touched.`
+              {mirrorSrcId
+                ? `This mirror follows ${mirrorSrcId}. A field you change here stays your own (highlighted); every other field keeps matching ${mirrorSrcId}, even when ${mirrorSrcId} is changed later. ${mirrorSrcId} itself is never changed.`
                 : editId
                 ? 'The change is saved to this record and logged in the audit trail. Amounts already paid or received are changed by recording or voiding a payment.'
-                : mirrorOf
-                ? `A copy of ${mirrorOf}, saved as a separate mirror with a number of its own. Change anything you need before saving; ${mirrorOf} itself is not touched.`
                 : F.sub}
             </p>
           </div>
@@ -158,7 +171,7 @@ export function Modals() {
                   }
 
                   return (
-                    <div key={fd.k} className={`fld ${fd.full ? 'full' : ''}`}>
+                    <div key={fd.k} className={`fld ${fd.full ? 'full' : ''} ${mirrorDiff(fd.k) ? 'mirror-diff' : ''}`}>
                       <label>
                         {fd.l}
                         {fd.req ? ' *' : ''}
@@ -166,6 +179,8 @@ export function Modals() {
                       {ctl}
                       {err ? (
                         <span className="bad">{err}</span>
+                      ) : mirrorDiff(fd.k) ? (
+                        <span className="hint mirror-was">Original: {original(fd)}</span>
                       ) : fd.hint ? (
                         <span className="hint">{fd.hint}</span>
                       ) : null}

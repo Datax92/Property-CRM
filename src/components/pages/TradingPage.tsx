@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable } from '../Shared';
+import { PageShell, SummaryKpis, DataTable, MirrorChanges } from '../Shared';
 import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
 import { BrandBanner, BrandFooter } from '../Brand';
@@ -75,6 +75,14 @@ const LINES: Line[] = [
 
 const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);
 
+/** What each field a mirror can change is called on screen. */
+const SHEET_FIELD_LABEL: Record<string, string> = {
+  ...Object.fromEntries(LINES.filter((l) => l.k).map((l) => [l.k as string, l.label])),
+  propertyId: 'Linked property', name: 'Property name', project: 'Project', city: 'City', type: 'Property type',
+  size: 'Size', status: 'Deal status', office: 'Office', seller: 'Seller', buyer: 'Buyer',
+  purchaseDate: 'Purchase date', saleDate: 'Sale date',
+};
+
 /** The rate lines of a sheet that stand exactly at their rate. */
 const atRate = (form: any): string[] => {
   const cs = M.calculateCostSheet(form);
@@ -86,9 +94,19 @@ const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
 const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
 
 export function TradingPage() {
-  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet } = useApp();
+  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet, toast, refreshData } = useApp();
   const [printing, setPrinting] = useState<CostSheet | null>(null);
   const [mirrorPick, setMirrorPick] = useState('');
+
+  const resetMirror = (cs: CostSheet) => {
+    if (!ledgersReady() || ledgerError()) {
+      toast('Not reset — your records are not reachable right now');
+      return;
+    }
+    M.resetSheetMirror(cs.id);
+    refreshData();
+    toast(`${cs.id} now matches ${cs.mirrorOf} again`);
+  };
 
   // =========================================================================
   // MIRROR COST SHEETS — editable copies, kept apart from the real deals
@@ -120,6 +138,11 @@ export function TradingPage() {
         label: 'Copy of',
         render: (cs: CostSheet) => <span className="tag mute">{cs.mirrorOf}</span>,
       },
+      {
+        key: 'mirrorEdits',
+        label: 'Changed on mirror',
+        render: (cs: CostSheet) => <MirrorChanges edits={cs.mirrorEdits} label={(k) => SHEET_FIELD_LABEL[k] || k} />,
+      },
       { key: 'name', label: 'Property', render: (cs: CostSheet) => <b>{cs.name}</b> },
       { key: 'project', label: 'Project' },
       { key: 'status', label: 'Status' },
@@ -148,6 +171,11 @@ export function TradingPage() {
             <button type="button" className="btn sm" onClick={() => setPrinting(cs)} title="Print this cost sheet now">
               <Icon name="print" size={12} /> Print
             </button>
+            {(cs.mirrorEdits || []).length > 0 && (
+              <button type="button" className="btn sm" onClick={() => resetMirror(cs)} title={`Drop the changes made on this mirror so it matches ${cs.mirrorOf}`}>
+                Reset to original
+              </button>
+            )}
           </span>
         ),
       },
@@ -157,7 +185,7 @@ export function TradingPage() {
       <PageShell
         title="Mirror cost sheets"
         u="نقل لاگت شیٹ"
-        p="Editable copies of cost sheets, kept apart from the real deals. They never change a property or the trading figures."
+        p="Copies that follow their original: only the lines you change on a mirror differ from it. A mirror never changes a property or the trading figures."
         acts={
           <>
             <select
@@ -493,14 +521,10 @@ function blankDeal(over: Record<string, any> = {}) {
   });
 }
 
-/** Find a sheet by its own ID, or a property's sheet (saved, else read from its records).
+/** Find a mirror by its own ID (up to date with its original), else a deal's real sheet.
     A mirror shares its property with the real sheet, so it is only ever found by its own ID. */
 function findSheet(key: string): CostSheet | null {
-  const saved =
-    M.DATA.costSheets.find((s: any) => s.id === key) ||
-    M.DATA.costSheets.find((s: any) => s.propertyId === key && !s.mirrorOf);
-  if (saved) return saved;
-  return M.sheetFromRecords(key);
+  return M.mirrorSheets().find((s: CostSheet) => s.id === key) || M.realSheet(key);
 }
 
 function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
@@ -516,7 +540,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
       const src = findSheet(key.slice(7));
       if (!src) return blankDeal();
       const mirrorOf = src.fromRecords || !src.id ? src.propertyId : src.id;
-      return M.calculateCostSheet({ ...src, id: '', fromRecords: false, attachments: [], name: `${src.name} (mirror)`, mirrorOf });
+      return M.calculateCostSheet({ ...src, id: '', fromRecords: false, attachments: [], mirrorOf, mirrorEdits: [] });
     }
     if (key) {
       const found = findSheet(key);
@@ -606,6 +630,25 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
     toast(`Cost sheet ${saved.id} saved`);
   };
 
+  // A mirror follows its original; whatever differs from it is a change made on the mirror.
+  const mirrorSource: any = live.mirrorOf ? M.realSheet(live.mirrorOf) : null;
+  const differs = (k: string) => !!mirrorSource && !M.sameValue(form[k], mirrorSource[k]);
+  const mirrorChanges: string[] = mirrorSource ? M.SHEET_MIRROR_KEYS.filter(differs) : [];
+  const fldCls = (k: string) => (differs(k) ? 'fld mirror-diff' : 'fld');
+
+  const resetToOriginal = () => {
+    if (live.id) {
+      if (!ledgersReady() || ledgerError()) {
+        toast('Not reset — your records are not reachable right now');
+        return;
+      }
+      load(M.resetSheetMirror(live.id));
+    } else {
+      load(M.syncSheetMirror({ ...form, mirrorEdits: [] }));
+    }
+    toast(`Now matches ${live.mirrorOf} again`);
+  };
+
   const dateValue = (d: any) => (d ? M.dateInput(M.parseDate(d)) : '');
   const selectValue = live.id || (live.propertyId && !live.mirrorOf ? live.propertyId : 'new');
 
@@ -653,13 +696,25 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
           </div>
         </div>
 
-        {live.mirrorOf && !live.id && (
-          <div className="note calm" style={{ marginBottom: '8px' }}>
+        {live.mirrorOf && (
+          <div className="note calm" style={{ marginBottom: '8px' }} data-noprint="1">
             <span className="ic"><Icon name="info" /></span>
-            <div>
-              This is a <b>mirror</b> of {live.mirrorOf}. Change anything you need and press Save — it is kept as a new
-              sheet and {live.mirrorOf} is not touched.
+            <div style={{ flex: 1 }}>
+              This is a <b>mirror</b> of {live.mirrorOf} and follows it: a change made to {live.mirrorOf} shows here too
+              {mirrorChanges.length ? (
+                <>
+                  , except the <b>{mirrorChanges.length} {mirrorChanges.length === 1 ? 'line' : 'lines'} changed on this mirror</b> (highlighted)
+                </>
+              ) : (
+                <> — right now it matches exactly</>
+              )}
+              . Saving never changes {live.mirrorOf}.
             </div>
+            {mirrorChanges.length > 0 && (
+              <button type="button" className="btn sm" onClick={resetToOriginal} title={`Drop the changes made on this mirror so it matches ${live.mirrorOf}`}>
+                Reset to original
+              </button>
+            )}
           </div>
         )}
         {outOfDate && (
@@ -716,8 +771,9 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                     );
                   }
                   const rate = l.rate ? l.rate(live) : null;
+                  const changed = !!l.k && differs(l.k);
                   return (
-                    <tr key={i} className={l.kind}>
+                    <tr key={i} className={changed ? `${l.kind} mirror-diff` : l.kind}>
                       <td className="no">{l.no || ''}</td>
                       <td>{l.label}</td>
                       <td className="basis">
@@ -735,15 +791,18 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                       </td>
                       <td className="r">
                         {l.k ? (
-                          <input
-                            type="number"
-                            min="0"
-                            step="1000"
-                            aria-label={l.label}
-                            value={form[l.k] === 0 || form[l.k] == null ? '' : form[l.k]}
-                            placeholder="0"
-                            onChange={(e) => setAmount(l.k as string, e.target.value)}
-                          />
+                          <>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1000"
+                              aria-label={l.label}
+                              value={form[l.k] === 0 || form[l.k] == null ? '' : form[l.k]}
+                              placeholder="0"
+                              onChange={(e) => setAmount(l.k as string, e.target.value)}
+                            />
+                            {changed && <small className="mirror-was">Original {M.fmt(+mirrorSource[l.k] || 0, 'full')}</small>}
+                          </>
                         ) : (
                           <b className={`mono ${amountOf(live, l) < 0 ? 'neg' : l.kind === 'result' ? 'pos' : ''}`}>
                             {M.fmt(amountOf(live, l), 'full')}
@@ -765,7 +824,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
               </div>
               <div className="panel-b">
                 <div className="formgrid one">
-                  <div className="fld">
+                  <div className={fldCls('propertyId')}>
                     <label htmlFor="cs-prop">Linked property</label>
                     <select id="cs-prop" value={form.propertyId || ''} onChange={(e) => linkProperty(e.target.value)}>
                       <option value="">— Not linked —</option>
@@ -777,11 +836,11 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                     </select>
                     <span className="hint">Linking fills the sheet from that property’s purchase, sale, expenses and taxes.</span>
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('name')}>
                     <label htmlFor="cs-name">Property name *</label>
                     <input id="cs-name" value={form.name || ''} placeholder="Plot 1104, Faisal Hills" onChange={(e) => updateField('name', e.target.value)} />
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('project')}>
                     <label htmlFor="cs-project">Project / society</label>
                     <input id="cs-project" list="cs-projects" value={form.project || ''} onChange={(e) => updateField('project', e.target.value)} />
                     <datalist id="cs-projects">
@@ -790,11 +849,11 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                       ))}
                     </datalist>
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('city')}>
                     <label htmlFor="cs-city">City</label>
                     <input id="cs-city" value={form.city || ''} onChange={(e) => updateField('city', e.target.value)} />
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('type')}>
                     <label htmlFor="cs-type">Property type</label>
                     <select id="cs-type" value={form.type || M.TYPES[0]} onChange={(e) => updateField('type', e.target.value)}>
                       {M.TYPES.map((t: string) => (
@@ -802,11 +861,11 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                       ))}
                     </select>
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('size')}>
                     <label htmlFor="cs-size">Size</label>
                     <input id="cs-size" value={form.size || ''} placeholder="5 Marla" onChange={(e) => updateField('size', e.target.value)} />
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('status')}>
                     <label htmlFor="cs-status">Deal status</label>
                     <select id="cs-status" value={form.status || 'Active Deal'} onChange={(e) => updateField('status', e.target.value)}>
                       {['Draft', 'Active Deal', 'Reserved', 'Sold'].map((t) => (
@@ -814,11 +873,11 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                       ))}
                     </select>
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('purchaseDate')}>
                     <label htmlFor="cs-pdate">Purchase date</label>
                     <input id="cs-pdate" type="date" value={dateValue(form.purchaseDate)} onChange={(e) => updateField('purchaseDate', e.target.value || M.TODAY)} />
                   </div>
-                  <div className="fld">
+                  <div className={fldCls('saleDate')}>
                     <label htmlFor="cs-sdate">Sale date</label>
                     <input id="cs-sdate" type="date" value={dateValue(form.saleDate)} onChange={(e) => updateField('saleDate', e.target.value || null)} />
                   </div>
