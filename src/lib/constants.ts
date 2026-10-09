@@ -130,7 +130,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost, what it is worth today, and the difference.' },
   'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought, with acquisition costs and what is still owed to the seller.' },
-  'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, after acquisition costs, commission, tax and selling costs.' },
+  'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, taken from its cost sheet: the same figures as the cost sheet register.' },
   'properties/projects': { t: 'Projects', u: 'منصوبے', p: 'Every project / society: stock held, what it cost, what it is worth, and what has been sold.' },
   'trading/sheets': { t: 'Cost sheet register', u: 'لاگت رجسٹر', p: 'Complete trading ledger: acquisition cost basis, sale realization, brokerage, statutory taxes, and net margins.' },
   'trading/calculator': { t: 'Cost sheet', u: 'لاگت شیٹ', p: 'One deal: purchase price, selling costs, gross profit and net margin, read from the records.' },

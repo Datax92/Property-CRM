@@ -588,20 +588,23 @@ export function profitSplit(k) {
 }
 
 /* E6 - Per-property profitability (section 25 asks for the screen, never the maths). */
+/* Each property sold in the period, with the figures of its deal cost sheet: the very sheet the
+   cost sheet register lists and opens, so the three never disagree. */
 export function propertyPerf(r, f) {
   const sold = DATA.sales.filter((s) => inR(s.date, r));
   const byId = {};
   DATA.properties.forEach((p) => { if (propMatch(p, f)) byId[p.id] = p; });
   return sold.filter((s) => byId[s.propertyId] && (f.agent === 'all' || s.agentId === f.agent)).map((s) => {
     const p = byId[s.propertyId];
+    const cs = realSheet(p.id);
     return {
       id: p.id, name: p.name, project: p.project, agent: s.agent, saleDate: s.date,
-      price: p.price, extras: p.totalCost - p.price, totalCost: p.totalCost,
-      sellingPrice: s.sellingPrice, commission: s.commission, tax: s.tax, other: s.otherExpenses,
-      grossProfit: s.grossProfit, netProfit: s.netProfit,
-      margin: pctOf(s.netProfit, s.sellingPrice), heldDays: p.heldDays,
+      sheet: cs.id || '', netBuyCost: cs.netBuyCost, purchasePrice: cs.purchasePrice,
+      grossSalePrice: cs.grossSalePrice, sellingCosts: cs.saleSideCosts, grossProfit: cs.grossProfit,
+      deductions: cs.grossProfit - cs.netMargin, netMargin: cs.netMargin, netMarginPct: cs.netMarginPct,
+      heldDays: p.heldDays,
     };
-  }).sort((a, b) => b.netProfit - a.netProfit);
+  }).sort((a, b) => b.netMargin - a.netMargin);
 }
 
 /* Per-project roll-up: stock held and what has been sold in the period. Properties carry the
@@ -1491,6 +1494,9 @@ export function normalizeLedger(name, rows) {
     rows.forEach((i) => { i.balanceAmount = Math.max(0, (i.totalAmount || 0) - (i.tokenAmount || 0)); });
     syncInvoiceMirrors(rows);
   }
+  // A sheet's totals are worked out again, not read as stored: a sheet saved under older
+  // arithmetic then adds up in the register exactly as it does when opened.
+  if (name === 'costSheets') rows = rows.map(calculateCostSheet);
   if (name === 'audit' || name === 'costSheets') rows.sort((a, b) => String(b.id).localeCompare(String(a.id)));
   return rows;
 }

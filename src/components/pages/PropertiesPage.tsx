@@ -145,14 +145,18 @@ export function PropertiesPage() {
   }
 
   if (tab === 'performance') {
+    // Every figure is the property's own cost sheet, laid out as the cost sheet register lays it out.
     const rows = M.propertyPerf(r, f);
+    const sum = (key: string) => rows.reduce((a: number, p: any) => a + (p[key] || 0), 0);
+    const pct = (n: number) => `${(n || 0).toFixed(1)}%`;
 
     const summaryPairs: [string, string][] = [
       ['Properties sold', M.fmtNum(rows.length)],
-      ['Total cost', M.fmt(rows.reduce((a: number, p: any) => a + p.totalCost, 0), numbers)],
-      ['Revenue', M.fmt(rows.reduce((a: number, p: any) => a + p.sellingPrice, 0), numbers)],
-      ['Gross profit', M.fmt(rows.reduce((a: number, p: any) => a + p.grossProfit, 0), numbers)],
-      ['Net profit', M.fmt(rows.reduce((a: number, p: any) => a + p.netProfit, 0), numbers)],
+      ['Purchase price (landed)', M.fmt(sum('purchasePrice'), numbers)],
+      ['Sale price', M.fmt(sum('grossSalePrice'), numbers)],
+      ['Gross profit', M.fmt(sum('grossProfit'), numbers)],
+      ['Net margin', M.fmt(sum('netMargin'), numbers)],
+      ['Net margin %', pct(M.pctOf(sum('netMargin'), sum('grossSalePrice')))],
     ];
 
     const cols = [
@@ -161,28 +165,44 @@ export function PropertiesPage() {
       { key: 'project', label: 'Project' },
       { key: 'agent', label: 'Agent' },
       { key: 'saleDate', label: 'Sold', cls: 'mono', render: (p: any) => M.fmtDate(p.saleDate) },
-      { key: 'price', label: 'Purchase price', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.price, numbers) },
-      { key: 'extras', label: 'Acquisition', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.extras, numbers) },
-      { key: 'totalCost', label: 'Total cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.totalCost, numbers) },
-      { key: 'sellingPrice', label: 'Selling price', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.sellingPrice, numbers) },
-      { key: 'commission', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.commission, numbers) },
+      {
+        key: 'sheet',
+        label: 'Sheet',
+        render: (p: any) =>
+          p.sheet ? (
+            <span className="mono">{p.sheet}</span>
+          ) : (
+            <span className="tag mute" title="No cost sheet saved yet: read from the property, sale, expense and tax records.">
+              From records
+            </span>
+          ),
+      },
+      { key: 'netBuyCost', label: 'Net buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.netBuyCost, numbers) },
+      { key: 'purchasePrice', label: 'Purchase price', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.purchasePrice, numbers) },
+      { key: 'grossSalePrice', label: 'Sale price', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => <b>{M.fmt(p.grossSalePrice, numbers)}</b> },
+      { key: 'sellingCosts', label: 'Selling costs', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.sellingCosts, numbers) },
       {
         key: 'grossProfit',
         label: 'Gross profit',
         a: 'r' as const,
         sum: true,
         cls: 'mono',
-        render: (p: any) => <span className={p.grossProfit > 0 ? 'pos' : p.grossProfit < 0 ? 'neg' : ''}>{M.fmt(p.grossProfit, numbers)}</span>,
+        render: (p: any) => <span className={p.grossProfit >= 0 ? 'pos' : 'neg'}>{M.fmt(p.grossProfit, numbers)}</span>,
       },
+      { key: 'deductions', label: 'CGT, Zakat & charity', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.deductions, numbers) },
       {
-        key: 'netProfit',
-        label: 'Net profit',
+        key: 'netMargin',
+        label: 'Net margin',
         a: 'r' as const,
         sum: true,
         cls: 'mono',
-        render: (p: any) => <span className={p.netProfit > 0 ? 'pos' : p.netProfit < 0 ? 'neg' : ''}>{M.fmt(p.netProfit, numbers)}</span>,
+        render: (p: any) => (
+          <span className={p.netMargin >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 800 }}>
+            {M.fmt(p.netMargin, numbers)}
+          </span>
+        ),
       },
-      { key: 'margin', label: 'Margin', a: 'r' as const, cls: 'mono', render: (p: any) => isFinite(p.margin) ? `${p.margin.toFixed(1)}%` : '—' },
+      { key: 'netMarginPct', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (p: any) => pct(p.netMarginPct) },
       {
         key: 'sheet',
         label: 'Cost Sheet',

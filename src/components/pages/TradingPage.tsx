@@ -568,6 +568,14 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   };
 
   const linkProperty = (pid: string) => {
+    // A property has one cost sheet, the one every page reads: linking a property that already
+    // has its own opens that sheet rather than starting a second one (copies are mirrors).
+    const own: any = pid && !form.mirrorOf ? M.DATA.costSheets.find((s: any) => s.propertyId === pid && !s.mirrorOf && s.id !== form.id) : null;
+    if (own) {
+      setActiveCostSheetId(own.id);
+      toast(`${pid} already has cost sheet ${own.id}, opened it`);
+      return;
+    }
     // A new sheet linked to a property is filled from that property's records straight away.
     if (pid && !form.id) {
       const fromRecords = M.sheetFromRecords(pid);
