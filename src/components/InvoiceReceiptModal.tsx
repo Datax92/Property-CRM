@@ -50,6 +50,14 @@ function voucherInfo(invoice: Invoice) {
   const sellerName = invoice.sellerName || (isSale ? M.COMPANY : '');
   const paid = invoice.tokenAmount || 0;
   const settledInFull = !proforma && (invoice.balanceAmount || 0) <= 0 && paid > 0;
+  // A payment split two ways prints each mode with its own amount and reference.
+  const second = invoice.paymentMode2 && (invoice.paymentAmount2 || 0) > 0 ? Math.min(paid, invoice.paymentAmount2 || 0) : 0;
+  const modes = second
+    ? [
+        { mode: invoice.paymentMode || '', amount: paid - second, ref: invoice.paymentRef || '' },
+        { mode: invoice.paymentMode2 || '', amount: second, ref: invoice.paymentRef2 || '' },
+      ]
+    : [{ mode: invoice.paymentMode || '', amount: paid, ref: invoice.paymentRef || '' }];
   return {
     isSale,
     proforma,
@@ -59,8 +67,10 @@ function voucherInfo(invoice: Invoice) {
     title: proforma ? 'Proforma Invoice' : isSale ? 'Sale Receipt Voucher' : 'Purchase Payment Voucher',
     heading: proforma ? 'Proforma Invoice' : isSale ? 'Receipt' : 'Payment Voucher',
     copy: proforma ? 'Quotation · not a receipt' : isSale ? 'Customer copy' : 'Company record copy',
-    // Mirrors have a serial series of their own (MSI-, MPI-), never a real receipt's number.
-    serial: `${invoice.mirrorOf ? 'M' : ''}${proforma ? 'PF' : isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`,
+    // A mirror prints exactly as its original would: same serial, same invoice number, no mirror marks.
+    serial: `${proforma ? 'PF' : isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`,
+    ref: invoice.mirrorOf || invoice.id,
+    modes,
     // The other party to the payment: the buyer who paid us, or the seller we paid.
     partyName: isSale ? invoice.receivedFromName || invoice.buyerName : sellerName,
     partyCnic: isSale ? invoice.receivedFromCnic || invoice.buyerCnic : invoice.sellerCnic,
@@ -126,9 +136,14 @@ export function VoucherA4({ invoice }: { invoice: Invoice }) {
         </div>
         <div>
           <span>Invoice ref.</span>
-          <b>{invoice.id}</b>
-          {invoice.mirrorOf && <em className="vr-mirror">Mirror of {invoice.mirrorOf}</em>}
+          <b>{v.ref}</b>
         </div>
+        {invoice.estampNo && (
+          <div>
+            <span>e-Stamp no.</span>
+            <b>{invoice.estampNo}</b>
+          </div>
+        )}
         <div>
           <span>Date</span>
           <b>{dateOr(invoice.receiptDate)}</b>
@@ -151,16 +166,27 @@ export function VoucherA4({ invoice }: { invoice: Invoice }) {
           <span>on account of</span>
           <b>{v.purpose}</b>
         </p>
-        {!proforma && (
-          <p>
-            <span>by</span>
-            <b className="fixed">{invoice.paymentMode || ' '}</b>
-            <span>Cheque / Ref. No.</span>
-            <b>{invoice.paymentRef || ' '}</b>
-            <span>dated</span>
-            <b className="fixed">{dateOr(invoice.paymentDate, dateOr(invoice.receiptDate))}</b>
-          </p>
-        )}
+        {!proforma &&
+          v.modes.map((m, i) => (
+            <p key={i}>
+              <span>{i ? 'and by' : 'by'}</span>
+              <b className="fixed">{m.mode || ' '}</b>
+              {v.modes.length > 1 && (
+                <>
+                  <span>PKR</span>
+                  <b className="fixed">{M.fmtNum(m.amount)}/-</b>
+                </>
+              )}
+              <span>Cheque / Ref. No.</span>
+              <b>{m.ref || ' '}</b>
+              {i === 0 && (
+                <>
+                  <span>dated</span>
+                  <b className="fixed">{dateOr(invoice.paymentDate, dateOr(invoice.receiptDate))}</b>
+                </>
+              )}
+            </p>
+          ))}
       </div>
 
       <div className="vr-amount-row">
@@ -371,7 +397,8 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
               </div>
               <div className="ts-rule" />
               <div className="ts-row"><span>Serial No.</span><b>{v.serial}</b></div>
-              <div className="ts-row"><span>Invoice</span><b>{invoice.id}</b></div>
+              <div className="ts-row"><span>Invoice</span><b>{v.ref}</b></div>
+              {invoice.estampNo && <div className="ts-row"><span>e-Stamp</span><b>{invoice.estampNo}</b></div>}
               <div className="ts-row"><span>Date</span><b>{dateOr(invoice.receiptDate)}</b></div>
               <div className="ts-rule" />
               <div className="ts-head">Buyer</div>
@@ -384,8 +411,15 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
               {invoice.bankDetailsSeller && <div className="ts-row"><span>Bank</span><b>{invoice.bankDetailsSeller}</b></div>}
               <div className="ts-rule" />
               <div className="ts-row"><span>Property</span><b>{invoice.propertyName || '—'}</b></div>
-              <div className="ts-row"><span>Pay mode</span><b>{invoice.paymentMode || '—'}</b></div>
-              {invoice.paymentRef && <div className="ts-row"><span>Ref.</span><b>{invoice.paymentRef}</b></div>}
+              {v.modes.map((m, i) => (
+                <React.Fragment key={i}>
+                  <div className="ts-row">
+                    <span>{v.modes.length > 1 ? `Pay mode ${i + 1}` : 'Pay mode'}</span>
+                    <b>{(m.mode || '—') + (v.modes.length > 1 ? ' · ' + money(m.amount) : '')}</b>
+                  </div>
+                  {m.ref && <div className="ts-row"><span>Ref.</span><b>{m.ref}</b></div>}
+                </React.Fragment>
+              ))}
               {invoice.paymentTerms && <div className="ts-row"><span>Terms</span><b>{invoice.paymentTerms}</b></div>}
               <div className="ts-rule" />
               <div className="ts-row"><span>Total price</span><b>{money(invoice.totalAmount)}</b></div>

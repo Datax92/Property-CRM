@@ -51,13 +51,13 @@ const LINES: Line[] = [
   { kind: 'item', no: '3.6', label: 'Other handling expenses', k: 'handlingExpenses' },
   { kind: 'section', no: '4', label: 'Real estate agent fee' },
   { kind: 'item', no: '4.1', label: 'Agent fee — buy side', k: 'buySideAgentFee' },
-  { kind: 'total', label: 'Purchase price (landed cost)', basis: '= Net buy cost + 1 + 2 + 3 + 4', value: (cs) => cs.purchasePrice },
+  { kind: 'total', label: 'Purchase price (landed cost)', value: (cs) => cs.purchasePrice },
   { kind: 'base', label: 'Gross sale price', basis: 'Sale price, or current value if unsold', k: 'grossSalePrice' },
   { kind: 'section', no: '5', label: 'Selling costs' },
   { kind: 'item', no: '5.1', label: 'FBR §236C advance tax on sale', basis: 'Filer 3%', k: 'tax236C', rate: (cs) => ['3%', Math.round(cs.grossSalePrice * 0.03)] },
   { kind: 'item', no: '5.2', label: 'Agent fee — sell side', k: 'sellSideAgentFee' },
   { kind: 'item', no: '5.3', label: 'Other selling expenses', k: 'otherSellingExpenses' },
-  { kind: 'total', label: 'Gross profit', basis: '= Sale price − selling costs − purchase price', value: (cs) => cs.grossProfit },
+  { kind: 'total', label: 'Gross profit', value: (cs) => cs.grossProfit },
   { kind: 'section', no: '6', label: 'Deductions from profit' },
   {
     kind: 'item',
@@ -70,7 +70,7 @@ const LINES: Line[] = [
   { kind: 'item', no: '6.2', label: 'Zakat', k: 'zakat' },
   { kind: 'item', no: '6.3', label: 'Charity', k: 'charity' },
   { kind: 'item', no: '6.4', label: 'Office expense share', basis: 'Optional', k: 'officeExpenseDeduction' },
-  { kind: 'result', label: 'Net margin (clean profit)', basis: '= Gross profit − 6', value: (cs) => cs.netMargin },
+  { kind: 'result', label: 'Net margin (clean profit)', value: (cs) => cs.netMargin },
 ];
 
 const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);

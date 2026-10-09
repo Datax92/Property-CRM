@@ -323,13 +323,15 @@ export function FinancePage() {
       ? [
           L('DIRECT COSTS OF THESE SALES', null, 'h'),
           L('Agent commission', -k.commission),
-          L('Withholding tax & selling costs on sales', -k.directCosts),
+          L('Withholding tax on sales', -k.saleTaxes),
+          L('Selling costs on sales', -k.sellingCosts),
           L('NET CONTRIBUTION', bv.net, 'g'),
         ]
       : [
           L('OPERATING EXPENSES', null, 'h'),
           L('Agent commission', -k.commission),
-          L('Withholding tax & selling costs on sales', -k.directCosts),
+          L('Withholding tax on sales', -k.saleTaxes),
+          L('Selling costs on sales', -k.sellingCosts),
           L('Salaries', -k.salaries),
           L('Office expenses', -k.officeExp),
           L('Marketing', -k.marketing),
@@ -368,7 +370,7 @@ export function FinancePage() {
         {
           k: 'Operating costs',
           v: -(k.operatingCosts + k.directCosts),
-          why: 'Commission, selling costs on sales, salaries, office, marketing, property, bills, other',
+          why: 'Commission, withholding tax and selling costs on sales, salaries, office, marketing, property, bills, other',
         },
         { k: 'Operating profit', v: bv.op, total: true },
         { k: 'Tax', v: -k.tax },

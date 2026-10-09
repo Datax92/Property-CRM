@@ -15,14 +15,19 @@ export function PropertiesPage() {
   if (tab === 'purchases') {
     const rows = M.DATA.properties
       .filter((p: any) => M.propMatch(p, f) && M.inRange(p.purchaseDate, r))
-      .map((p: any) => ({ ...p, extrasTotal: p.totalCost - p.price }));
+      // Landed cost is what the plot cost all in, from its cost sheet; expenses are everything on
+      // top of the price (fees, taxes, expenses picked for it, buy-side agent fee).
+      .map((p: any) => {
+        const landed = M.landedCost(p.id);
+        return { ...p, landed, expenses: landed - p.price };
+      });
 
     const summaryPairs: [string, string][] = [
       ['Properties bought', M.fmtNum(rows.length)],
-      ['Purchase price', M.fmt(rows.reduce((a: number, p: any) => a + p.price, 0), numbers)],
-      ['Acquisition costs', M.fmt(rows.reduce((a: number, p: any) => a + p.extrasTotal, 0), numbers)],
-      ['Total cost', M.fmt(rows.reduce((a: number, p: any) => a + p.totalCost, 0), numbers)],
-      ['Still payable', M.fmt(rows.reduce((a: number, p: any) => a + p.remaining, 0), numbers)],
+      ['Net buy cost', M.fmt(rows.reduce((a: number, p: any) => a + p.price, 0), numbers)],
+      ['Expenses', M.fmt(rows.reduce((a: number, p: any) => a + p.expenses, 0), numbers)],
+      ['Landed cost', M.fmt(rows.reduce((a: number, p: any) => a + p.landed, 0), numbers)],
+      ['Still payable to sellers', M.fmt(rows.reduce((a: number, p: any) => a + p.remaining, 0), numbers)],
     ];
 
     const cols = [
@@ -31,11 +36,11 @@ export function PropertiesPage() {
       { key: 'type', label: 'Type' },
       { key: 'project', label: 'Project' },
       { key: 'seller', label: 'Seller' },
-      { key: 'purchaseDate', label: 'Purchased', cls: 'mono', render: (p: any) => M.fmtDate(p.purchaseDate) },
-      { key: 'price', label: 'Price', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.price, numbers) },
-      { key: 'extrasTotal', label: 'Extra costs', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.extrasTotal, numbers) },
-      { key: 'totalCost', label: 'Total cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.totalCost, numbers) },
-      { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
+      { key: 'purchaseDate', label: 'Purchase date', cls: 'mono', render: (p: any) => M.fmtDate(p.purchaseDate) },
+      { key: 'price', label: 'Net buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.price, numbers) },
+      { key: 'expenses', label: 'Expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
+      { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.landed, numbers) },
+      { key: 'paid', label: 'Paid to seller', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
       { key: 'remaining', label: 'Remaining', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.remaining, numbers) },
       { key: 'payStatus', label: 'Payment', render: (p: any) => <Tag text={p.payStatus} /> },
       { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },
@@ -231,16 +236,15 @@ export function PropertiesPage() {
   // Inventory tab (default)
   const rows = M.DATA.properties
     .filter((p: any) => M.propMatch(p, f) && p.status !== 'Sold')
-    .map((p: any) => ({
-      ...p,
-      upside: p.currentValue - p.totalCost,
-      upPct: M.pctOf(p.currentValue - p.totalCost, p.totalCost),
-    }))
+    .map((p: any) => {
+      const landed = M.landedCost(p.id);
+      return { ...p, landed, upside: p.currentValue - landed, upPct: M.pctOf(p.currentValue - landed, landed) };
+    })
     .sort((a: any, b: any) => b.upside - a.upside);
 
   const summaryPairs: [string, string][] = [
     ['Unsold properties', M.fmtNum(rows.length)],
-    ['Cost value', M.fmt(rows.reduce((a: number, p: any) => a + p.totalCost, 0), numbers)],
+    ['Landed cost', M.fmt(rows.reduce((a: number, p: any) => a + p.landed, 0), numbers)],
     ['Market value', M.fmt(rows.reduce((a: number, p: any) => a + p.currentValue, 0), numbers)],
     ['Potential profit', M.fmt(rows.reduce((a: number, p: any) => a + p.upside, 0), numbers)],
   ];
@@ -252,7 +256,7 @@ export function PropertiesPage() {
     { key: 'project', label: 'Project' },
     { key: 'location', label: 'City' },
     { key: 'size', label: 'Size' },
-    { key: 'totalCost', label: 'Purchase cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.totalCost, numbers) },
+    { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.landed, numbers) },
     { key: 'currentValue', label: 'Current value', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.currentValue, numbers) },
     {
       key: 'upside',

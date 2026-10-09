@@ -193,7 +193,13 @@ export interface Invoice {
   paymentDate?: Date | string;
   paymentMode?: string;
   paymentRef?: string;
+  /** A payment split across two modes, e.g. part cash and part bank transfer: the second part. */
+  paymentMode2?: string;
+  paymentAmount2?: number;
+  paymentRef2?: string;
   paymentTerms?: string;
+  /** Number of the e-Stamp paper the deal is written on. */
+  estampNo?: string;
   bankDetailsBuyer?: string;
   bankDetailsSeller?: string;
 

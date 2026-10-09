@@ -1380,7 +1380,6 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   padding: 1px 9px; border: 1px solid var(--vr-gold); border-radius: 99px;
   font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--vr-gold);
 }
-.vr-mirror { display: block; font-style: normal; font-size: 10px; color: #6B7280; }
 .vr-watermark { font-size: 0; opacity: .05; }
 .voucher-table-main th { background: var(--vr-wash); color: var(--vr-ink); border-bottom: 2px solid var(--vr-ink); }
 .vr-footstrip { margin: 10px 0 -14px; }

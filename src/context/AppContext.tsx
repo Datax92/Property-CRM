@@ -88,6 +88,7 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
   return [
     { g: 'Invoice' },
     { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+    { k: 'estampNo', l: 'e-Stamp no.', ph: 'Number on the e-Stamp paper' },
     {
       k: 'propertyId',
       l: 'Property',
@@ -107,6 +108,15 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
     { g: 'Payment' },
     { k: 'paymentMode', l: 'Payment mode', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
     { k: 'paymentRef', l: 'Cheque / transfer reference', ph: 'Cheque no. or transaction ID' },
+    {
+      k: 'paymentMode2',
+      l: 'Second payment mode',
+      type: 'select',
+      opts: () => [['', '— None, paid one way —'], ...M.METHODS.map((m: string) => [m, m])],
+      hint: 'For a payment split two ways, e.g. part cash and part bank transfer.',
+    },
+    { k: 'paymentAmount2', l: 'Paid by the second mode (PKR)', type: 'money', hint: 'The rest of the token is paid by the first mode.' },
+    { k: 'paymentRef2', l: 'Second mode reference', ph: 'Cheque no. or transaction ID' },
     { k: 'paymentDate', l: 'Payment date', type: 'date' },
     { k: 'paymentTerms', l: 'Payment terms', ph: 'e.g. Balance within 30 days of token', full: true },
     { g: 'Amounts' },
@@ -133,11 +143,23 @@ const invoiceBalance = (v: any) => Math.max(0, n(v.totalAmount) - n(v.tokenAmoun
 const invoiceCalc = (v: any) => [
   ['Total amount', n(v.totalAmount)],
   ['Token / advance', n(v.tokenAmount)],
+  // A split payment: what each mode carried.
+  ...(v.paymentMode2
+    ? [
+        ['  by ' + (v.paymentMode || 'first mode'), Math.max(0, n(v.tokenAmount) - n(v.paymentAmount2))],
+        ['  by ' + v.paymentMode2, n(v.paymentAmount2)],
+      ]
+    : []),
   ['Balance remaining', invoiceBalance(v), true],
 ];
 const invoiceValidate = (v: any) => {
   const e: Record<string, string> = {};
   if (n(v.tokenAmount) > n(v.totalAmount)) e.tokenAmount = 'Token cannot exceed total amount.';
+  if (v.paymentMode2) {
+    if (v.paymentMode2 === v.paymentMode) e.paymentMode2 = 'Pick a different mode from the first one.';
+    else if (n(v.paymentAmount2) <= 0) e.paymentAmount2 = 'Enter how much was paid by the second mode.';
+    else if (n(v.paymentAmount2) > n(v.tokenAmount)) e.paymentAmount2 = 'Cannot be more than the token / advance.';
+  }
   return e;
 };
 

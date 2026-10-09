@@ -293,7 +293,10 @@ export function computeKPIs(r, f) {
   const scoped = scopedToProperty(f);
   const costOfSales = soldInRange.reduce((a, s) => a + s.propertyCost, 0);
   const grossProfit = salesRevenue - (scoped ? costOfSales : purchaseCost);
-  const directCosts = soldInRange.reduce((a, s) => a + s.tax + s.otherExpenses, 0);
+  // Withholding tax and other selling costs typed on each sale, kept apart so neither is taken for the other.
+  const saleTaxes = soldInRange.reduce((a, s) => a + (s.tax || 0), 0);
+  const sellingCosts = soldInRange.reduce((a, s) => a + (s.otherExpenses || 0), 0);
+  const directCosts = saleTaxes + sellingCosts;
 
   const comms = D.commissions.filter((c) => propIds.has(c.propertyId) && inR(c.date, r) && (f.agent === 'all' || c.agentId === f.agent));
   const commission = comms.reduce((a, c) => a + c.amount, 0);
@@ -351,7 +354,7 @@ export function computeKPIs(r, f) {
   const cashOut = pay.filter((p) => p.dir === 'out').reduce((a, p) => a + p.amount, 0);
 
   const unsold = props.filter((p) => p.status !== 'Sold');
-  const portfolioCost = unsold.reduce((a, p) => a + p.totalCost, 0);
+  const portfolioCost = unsold.reduce((a, p) => a + landedCost(p.id), 0);
   const portfolioValue = unsold.reduce((a, p) => a + p.currentValue, 0);
 
   const receivable = D.sales.filter((s) => saleMatch(s, f, propIds)).reduce((a, s) => a + s.outstanding, 0);
@@ -373,7 +376,7 @@ export function computeKPIs(r, f) {
       unsold: unsold.length, purchasedInRange: purchased.length, soldInRange: soldInRange.length,
     },
     purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, cashReceived, grossProfit,
-    costOfSales, directCosts,
+    costOfSales, directCosts, saleTaxes, sellingCosts,
     // Two bases for gross profit. grossProfitDoc follows the requirement document literally
     // (period sales − period purchase spend); grossProfitCOGS matches the cost of the properties
     // actually sold, which is the accounting-correct figure. See AUDIT.md finding A3.
@@ -444,7 +447,7 @@ export function expenseBreakdown(k) {
     ['Agent Commission', k.commission, 300], ['Marketing', k.marketing, 45],
     ['Bills', k.bills, 100], ['Property Expenses', k.propertyExp, 200],
     ['Tax', k.tax, 20], ['Zakat', k.zakat, 130], ['Other', k.other + k.employeeExp, 340],
-    ['Selling costs on sales', k.directCosts, 280],
+    ['Withholding tax on sales', k.saleTaxes, 20], ['Selling costs on sales', k.sellingCosts, 280],
   ].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
 }
 
@@ -484,12 +487,14 @@ export function alerts() {
   if (pendSal.length) push('med', 'Salary payment due', pendSal.length + ' employees pending for ' + pendSal[0].monthLabel + ' — ' + fmt(pendSal.reduce((a, s) => a + s.net, 0)), 'salaries');
   DATA.properties.filter((p) => p.remaining > 0 && p.status !== 'Sold').slice(0, 3)
     .forEach((p) => push('low', 'Property payment due', p.name + ' — ' + fmt(p.remaining) + ' still payable to ' + p.seller, 'purchases'));
-  DATA.properties.filter((p) => p.status !== 'Sold' && p.heldDays > 300).slice(0, 3)
-    .forEach((p) => push('med', 'Property held too long', p.name + ' — held ' + p.heldDays + ' days, cost ' + fmt(p.totalCost), 'inventory'));
-  DATA.properties.filter((p) => p.status !== 'Sold' && p.currentValue < p.totalCost * 1.1).slice(0, 3)
-    .forEach((p) => push('low', 'Low potential profit', p.name + ' — upside only ' + fmt(p.currentValue - p.totalCost) + ' (' + pctOf(p.currentValue - p.totalCost, p.totalCost).toFixed(1) + '%)', 'inventory'));
-  DATA.properties.filter((p) => p.status !== 'Sold' && p.currentValue > p.totalCost * 1.3).slice(0, 2)
-    .forEach((p) => push('good', 'High potential profit', p.name + ' — upside ' + fmt(p.currentValue - p.totalCost) + ', consider listing', 'inventory'));
+  // Stock is judged on what it cost all in, as its cost sheet adds it up.
+  const held = DATA.properties.filter((p) => p.status !== 'Sold').map((p) => ({ p, cost: landedCost(p.id) }));
+  held.filter((x) => x.p.heldDays > 300).slice(0, 3)
+    .forEach(({ p, cost }) => push('med', 'Property held too long', p.name + ' — held ' + p.heldDays + ' days, cost ' + fmt(cost), 'inventory'));
+  held.filter((x) => x.p.currentValue < x.cost * 1.1).slice(0, 3)
+    .forEach(({ p, cost }) => push('low', 'Low potential profit', p.name + ' — upside only ' + fmt(p.currentValue - cost) + ' (' + pctOf(p.currentValue - cost, cost).toFixed(1) + '%)', 'inventory'));
+  held.filter((x) => x.p.currentValue > x.cost * 1.3).slice(0, 2)
+    .forEach(({ p, cost }) => push('good', 'High potential profit', p.name + ' — upside ' + fmt(p.currentValue - cost) + ', consider listing', 'inventory'));
   return A;
 }
 
@@ -636,7 +641,7 @@ export function projectSummary(r, f) {
   props.forEach((p) => {
     const x = row(p.project, p.location);
     x.total++;
-    if (p.status !== 'Sold') { x.held++; x.heldCost += p.totalCost; x.heldValue += p.currentValue; }
+    if (p.status !== 'Sold') { x.held++; x.heldCost += landedCost(p.id); x.heldValue += p.currentValue; }
   });
   DATA.sales.filter((s) => saleMatch(s, f, ids) && inR(s.date, r)).forEach((s) => {
     const p = props.find((q) => q.id === s.propertyId);
@@ -874,6 +879,7 @@ function invoiceBody(v) {
   return {
     receiptDate: parseDate(v.receiptDate || TODAY),
     propertyId: v.propertyId || null,
+    estampNo: v.estampNo || '',
 
     buyerName: v.buyerName || '',
     buyerCompany: v.buyerCompany || '',
@@ -885,6 +891,10 @@ function invoiceBody(v) {
     paymentDate: v.paymentDate ? parseDate(v.paymentDate) : null,
     paymentMode: v.paymentMode || '',
     paymentRef: v.paymentRef || '',
+    // A payment split over two modes: the second mode's part; the rest of the token is by the first.
+    paymentMode2: v.paymentMode2 || '',
+    paymentAmount2: v.paymentMode2 ? Math.min(token, Math.round(+v.paymentAmount2 || 0)) : 0,
+    paymentRef2: v.paymentMode2 ? v.paymentRef2 || '' : '',
     paymentTerms: v.paymentTerms || '',
     bankDetailsBuyer: v.bankDetailsBuyer || '',
     bankDetailsSeller: v.bankDetailsSeller || '',
@@ -985,7 +995,7 @@ export const sameValue = (a, b) => valueKey(a) === valueKey(b);
 export const INVOICE_MIRROR_KEYS = [
   'receiptDate', 'propertyId', 'buyerName', 'buyerCompany', 'buyerCnic', 'bankDetailsBuyer',
   'sellerName', 'sellerCompany', 'sellerCnic', 'bankDetailsSeller',
-  'paymentMode', 'paymentRef', 'paymentDate', 'paymentTerms',
+  'paymentMode', 'paymentRef', 'paymentMode2', 'paymentAmount2', 'paymentRef2', 'paymentDate', 'paymentTerms', 'estampNo',
   'totalAmount', 'tokenAmount', 'tokenDate', 'transferDate',
   'receivedByName', 'receivedByCnic', 'receivedFromName', 'receivedFromCnic', 'approvedByName', 'notes',
 ];
@@ -1983,6 +1993,13 @@ export function realSheet(key) {
   return DATA.costSheets.find((s) => s.id === key && !s.mirrorOf)
     || DATA.costSheets.find((s) => s.propertyId === key && !s.mirrorOf)
     || sheetFromRecords(key);
+}
+
+/** What a plot cost all in, as its cost sheet adds it up: the price with its fees, taxes,
+    expenses and buy-side agent fee. Every page that shows what stock cost uses this. */
+export function landedCost(propertyId) {
+  const cs = realSheet(propertyId);
+  return cs ? cs.purchasePrice : 0;
 }
 
 /** The fields of a mirror cost sheet that differ from its original. */
