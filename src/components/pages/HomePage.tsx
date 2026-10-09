@@ -128,7 +128,7 @@ export function HomePage() {
     mirrorPurchaseInvoices: { icon: 'mirrorPurchase', label: 'Mirror Purchase Invoices', value: count(mirrorInvoices('purchase'), 'copy', 'copies'), go: 'sales/mirrorPurchaseInvoices' },
     mirrorSheets: { icon: 'mirrorSheet', label: 'Mirror Cost Sheets', value: count(M.mirrorSheets().length, 'copy', 'copies'), go: 'trading/mirrors' },
     projects: { icon: 'projects', label: 'Projects', value: count(projects, 'active project', 'active projects'), go: 'properties/projects' },
-    tax: { icon: 'tax', label: 'Taxes & CGT', value: money(k.tax), go: 'costs/tax', need: 'tax' },
+    tax: { icon: 'tax', label: 'Taxes & CGT', value: money(k.taxBooked), go: 'costs/tax', need: 'tax' },
     zakat: { icon: 'zakat', label: 'Zakat', value: money(k.zakatRemaining) + ' due', go: 'costs/zakat', need: 'zakat' },
     charity: { icon: 'charity', label: 'Charity', value: money(charity), go: 'costs/charity' },
     commission: { icon: 'commission', label: 'Agent Commission', value: money(k.commission), go: 'agents/commissions' },

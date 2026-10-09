@@ -261,6 +261,17 @@ export const scopedToProperty = (f) => f.project !== 'all' || f.agent !== 'all' 
 /** §31 — a voided transaction stays on the ledger but no longer moves cash. */
 export const livePayments = () => DATA.payments.filter((p) => p.status !== 'Voided');
 
+/** When an expense, tax or Zakat entry counts in profit. One picked for a plot is a cost of that
+    deal, as on its cost sheet: it counts when the plot is sold, on the sale date, and until then
+    it is held in what the plot cost (null). Anything else counts on its own date. Assets and
+    personal spending are never a cost of a deal. */
+export function profitDate(x) {
+  if (!x.propertyId || NON_EXPENSE_GROUPS.indexOf(x.group) >= 0) return x.date;
+  if (!DATA.properties.some((p) => p.id === x.propertyId)) return x.date;
+  const sale = DATA.sales.find((s) => s.propertyId === x.propertyId);
+  return sale ? sale.date : null;
+}
+
 export function computeKPIs(r, f) {
   const D = DATA;
   refreshZakatSummary();
@@ -289,7 +300,9 @@ export function computeKPIs(r, f) {
   const commissionPaid = comms.reduce((a, c) => a + c.paid, 0);
   const commissionOut = comms.reduce((a, c) => a + c.outstanding, 0);
 
-  const exp = D.expenses.filter((e) => inR(e.date, r) && overheadMatch(e, f));
+  // A plot's purchase cost counts when it is sold (cost of sales above), and so does every
+  // expense, tax and Zakat entry picked for it: profit carries each deal whole, once it closes.
+  const exp = D.expenses.filter((e) => inR(profitDate(e), r) && overheadMatch(e, f));
   const byGroup = {};
   Object.keys(EXPENSE_TREE).forEach((g) => (byGroup[g] = 0));
   exp.forEach((e) => (byGroup[e.group] += e.amount));
@@ -304,15 +317,17 @@ export function computeKPIs(r, f) {
   const billsOut = bl.reduce((a, b) => a + b.outstanding, 0);
   const billsOverdue = bl.filter((b) => b.status === 'Overdue');
 
+  // What is owed and paid follows each entry's own date; only the profit side waits for a sale.
   const txs = D.taxes.filter((t) => inR(t.date, r) && overheadMatch(t, f));
-  const tax = txs.reduce((a, t) => a + t.amount, 0);
+  const taxBooked = txs.reduce((a, t) => a + t.amount, 0);
   const taxPaid = txs.reduce((a, t) => a + t.paid, 0);
   const taxOut = txs.reduce((a, t) => a + t.outstanding, 0);
+  const tax = D.taxes.filter((t) => inR(profitDate(t), r) && overheadMatch(t, f)).reduce((a, t) => a + t.amount, 0);
   const taxDueSoon = D.taxes.filter((t) => !t.paid && t.dueDate >= TODAY && t.dueDate <= addDays(TODAY, 30)).reduce((a, t) => a + t.amount, 0);
 
   const zk = D.zakat.filter((z) => inR(z.date, r));
   const zakatPaid = zk.reduce((a, z) => a + z.amount, 0);
-  const zakat = zakatPaid;
+  const zakat = D.zakat.filter((z) => inR(profitDate(z), r)).reduce((a, z) => a + z.amount, 0);
 
   const officeExp = byGroup['Office Expenses'], marketing = byGroup['Marketing Expenses'],
     propertyExp = byGroup['Property Expenses'], employeeExp = byGroup['Employee Expenses'],
@@ -371,7 +386,7 @@ export function computeKPIs(r, f) {
     officeExp, marketing, propertyExp, employeeExp, other, salaries, salariesPaid,
     personal, assetsBought, retainedAfterPersonal: netProfit - personal,
     bills, billsPaid, billsOut, billsOverdueCount: billsOverdue.length,
-    tax, taxPaid, taxOut, taxDueSoon, zakat, zakatPaid,
+    tax, taxBooked, taxPaid, taxOut, taxDueSoon, zakat, zakatPaid,
     zakatCalculated: DATA.zakatSummary.calculated, zakatRemaining: DATA.zakatSummary.remaining,
     totalExpenses, netProfit, cashIn, cashOut, netCash: cashIn - cashOut,
     portfolioCost, portfolioValue, potentialProfit: portfolioValue - portfolioCost,
