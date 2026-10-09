@@ -1842,6 +1842,8 @@ const ZERO_LINES = {
   officeExpenseDeduction: 0,
 };
 export const SHEET_AMOUNT_KEYS = Object.keys(ZERO_LINES).concat(['netBuyCost', 'grossSalePrice']);
+/** The deal details a sheet reads from its property and its sale. */
+export const SHEET_DETAIL_KEYS = ['name', 'project', 'city', 'type', 'size', 'status', 'office', 'seller', 'buyer', 'purchaseDate', 'saleDate'];
 
 export function sheetFromRecords(propertyId) {
   const p = DATA.properties.find((x) => x.id === propertyId);
@@ -1889,26 +1891,30 @@ export function sheetFromRecords(propertyId) {
     if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses); }
   }
   const cs = calculateCostSheet(v);
-  // The amounts as read, kept on a sheet so it can tell later which of them the records changed.
+  // What the records say, kept on a sheet so it can tell later which of it they changed.
+  // Details are kept as recorded (an unknown purchase date is not today's date), and a blank one
+  // as null: the database keeps a field left undefined at its old value.
   cs.recorded = {};
   SHEET_AMOUNT_KEYS.forEach((k) => { cs.recorded[k] = Math.round(cs[k] || 0); });
+  SHEET_DETAIL_KEYS.forEach((k) => { cs.recorded[k] = v[k] == null ? null : v[k]; });
   return cs;
 }
 
-/** A linked sheet brought up to date with its property's records: each line whose recorded
-    amount has changed since the sheet last took it in takes the new amount, while a line typed
-    over on the sheet keeps what was typed until its own records change. A sheet saved before it
-    kept the recorded amounts takes every amount the records have. Mirrors follow their original
-    instead. Returns the very same sheet when there is nothing to change. */
+/** A linked sheet brought up to date with its property's records: each line or detail whose
+    recorded value has changed since the sheet last took it in takes the new value, while one
+    typed over on the sheet keeps what was typed until its own records change. So linking another
+    property brings in that property's details and amounts. A sheet saved before it kept what the
+    records said takes every value the records have. Mirrors follow their original instead.
+    Returns the very same sheet when there is nothing to change. */
 export function syncSheetWithRecords(cs) {
   if (!cs || !cs.propertyId || cs.mirrorOf) return cs;
   const fresh = sheetFromRecords(cs.propertyId);
   if (!fresh) return cs;
   const was = cs.recorded || {};
-  const moved = SHEET_AMOUNT_KEYS.filter((k) => fresh.recorded[k] !== Math.round(was[k] || 0));
+  const moved = Object.keys(fresh.recorded).filter((k) => !sameValue(fresh.recorded[k], was[k]));
   if (!moved.length) return cs;
   const next = { ...cs, recorded: fresh.recorded };
-  moved.forEach((k) => { next[k] = fresh[k]; });
+  moved.forEach((k) => { next[k] = fresh[k] == null ? null : fresh[k]; });
   return calculateCostSheet(next);
 }
 
@@ -1948,9 +1954,7 @@ export function mirrorSheets() {
 }
 
 /** The fields of a cost sheet a mirror follows. Its number and attachments are its own. */
-export const SHEET_MIRROR_KEYS = SHEET_AMOUNT_KEYS.concat([
-  'propertyId', 'name', 'project', 'city', 'type', 'size', 'status', 'office', 'seller', 'buyer', 'purchaseDate', 'saleDate',
-]);
+export const SHEET_MIRROR_KEYS = SHEET_AMOUNT_KEYS.concat(['propertyId'], SHEET_DETAIL_KEYS);
 
 /** The real sheet of a deal: saved under its own number, else the one saved for that property,
     else read from the property's records. */

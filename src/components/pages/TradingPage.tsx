@@ -792,7 +792,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                         </option>
                       ))}
                     </select>
-                    <span className="hint">Linking fills the sheet from that property’s purchase, sale, expenses and taxes, and keeps it up to date as they change.</span>
+                    <span className="hint">Linking fills the sheet from that property — its details, purchase, sale, expenses and taxes — and keeps it up to date as they change.</span>
                   </div>
                   <div className={fldCls('name')}>
                     <label htmlFor="cs-name">Property name *</label>
