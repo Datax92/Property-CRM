@@ -400,6 +400,51 @@ export const FORMS_DEF: Record<string, any> = {
       };
     },
   },
+  asset: {
+    title: 'Add an asset',
+    editTitle: 'Edit asset',
+    coll: 'expenses',
+    load: (e: any) => ({ currentValue: e.currentValue == null ? '' : e.currentValue, valueDate: e.valueDate ? M.dateInput(e.valueDate) : dstr(M.TODAY) }),
+    update: (id: string, v: any) => M.updateAsset(id, v),
+    sub: 'Something the business owns: gold, shares, savings, a vehicle. It is not an expense, and it shows in investment tracking at cost against what it is worth today.',
+    fields: [
+      { g: 'Asset' },
+      { k: 'category', l: 'Kind of asset', req: true, ph: 'Gold, PSX shares, savings …', list: () => M.expenseSubcats('Assets') },
+      { k: 'note', l: 'Name / description', ph: 'e.g. 10 tola gold, Bank Islami TDR' },
+      { k: 'vendor', l: 'Bought from', req: true, ph: 'Seller, broker or bank' },
+      { k: 'date', l: 'Date bought', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { g: 'Cost' },
+      { k: 'amount', l: 'Cost (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the cost.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
+      { g: 'Worth today' },
+      {
+        k: 'currentValue',
+        l: 'Worth today (PKR)',
+        type: 'money',
+        auto: (v: any) => `Auto: ${M.fmt(n(v.amount), 'full')} (its cost)`,
+        hint: 'Update it as the market moves — gold rate, share price. Blank means it is worth what it cost.',
+      },
+      { k: 'valueDate', l: 'Valued on', type: 'date', def: () => dstr(M.TODAY), maxToday: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
+    ],
+    calc: (v: any) => {
+      const cost = n(v.amount);
+      const worth = v.currentValue === '' || v.currentValue == null ? cost : n(v.currentValue);
+      return [
+        ['Cost', cost],
+        ['Worth today', worth],
+        [worth >= cost ? 'Gain' : 'Loss', worth - cost, true],
+      ];
+    },
+    validate: (v: any) => (n(v.paid) > n(v.amount) ? { paid: 'Paid cannot exceed the cost.' } : {}),
+    submit: (v: any) => {
+      const e = M.addAsset(v);
+      return { id: e.id, msg: 'Asset ' + e.id + ' recorded', go: 'finance/assets' };
+    },
+  },
   payment: {
     title: 'Record a payment',
     sub: 'A single money-in or money-out entry on the cash ledger (§26, §27).',
@@ -879,6 +924,8 @@ function formDefaults(id: string) {
 /** The form that edits a saved record of this ledger, if it has one. */
 export function editFormFor(coll: string, rec?: any): string | null {
   if (coll === 'invoices') return rec && rec.type === 'purchase' ? 'purchaseInvoice' : rec && rec.type === 'proforma' ? 'proformaInvoice' : 'saleInvoice';
+  // An asset sits on the expense ledger but has a form of its own, with its worth today.
+  if (coll === 'expenses') return rec && rec.group === 'Assets' ? 'asset' : 'expense';
   return Object.keys(FORMS_DEF).find((k) => FORMS_DEF[k].coll === coll && FORMS_DEF[k].update) || null;
 }
 

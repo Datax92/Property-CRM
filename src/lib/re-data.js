@@ -72,7 +72,7 @@ const EXPENSE_TREE = {
   // Not business costs: the owner's own spending (drawings) and things bought to keep (assets).
   // Both leave the cash ledger but neither is charged against profit.
   'Personal Expenses': ['Household','Family','Medical','Education','Personal Travel','Other Personal'],
-  'Assets': ['Furniture & Fixtures','Computers & IT','Vehicles','Office Equipment','Land & Building','Other Assets'],
+  'Assets': ['Gold','Stocks & Shares (PSX)','Mutual Funds','Savings / Deposits','Land & Building','Vehicles','Furniture & Fixtures','Computers & IT','Office Equipment','Other Assets'],
 };
 export const EXPENSE_GROUPS = Object.keys(EXPENSE_TREE);
 export const expenseSubcats = (group) => EXPENSE_TREE[group] || [];
@@ -85,7 +85,7 @@ export const DEAL_COST_LINES = [
   ['Development charges', 'developmentCharges', /develop/i],
   ['Salary', 'salaryExpenses', /salar|staff|wage/i],
   ['Travelling / fuel', 'fuelTravelling', /travel|fuel|petrol|visit|transport/i],
-  ['Marketing', 'marketingExpenses', /market|advert|ads?|portal|print|billboard/i],
+  ['Marketing', 'marketingExpenses', /market|advert|\bads?\b|portal|print|billboard/i],
   ['Renovation & repairs', 'renovationRepairs', /renovat|repair/i],
   ['Maintenance & bills', 'maintenanceBills', /mainten|bill|electric|gas|water/i],
   ['Charity', 'charity', /charit|donat|sadaq|sadq|khairat/i],
@@ -608,6 +608,53 @@ export function accountBalances(asOf, f) {
     if (!x.last || p.date > x.last) x.last = p.date;
   });
   return Object.keys(by).map((k) => ({ ...by[k], balance: by[k].cashIn - by[k].cashOut })).sort((a, b) => b.balance - a.balance);
+}
+
+/* ====================================================================
+   INVESTMENTS — everything the business has money in and still holds:
+   unsold plots (at landed cost) and assets such as gold, shares and
+   deposits (at cost), each against what it is worth today.
+   ==================================================================== */
+/** Kinds of investment, in the order their colours are given. */
+export const INVESTMENT_TYPES = ['Real Estate', 'Savings', 'Stocks & Shares', 'Gold', 'Mutual Funds', 'Other'];
+
+/** The kind of investment an asset is, read from its type and description. */
+export function investmentType(a) {
+  const t = ((a.category || '') + ' ' + (a.note || '')).toLowerCase();
+  if (/gold|silver|jewel/.test(t)) return 'Gold';
+  if (/psx|share|stock|equit/.test(t)) return 'Stocks & Shares';
+  if (/mutual|\bfunds?\b|\bamf\b|\bnit\b/.test(t)) return 'Mutual Funds';
+  if (/saving|deposit|\btdr\b|certificate|\bbonds?\b|sukuk|\bbank\b/.test(t)) return 'Savings';
+  if (/land|building|plot|house|flat|apartment|shop/.test(t)) return 'Real Estate';
+  return 'Other';
+}
+
+/** What an asset is worth today: the value last entered for it, else what it cost. */
+export const assetWorth = (a) => (a.currentValue == null || a.currentValue === '' ? a.amount : +a.currentValue);
+
+/** Every holding with what went in, what it is worth today and the gain or loss on it. */
+export function investments(f) {
+  const out = [];
+  DATA.properties.filter((p) => p.status !== 'Sold' && (!f || propMatch(p, f))).forEach((p) => {
+    const invested = landedCost(p.id);
+    out.push({ id: p.id, coll: 'properties', name: p.name, type: 'Real Estate', detail: p.project, started: p.purchaseDate, invested, worth: p.currentValue || invested });
+  });
+  DATA.expenses.filter((e) => e.group === 'Assets' && (!f || overheadMatch(e, f))).forEach((e) => {
+    out.push({
+      id: e.id, coll: 'expenses', name: e.note && e.note !== e.category ? e.note : e.category, type: investmentType(e), detail: e.category,
+      started: e.date, invested: e.amount, worth: assetWorth(e), valuedOn: e.valueDate || null,
+    });
+  });
+  return out.map((x) => ({ ...x, gain: x.worth - x.invested, gainPct: pctOf(x.worth - x.invested, x.invested) }));
+}
+
+/** The holdings added up by kind of investment, in the fixed order of the kinds. */
+export function investmentsByType(rows) {
+  return INVESTMENT_TYPES.map((type) => {
+    const of = rows.filter((x) => x.type === type);
+    const invested = of.reduce((a, x) => a + x.invested, 0), worth = of.reduce((a, x) => a + x.worth, 0);
+    return { id: type, type, count: of.length, invested, worth, gain: worth - invested, gainPct: pctOf(worth - invested, invested) };
+  }).filter((x) => x.count > 0);
 }
 
 /* E4 - Overhead run rate and months of cover. Answers "if we sold nothing else
@@ -1521,6 +1568,26 @@ export function updateExpense(id, v) {
   });
   saveRecordToFirestore('expenses', e.id, e);
   logEdit(e.id, 'Expense', prev, e.amount);
+  return e;
+}
+
+/* An asset is kept on the expense ledger under Assets, with what it is worth today beside its cost. */
+const assetValue = (v) => ({
+  currentValue: v.currentValue === '' || v.currentValue == null ? null : Math.max(0, Math.round(+v.currentValue || 0)),
+  valueDate: v.currentValue === '' || v.currentValue == null ? null : parseDate(v.valueDate || TODAY),
+});
+
+export function addAsset(v) {
+  const e = addExpense({ ...v, group: 'Assets', propertyId: '' });
+  Object.assign(e, assetValue(v));
+  saveRecordToFirestore('expenses', e.id, e);
+  return e;
+}
+
+export function updateAsset(id, v) {
+  const e = updateExpense(id, { ...v, group: 'Assets', propertyId: '' });
+  Object.assign(e, assetValue(v));
+  saveRecordToFirestore('expenses', e.id, e);
   return e;
 }
 

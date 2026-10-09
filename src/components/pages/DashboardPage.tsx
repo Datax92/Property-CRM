@@ -8,6 +8,7 @@ import { PropArt, Icon } from '../Icons';
 import { PAGE_META, SC, OC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 import { HomePage } from './HomePage';
+import { InvestmentKpis, InvestmentCharts } from '../Investments';
 
 export function DashboardPage() {
   const {
@@ -434,6 +435,10 @@ export function DashboardPage() {
         const restTot = rawExp.slice(5).reduce((a: number, x: any) => a + x[1], 0);
         if (restTot > 0) exp.push({ k: 'Other categories', v: restTot, c: SC[5] });
 
+        // What the business has money in and still holds, and what each bank and cash account holds.
+        const inv = M.investments(f);
+        const balances = M.accountBalances(r.end, f);
+
         const portfolioItems = [
           ['Available', k.counts.available],
           ['Reserved', k.counts.reserved],
@@ -467,7 +472,7 @@ export function DashboardPage() {
               <KpiCard
                 k="Cash in hand"
                 v={cash.closing}
-                f={`at ${M.fmtDate(r.end)}`}
+                f={`in ${M.fmtNum(balances.length)} bank & cash ${balances.length === 1 ? 'account' : 'accounts'} · ${M.fmtDate(r.end)}`}
                 go="finance/cashflow"
               />
               <KpiCard k="Receivables" v={k.receivable} f="owed to us" go="sales/receivables" />
@@ -589,8 +594,56 @@ export function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
+                <div className="panel">
+                  <div className="panel-h">
+                    <h3>Cash &amp; bank balances</h3>
+                    <span className="sub">{M.fmtDate(r.end)}</span>
+                    <span className="spacer" />
+                    <button type="button" className="link" onClick={() => goto('finance/cashflow')}>
+                      Cash flow
+                    </button>
+                  </div>
+                  <div className="panel-b tight">
+                    {balances.length ? (
+                      <div className="acctlist">
+                        {balances.map((b: any) => (
+                          <div key={b.account} className="r">
+                            <span>{b.account}</span>
+                            <b className={b.balance < 0 ? 'neg' : 'pos'}>{M.fmt(b.balance, numbers)}</b>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty" style={{ padding: '16px' }}>
+                        No money recorded in or out yet.
+                      </div>
+                    )}
+                    {balances.some((b: any) => b.balance < 0) && (
+                      <div style={{ marginTop: '8px' }}>
+                        <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
+                          <Icon name="plus" size={12} /> Opening balance
+                        </button>{' '}
+                        <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Owner Capital' })}>
+                          <Icon name="plus" size={12} /> Owner capital
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
+
+            <div className="sech">
+              <h2>Investments</h2>
+              <span className="sub">unsold plots and assets, at what went in against what each is worth today</span>
+              <span className="spacer" />
+              <button type="button" className="link" onClick={() => goto('finance/investments')}>
+                Investment tracking
+              </button>
+            </div>
+            <InvestmentKpis rows={inv} />
+            <InvestmentCharts rows={inv} />
           </>
         );
       })()}

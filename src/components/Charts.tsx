@@ -441,3 +441,232 @@ export function RankedList({
     </div>
   );
 }
+
+/** An axis with round steps that always has zero on it, with room under the lowest bar for its label. */
+function niceScale(lo: number, hi: number) {
+  lo = Math.min(0, lo);
+  hi = Math.max(0, hi);
+  if (hi === lo) hi = 1;
+  const raw = (hi - lo) / 4;
+  const e = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f = raw / e;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+  let min = Math.floor(lo / step) * step;
+  const max = Math.ceil(hi / step) * step;
+  if (lo < 0 && lo - min < step * 0.3) min -= step;
+  const ticks: number[] = [];
+  for (let t = min; t <= max + step / 2; t += step) ticks.push(Math.abs(t) < step / 1e6 ? 0 : t);
+  return { min, max, ticks };
+}
+
+/** Long axis labels are tilted so each stays readable; short ones sit level. */
+const tilt = (rows: { label: string }[]) => rows.length > 6 || rows.some((r) => String(r.label).length > 11);
+const clip = (s: string, n = 16) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+/**
+ * One bar per item, each in its own colour (the colour of its kind, named in the legend) or, when
+ * `signed`, green for a gain and red for a loss. Bars stand on the zero line; values sit on them.
+ */
+export function ChartBars({
+  rows,
+  legend,
+  signed = false,
+  label = 'Bar chart',
+  width = 760,
+}: {
+  rows: { label: string; v: number; c?: string; full?: string; sub?: string }[];
+  legend?: { k: string; c: string }[];
+  signed?: boolean;
+  label?: string;
+  /** Drawing width: wider for a chart that spans the page, so its text keeps its size. */
+  width?: number;
+}) {
+  const { numbers, showTip, hideTip } = useApp();
+  const tilted = tilt(rows);
+  const W = width,
+    H = tilted ? 280 : 240,
+    PL = 50,
+    PR = 12,
+    PT = 20,
+    PB = tilted ? 70 : 28;
+  const iw = W - PL - PR,
+    ih = H - PT - PB;
+  const vals = rows.map((r) => r.v || 0);
+  const { min, max, ticks } = niceScale(Math.min(...vals), Math.max(...vals));
+  const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
+  const bw = iw / (rows.length || 1),
+    barW = Math.max(6, Math.min(46, bw * 0.62));
+  const colour = (r: { v: number; c?: string }) => (signed ? (r.v >= 0 ? 'var(--good)' : 'var(--bad)') : r.c || 'var(--s1)');
+
+  return (
+    <div className="chart">
+      {legend && legend.length > 1 && (
+        <div className="legend">
+          {legend.map((l) => (
+            <span key={l.k} className="it">
+              <i className="sw" style={{ background: l.c }} />
+              {l.k}
+            </span>
+          ))}
+        </div>
+      )}
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        {ticks.map((t, idx) => (
+          <React.Fragment key={idx}>
+            <line className="gridline" x1={PL} x2={W - PR} y1={y(t).toFixed(1)} y2={y(t).toFixed(1)} />
+            <text className="ax" x={PL - 8} y={(y(t) + 3.5).toFixed(1)} textAnchor="end">
+              {axMoney(t, numbers)}
+            </text>
+          </React.Fragment>
+        ))}
+        {rows.map((r, i) => {
+          const cx = PL + bw * i + bw / 2;
+          const v = r.v || 0;
+          const top = y(Math.max(v, 0)),
+            h = Math.max(1.5, Math.abs(y(v) - y(0)));
+          const tipHtml = `<div class="tt">${r.full || r.label}</div><div class="rw"><i class="sw" style="background:${colour(r)}"></i><b class="vv">${M.fmt(
+            v,
+            numbers
+          )}</b></div>${r.sub ? `<div class="rw">${r.sub}</div>` : ''}`;
+          const lx = cx.toFixed(1),
+            ly = (PT + ih + (tilted ? 12 : 17)).toFixed(1);
+          return (
+            <React.Fragment key={i}>
+              <rect x={(cx - barW / 2).toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={colour(r)} />
+              {rows.length <= 14 && v !== 0 && (
+                <text className="dlab" x={lx} y={(v >= 0 ? top - 5 : top + h + 12).toFixed(1)} textAnchor="middle">
+                  {axMoney(v, numbers)}
+                </text>
+              )}
+              <rect
+                x={(PL + bw * i).toFixed(1)}
+                y={PT}
+                width={bw.toFixed(1)}
+                height={ih}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseMove={(e) => showTip(tipHtml, e.clientX, e.clientY)}
+                onMouseLeave={hideTip}
+              />
+              {tilted ? (
+                <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
+                  {clip(String(r.label))}
+                </text>
+              ) : (
+                <text className="ax" x={lx} y={ly} textAnchor="middle">
+                  {r.label}
+                </text>
+              )}
+            </React.Fragment>
+          );
+        })}
+        <line className="axline" x1={PL} x2={W - PR} y1={y(0).toFixed(1)} y2={y(0).toFixed(1)} />
+      </svg>
+    </div>
+  );
+}
+
+/** Several series side by side for each row (e.g. invested against worth today), negatives below the line. */
+export function ChartBarGroups({
+  rows,
+  series,
+  label = 'Grouped bar chart',
+  width = 760,
+}: {
+  rows: any[];
+  series: { key: string; label: string; c: string }[];
+  label?: string;
+  width?: number;
+}) {
+  const { numbers, showTip, hideTip } = useApp();
+  const tilted = tilt(rows);
+  const W = width,
+    H = tilted ? 270 : 236,
+    PL = 50,
+    PR = 12,
+    PT = 14,
+    PB = tilted ? 64 : 28;
+  const iw = W - PL - PR,
+    ih = H - PT - PB;
+  const all = rows.flatMap((r) => series.map((s) => r[s.key] || 0));
+  const { min, max, ticks } = niceScale(Math.min(...all), Math.max(...all));
+  const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
+  const bw = iw / (rows.length || 1);
+  const barW = Math.max(4, Math.min(22, (bw - 12) / series.length - 2));
+  const groupW = series.length * (barW + 2) - 2;
+
+  return (
+    <div className="chart">
+      <div className="legend">
+        {series.map((s) => (
+          <span key={s.key} className="it">
+            <i className="sw" style={{ background: s.c }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        {ticks.map((t, idx) => (
+          <React.Fragment key={idx}>
+            <line className="gridline" x1={PL} x2={W - PR} y1={y(t).toFixed(1)} y2={y(t).toFixed(1)} />
+            <text className="ax" x={PL - 8} y={(y(t) + 3.5).toFixed(1)} textAnchor="end">
+              {axMoney(t, numbers)}
+            </text>
+          </React.Fragment>
+        ))}
+        {rows.map((r, i) => {
+          const cx = PL + bw * i + bw / 2;
+          const x0 = cx - groupW / 2;
+          const tipHtml =
+            `<div class="tt">${r.full || r.label}</div>` +
+            series
+              .map((s) => `<div class="rw"><i class="sw" style="background:${s.c}"></i>${s.label}<b class="vv">${M.fmt(r[s.key] || 0, numbers)}</b></div>`)
+              .join('');
+          const lx = cx.toFixed(1),
+            ly = (PT + ih + (tilted ? 12 : 17)).toFixed(1);
+          return (
+            <React.Fragment key={i}>
+              {series.map((s, si) => {
+                const v = r[s.key] || 0;
+                const top = y(Math.max(v, 0));
+                return (
+                  <rect
+                    key={s.key}
+                    x={(x0 + si * (barW + 2)).toFixed(1)}
+                    y={top.toFixed(1)}
+                    width={barW.toFixed(1)}
+                    height={Math.max(v ? 1.5 : 0, Math.abs(y(v) - y(0))).toFixed(1)}
+                    rx="3"
+                    fill={s.c}
+                  />
+                );
+              })}
+              <rect
+                x={(PL + bw * i).toFixed(1)}
+                y={PT}
+                width={bw.toFixed(1)}
+                height={ih}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseMove={(e) => showTip(tipHtml, e.clientX, e.clientY)}
+                onMouseLeave={hideTip}
+              />
+              {tilted ? (
+                <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
+                  {clip(String(r.label))}
+                </text>
+              ) : (
+                (rows.length <= 14 || i % 2 === 0) && (
+                  <text className="ax" x={lx} y={ly} textAnchor="middle">
+                    {r.label}
+                  </text>
+                )
+              )}
+            </React.Fragment>
+          );
+        })}
+        <line className="axline" x1={PL} x2={W - PR} y1={y(0).toFixed(1)} y2={y(0).toFixed(1)} />
+      </svg>
+    </div>
+  );
+}

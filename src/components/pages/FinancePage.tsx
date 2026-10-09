@@ -4,6 +4,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable } from '../Shared';
 import { ChartWaterfall, ChartLines, RankedList } from '../Charts';
+import { InvestmentKpis, InvestmentCharts, Kind, GainPill } from '../Investments';
 import { Icon } from '../Icons';
 import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
@@ -18,6 +19,7 @@ export function FinancePage() {
     period,
     setPeriod,
     openModal,
+    openEdit,
     numbers,
     exportCsv,
     print,
@@ -372,13 +374,80 @@ export function FinancePage() {
     );
   }
 
+  if (tab === 'investments') {
+    // Every holding, however long ago it was bought: unsold plots and assets.
+    const rows = M.investments(f);
+    const cols = [
+      { key: 'name', label: 'Holding', render: (x: any) => <b>{x.name}</b> },
+      { key: 'type', label: 'Kind', render: (x: any) => <Kind type={x.type} /> },
+      { key: 'detail', label: 'Detail' },
+      { key: 'started', label: 'Started on', cls: 'mono', render: (x: any) => M.fmtDate(x.started) },
+      { key: 'invested', label: 'Invested', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.invested, numbers) },
+      { key: 'worth', label: 'Worth today', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => <b>{M.fmt(x.worth, numbers)}</b> },
+      {
+        key: 'gain',
+        label: 'Profit / loss',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (x: any) => <span className={x.gain > 0 ? 'pos' : x.gain < 0 ? 'neg' : ''}>{M.fmt(x.gain, numbers)}</span>,
+      },
+      { key: 'gainPct', label: '%', a: 'r' as const, render: (x: any) => <GainPill pct={x.gainPct} /> },
+      {
+        key: 'act',
+        label: '',
+        render: (x: any) => (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => openEdit(x.coll, x.id)}
+            title={x.coll === 'properties' ? 'Change the plot’s current market value' : 'Change what this asset is worth today'}
+          >
+            Update value
+          </button>
+        ),
+      },
+    ];
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        toolProps={{ period: false }}
+        acts={
+          <>
+            <button type="button" className="btn" onClick={() => openModal('property')}>
+              <Icon name="plus" /> Add plot
+            </button>
+            <button type="button" className="btn pri" onClick={() => openModal('asset')}>
+              <Icon name="plus" /> Add asset
+            </button>
+          </>
+        }
+      >
+        <InvestmentKpis rows={rows} />
+        <InvestmentCharts rows={rows} />
+        <div style={{ marginTop: '16px' }}>
+          <DataTable cols={cols} rows={rows} totals={true} />
+        </div>
+      </PageShell>
+    );
+  }
+
   if (tab === 'assets') {
     // An asset stays an asset however long ago it was bought, so the register is not limited to the period.
-    const rows = M.DATA.expenses.filter((e: any) => e.group === 'Assets' && (f.office === 'all' || e.office === f.office));
+    const rows = M.DATA.expenses
+      .filter((e: any) => e.group === 'Assets' && (f.office === 'all' || e.office === f.office))
+      .map((e: any) => {
+        const worth = M.assetWorth(e);
+        return { ...e, worth, gain: worth - e.amount, gainPct: M.pctOf(worth - e.amount, e.amount) };
+      });
     const inPeriod = rows.filter((e: any) => M.inRange(e.date, r));
     const summaryPairs: [string, string][] = [
       ['Assets held', M.fmtNum(rows.length)],
-      ['Total asset value (at cost)', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+      ['At cost', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+      ['Worth today', M.fmt(rows.reduce((a: number, e: any) => a + e.worth, 0), numbers)],
+      ['Profit / loss', M.fmt(rows.reduce((a: number, e: any) => a + e.gain, 0), numbers)],
       [`Bought in ${r.label}`, M.fmt(inPeriod.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
       ['Still owed to vendors', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
     ];
@@ -390,6 +459,27 @@ export function FinancePage() {
       { key: 'office', label: 'Office' },
       { key: 'date', label: 'Date bought', cls: 'mono', render: (e: any) => M.fmtDate(e.date) },
       { key: 'amount', label: 'Cost', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.amount, numbers) },
+      {
+        key: 'worth',
+        label: 'Worth today',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (e: any) => (
+          <span title={e.valueDate ? `Valued on ${M.fmtDate(e.valueDate)}` : 'No value entered yet: shown at cost'}>
+            <b>{M.fmt(e.worth, numbers)}</b>
+          </span>
+        ),
+      },
+      {
+        key: 'gain',
+        label: 'Profit / loss',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (e: any) => <span className={e.gain > 0 ? 'pos' : e.gain < 0 ? 'neg' : ''}>{M.fmt(e.gain, numbers)}</span>,
+      },
+      { key: 'gainPct', label: '%', a: 'r' as const, render: (e: any) => <GainPill pct={e.gainPct} /> },
       { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.paid, numbers) },
       { key: 'outstanding', label: 'Owed', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.outstanding, numbers) },
     ];
@@ -400,7 +490,7 @@ export function FinancePage() {
         p={meta.p}
         toolProps={{ period: false }}
         acts={
-          <button type="button" className="btn pri" onClick={() => openModal('expense', { group: 'Assets' })}>
+          <button type="button" className="btn pri" onClick={() => openModal('asset')}>
             <Icon name="plus" /> Add asset
           </button>
         }
@@ -412,7 +502,8 @@ export function FinancePage() {
           </span>
           <div>
             Buying an asset moves cash into something the company owns, so it shows on the cash flow but is{' '}
-            <b>not an expense</b> and does not reduce profit.
+            <b>not an expense</b> and does not reduce profit. Keep <b>worth today</b> up to date (Edit) and its gain or
+            loss shows here, in investment tracking and on the dashboard.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
