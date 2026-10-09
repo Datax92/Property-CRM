@@ -292,7 +292,8 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
   const total = bars.reduce((a: number, p: any) => a + p.total, 0);
   const completed = bars.reduce((a: number, p: any) => a + p.completed, 0);
   const overdue = bars.reduce((a: number, p: any) => a + p.overdue, 0);
-  const avg = projects.length ? projects.reduce((a: number, p: any) => a + p.pct, 0) / projects.length : 0;
+  // Averaged over every bar on the chart, so tasks with no project count too.
+  const avg = bars.length ? bars.reduce((a: number, p: any) => a + p.pct, 0) / bars.length : 0;
   const avgTone = avg >= 80 ? 'c-done' : avg >= 50 ? 'c-mid' : 'c-avg';
 
   const max = Math.max(1, ...bars.map((p: any) => p.total));
@@ -416,7 +417,8 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
               <div className="tchart-legend">
                 <span><i className="seg-over" /> Overdue</span>
                 <span><i className="seg-done" /> Completed</span>
-                <span><i className="seg-total" /> Total Tasks</span>
+                <span><i className="seg-total" /> Still open</span>
+                <span className="muted">The number on each bar is its total tasks.</span>
               </div>
             </>
           )}
@@ -428,7 +430,7 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
 
 /** Tasks: a list of tasks, the projects they belong to, and a summary of both. */
 export function TasksPage() {
-  const { tab, toast, refreshData, openModal, openEdit, goto } = useApp();
+  const { tab, toast, refreshData, openModal, openEdit, goto, exportCsv, exportXls, print } = useApp();
 
   // Filters live here so "Tasks" from a project row lands on that project's tasks.
   const [fId, setFId] = useState('');
@@ -436,6 +438,7 @@ export function TasksPage() {
   const [fProject, setFProject] = useState('');
   const [fStatus, setFStatus] = useState('');
   const [fPriority, setFPriority] = useState('');
+  const [fWho, setFWho] = useState('');
   const [newest, setNewest] = useState(true);
   const [pageSize, setPageSize] = useState(20);
   const [shown, setShown] = useState(20);
@@ -478,6 +481,7 @@ export function TasksPage() {
       if (fProject === '-' ? !!t.projectId : fProject && t.projectId !== fProject) return false;
       if (fStatus && st !== fStatus) return false;
       if (fPriority && (t.priority || 'Low') !== fPriority) return false;
+      if (fWho && (t.assignee || '') !== fWho) return false;
       return true;
     })
     .sort((a: any, b: any) => {
@@ -485,7 +489,15 @@ export function TasksPage() {
       return newest ? -d : d;
     });
   const visible = rows.slice(0, shown);
-  const filtered = !!(fId || fText || fProject || fStatus || fPriority);
+  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho);
+
+  // The next thing to do: overdue work first, then the nearest deadline.
+  const pending = M.DATA.tasks
+    .filter((t: any) => ['Completed', 'Cancelled'].indexOf(M.taskStatus(t)) < 0 && t.date instanceof Date)
+    .sort((a: any, b: any) => a.date - b.date);
+  const overdueTasks = pending.filter((t: any) => M.taskStatus(t) === 'Overdue');
+  const nextTask = pending.find((t: any) => M.taskStatus(t) !== 'Overdue');
+  const whoText = (t: any) => [t.assignee, t.project].filter(Boolean).join(' · ');
   const allPicked = visible.length > 0 && visible.every((t: any) => picked.includes(t.id));
 
   const clear = () => {
@@ -494,6 +506,7 @@ export function TasksPage() {
     setFProject('');
     setFStatus('');
     setFPriority('');
+    setFWho('');
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -522,6 +535,44 @@ export function TasksPage() {
         </button>
       }
     >
+      {overdueTasks.length > 0 && (
+        <div className="note bad tnext" data-noprint="1">
+          <span className="ic"><Icon name="warn" /></span>
+          <div>
+            <b>
+              {overdueTasks.length} {overdueTasks.length === 1 ? 'task is' : 'tasks are'} past the deadline.
+            </b>{' '}
+            Oldest:{' '}
+            <button type="button" className="linkbtn" onClick={() => openEdit('tasks', overdueTasks[0].id)}>
+              {overdueTasks[0].text}
+            </button>{' '}
+            — due {M.fmtDate(overdueTasks[0].date)}, {M.dueIn(overdueTasks[0].date)}
+            {whoText(overdueTasks[0]) ? ` · ${whoText(overdueTasks[0])}` : ''}
+            {overdueTasks.length > 1 && (
+              <>
+                {' '}
+                <button type="button" className="linkbtn" onClick={() => setFStatus('Overdue')}>
+                  Show all overdue
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {nextTask && (
+        <div className="note calm tnext" data-noprint="1">
+          <span className="ic"><Icon name="info" /></span>
+          <div>
+            <b>Next activity:</b>{' '}
+            <button type="button" className="linkbtn" onClick={() => openEdit('tasks', nextTask.id)}>
+              {nextTask.text}
+            </button>{' '}
+            — due {M.fmtDate(nextTask.date)} ({M.dueIn(nextTask.date)})
+            {whoText(nextTask) ? ` · ${whoText(nextTask)}` : ''}
+          </div>
+        </div>
+      )}
+
       <form className="tquick" onSubmit={addQuick}>
         <input value={quick} onChange={(e) => setQuick(e.target.value)} placeholder="Quick add: write a task and press Enter…" aria-label="Quick add a task" />
         <button type="submit" className="btn pri">
@@ -551,7 +602,22 @@ export function TasksPage() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <select value={fWho} onChange={(e) => setFWho(e.target.value)} aria-label="Filter by who it is assigned to">
+          <option value="">Assigned to</option>
+          {M.taskAssignees().map((s: string) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
         <span className="spacer" />
+        <button type="button" className="btn sm" onClick={exportCsv} title="Download these tasks as a spreadsheet (CSV)">
+          <Icon name="down" /> CSV
+        </button>
+        <button type="button" className="btn sm" onClick={exportXls} title="Download these tasks for Excel">
+          <Icon name="down" /> Excel
+        </button>
+        <button type="button" className="btn sm" onClick={print} title="Print or save as PDF">
+          <Icon name="print" /> PDF
+        </button>
         {filtered && (
           <button type="button" className="btn sm" onClick={clear} title="Clear all filters">
             <Icon name="x" /> Clear
@@ -586,10 +652,10 @@ export function TasksPage() {
       )}
 
       <div className="tlist">
-        <table className="ttable">
+        <table className="ttable" data-export="1">
           <thead>
             <tr>
-              <th className="chk">
+              <th className="chk" data-noexport="1">
                 <input
                   type="checkbox"
                   checked={allPicked}
@@ -601,17 +667,18 @@ export function TasksPage() {
               <th>Status</th>
               <th>Project</th>
               <th>Priority</th>
-              <th>Due</th>
-              <th className="r">
+              <th>Assigned to</th>
+              <th>Deadline</th>
+              <th className="r" data-noexport="1">
                 {rows.length ? `${Math.min(shown, rows.length)} of ${rows.length}` : ''}
               </th>
-              <th />
+              <th data-noexport="1" />
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={8} className="tnone">
+                <td colSpan={9} className="tnone">
                   {filtered ? 'No task matches these filters.' : 'No tasks yet — write one above and press Enter.'}
                 </td>
               </tr>
@@ -620,7 +687,7 @@ export function TasksPage() {
                 const st = M.taskStatus(t);
                 return (
                   <tr key={t.id} className={picked.includes(t.id) ? 'on' : ''}>
-                    <td className="chk">
+                    <td className="chk" data-noexport="1">
                       <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={`Select ${t.text}`} />
                     </td>
                     <td>
@@ -631,9 +698,13 @@ export function TasksPage() {
                     <td><StatusPill status={st} /></td>
                     <td className="tproj">{t.project || ''}</td>
                     <td><PriorityPill p={t.priority} /></td>
-                    <td className={`mono ${st === 'Overdue' ? 'neg' : 'muted'}`}>{t.date ? M.fmtDate(t.date) : ''}</td>
-                    <td className="r muted" title={t.createdAt ? 'Created ' + M.fmtDate(t.createdAt) : ''}>{ago(t.createdAt)}</td>
-                    <td className="r nowrap">
+                    <td className="tproj">{t.assignee || ''}</td>
+                    <td className={`mono ${st === 'Overdue' ? 'neg' : 'muted'}`}>
+                      {t.date ? M.fmtDate(t.date) : ''}
+                      {t.date && st !== 'Completed' && st !== 'Cancelled' && <span className={`tdue ${st === 'Overdue' ? 'late' : ''}`}>{M.dueIn(t.date)}</span>}
+                    </td>
+                    <td className="r muted" data-noexport="1" title={t.createdAt ? 'Created ' + M.fmtDate(t.createdAt) : ''}>{ago(t.createdAt)}</td>
+                    <td className="r nowrap" data-noexport="1">
                       {confirm === t.id ? (
                         <span className="task-confirm">
                           Delete?

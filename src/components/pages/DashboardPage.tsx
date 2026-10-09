@@ -39,6 +39,7 @@ export function DashboardPage() {
         salaries: 'costs/salaries',
         purchases: 'properties/purchases',
         inventory: 'properties/inventory',
+        tasks: 'tasks/list',
       };
       return map[v] || 'dashboard/alerts';
     };

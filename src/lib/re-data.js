@@ -535,6 +535,14 @@ export function alerts() {
     .forEach(({ p, cost }) => push('low', 'Low potential profit', p.name + ' — upside only ' + fmt(p.currentValue - cost) + ' (' + pctOf(p.currentValue - cost, cost).toFixed(1) + '%)', 'inventory'));
   held.filter((x) => x.p.currentValue > x.cost * 1.3).slice(0, 2)
     .forEach(({ p, cost }) => push('good', 'High potential profit', p.name + ' — upside ' + fmt(p.currentValue - cost) + ', consider listing', 'inventory'));
+  // Task deadlines: overdue work first, then anything due in the next two days.
+  const pending = DATA.tasks.filter((t) => ['Completed', 'Cancelled'].indexOf(taskStatus(t)) < 0 && t.date instanceof Date)
+    .sort((a, b) => a.date - b.date);
+  const who = (t) => (t.assignee ? ' · ' + t.assignee : '');
+  pending.filter((t) => taskStatus(t) === 'Overdue').slice(0, 3)
+    .forEach((t) => push('high', 'Task overdue', t.text + ' — was due ' + fmtDate(t.date) + ' (' + dueIn(t.date) + ')' + who(t), 'tasks'));
+  pending.filter((t) => t.date >= TODAY && t.date <= addDays(TODAY, 2)).slice(0, 3)
+    .forEach((t) => push('med', 'Task deadline', t.text + ' — ' + dueIn(t.date) + who(t), 'tasks'));
   return A;
 }
 
@@ -2316,6 +2324,20 @@ export const TASK_STATUSES = ['Open', 'Working', 'Pending Review', 'Completed', 
 export const TASK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 export const PROJECT_TYPES = ['Internal', 'External', 'Personal', 'Other'];
 
+/** People tasks have been given to, then the agents and the signed-in user, for picking an assignee. */
+export function taskAssignees() {
+  const names = DATA.tasks.map((t) => t.assignee).concat(DATA.agents.map((a) => a.name), [ACTOR]).filter(Boolean);
+  return Array.from(new Set(names));
+}
+
+/** How far a due date is: "today", "in 3 days" or "2 days late". */
+export function dueIn(d) {
+  if (!(d instanceof Date)) return '';
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - TODAY) / day);
+  if (days === 0) return 'due today';
+  return days > 0 ? 'in ' + days + (days === 1 ? ' day' : ' days') : -days + (days === -1 ? ' day' : ' days') + ' late';
+}
+
 /** A task's status as shown: an unfinished task past its due date is Overdue. */
 export function taskStatus(t) {
   const st = t.status || (t.done ? 'Completed' : 'Open');
@@ -2332,6 +2354,7 @@ function taskBody(v) {
     text, status, done: status === 'Completed',
     priority: TASK_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Low',
     projectId: proj ? proj.id : null, project: proj ? proj.name : '',
+    assignee: String(v.assignee || '').trim(),
     date: v.date ? parseDate(v.date) : null,
     description: v.description || '',
   };

@@ -622,7 +622,8 @@ export const FORMS_DEF: Record<string, any> = {
       },
       { k: 'status', l: 'Status', type: 'select', opts: () => M.TASK_STATUSES, def: 'Open', req: true },
       { k: 'priority', l: 'Priority', type: 'select', opts: () => M.TASK_PRIORITIES, def: 'Low', req: true },
-      { k: 'date', l: 'Due date', type: 'date' },
+      { k: 'assignee', l: 'Assigned to', ph: 'Who is doing it', list: () => M.taskAssignees() },
+      { k: 'date', l: 'Deadline', type: 'date', hint: 'It turns Overdue after this date and shows in alerts as it comes near.' },
       { k: 'description', l: 'Details', ph: 'Optional notes', full: true },
     ],
     validate: () => ({}),
@@ -1303,7 +1304,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ['Role', role],
     ];
 
-    const tbl = document.querySelector('#main table.tbl');
+    // The page's table: a ledger table, or one marked for export (e.g. the task list).
+    const tbl = document.querySelector('#main table.tbl, #main table[data-export]');
     let cols: string[] = [];
     let rows: string[][] = [];
     if (tbl) {
@@ -1378,7 +1380,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ['Role', role],
     ];
 
-    const tbl = document.querySelector('#main table.tbl');
+    // The page's table: a ledger table, or one marked for export (e.g. the task list).
+    const tbl = document.querySelector('#main table.tbl, #main table[data-export]');
     let cols: string[] = [];
     let rows: string[][] = [];
     if (tbl) {
