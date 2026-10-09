@@ -2385,6 +2385,91 @@ export function updateTask(id, patch) {
   return t;
 }
 
+/* ====================================================================
+   DELETING — a record entered by mistake can be removed. Money it moved
+   is voided on the cash ledger first (the payments stay on record as
+   voided, so cash in hand is right again), anything that exists only
+   because of it goes with it, and the deletion is logged in the audit
+   trail. A delete that would leave other records pointing at nothing is
+   refused with what to do first.
+   ==================================================================== */
+const voidLinked = (key) =>
+  DATA.payments.filter((p) => p.settleKey === key && p.status !== 'Voided').forEach((p) => voidPayment(p.id));
+
+function removeFrom(coll, id) {
+  const i = DATA[coll].findIndex((x) => x.id === id);
+  if (i >= 0) DATA[coll].splice(i, 1);
+  deleteRecordFromFirestore(coll, id);
+}
+
+function logDelete(id, entity, amount, note) {
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: id, action: 'Deleted', user: ACTOR,
+    entity, prevAmount: amount == null ? null : amount, newAmount: 0, note, manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+}
+
+/** The ledgers whose records can be deleted from their register. */
+export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', 'bills', 'salaries', 'commissions', 'invoices', 'agents', 'costSheets'];
+
+export function deleteRecord(coll, id) {
+  const rec = (DATA[coll] || []).find((x) => x.id === id);
+  if (!rec) throw new Error(id + ' was not found.');
+  if (coll === 'properties') {
+    const sale = DATA.sales.find((s) => s.propertyId === id);
+    if (sale) throw new Error(rec.name + ' has sale ' + sale.id + ' — delete the sale first.');
+    const linked = [DATA.expenses, DATA.taxes, DATA.zakat, DATA.commissions].flatMap((arr) => arr.filter((x) => x.propertyId === id));
+    if (linked.length)
+      throw new Error(rec.name + ' still has ' + linked.map((x) => x.id).join(', ') + ' picked for it — delete those first, or pick another property on them.');
+    voidLinked('prop:' + id);
+    // Its cost sheets and their mirrors are about this property only.
+    const sheets = DATA.costSheets.filter((s) => s.propertyId === id || s.mirrorOf === id).map((s) => s.id);
+    DATA.costSheets.filter((s) => sheets.indexOf(s.mirrorOf) >= 0).forEach((s) => sheets.push(s.id));
+    Array.from(new Set(sheets)).forEach((sid) => removeFrom('costSheets', sid));
+    removeFrom('properties', id);
+    logDelete(id, 'Property', rec.totalCost, 'Property ' + id + ' (' + rec.name + ') deleted; payments to the seller voided');
+    return rec;
+  }
+  if (coll === 'sales') {
+    voidLinked('sale:' + id);
+    // The sale's own commission entry goes with it; one entered in the commission ledger stays.
+    DATA.commissions.filter((c) => c.propertyId === rec.propertyId && c.txnType === 'Sale' && c.source !== 'ledger').forEach((c) => {
+      voidLinked('comm:' + c.id);
+      removeFrom('commissions', c.id);
+    });
+    const p = DATA.properties.find((x) => x.id === rec.propertyId);
+    if (p) {
+      p.status = 'Available';
+      saveRecordToFirestore('properties', p.id, p);
+    }
+    removeFrom('sales', id);
+    logDelete(id, 'Sale', rec.sellingPrice, 'Sale ' + id + ' of ' + rec.property + ' deleted; its receipts voided and the property is available again');
+    return rec;
+  }
+  if (coll === 'commissions' && rec.source !== 'ledger') {
+    const sale = DATA.sales.find((s) => s.propertyId === rec.propertyId);
+    throw new Error('This commission comes from ' + (sale ? 'sale ' + sale.id : 'a sale') + ' — edit that sale (no agent) or delete it.');
+  }
+  if ((coll === 'invoices' || coll === 'costSheets') && rec.mirrorOf)
+    throw new Error('A mirror goes with its original — delete ' + rec.mirrorOf + ' instead, or reset the mirror to match it.');
+  if (coll === 'agents') {
+    const used = DATA.sales.filter((s) => s.agentId === id).length + DATA.commissions.filter((c) => c.agentId === id).length;
+    if (used) throw new Error(rec.name + ' has sales or commission on record — those keep the agent, so the agent cannot be deleted.');
+  }
+  const settle = { expenses: 'exp:', taxes: 'tax:', zakat: 'zakat:', bills: 'bill:', salaries: 'sal:', commissions: 'comm:' }[coll];
+  if (settle) voidLinked(settle + id);
+  // An invoice or a saved cost sheet takes its mirrors with it.
+  if (coll === 'invoices' || coll === 'costSheets') DATA[coll].filter((x) => x.mirrorOf === id).map((x) => x.id).forEach((mid) => removeFrom(coll, mid));
+  removeFrom(coll, id);
+  if (coll === 'zakat') refreshZakatSummary();
+  const entity = { expenses: rec.group === 'Assets' ? 'Asset' : 'Expense', taxes: 'Tax', zakat: 'Zakat', bills: 'Bill', salaries: 'Salary', commissions: 'Agent Commission', invoices: 'Invoice', agents: 'Agent', costSheets: 'Trading Cost Sheet' }[coll] || coll;
+  const amount = rec.amount != null ? rec.amount : rec.net != null ? rec.net : rec.totalAmount != null ? rec.totalAmount : rec.netMargin != null ? rec.netMargin : null;
+  logDelete(id, entity, amount, entity + ' ' + id + ' deleted' + (settle ? '; its payments voided' : ''));
+  return rec;
+}
+
 export function deleteTask(id) {
   const i = DATA.tasks.findIndex((x) => x.id === id);
   if (i < 0) return false;

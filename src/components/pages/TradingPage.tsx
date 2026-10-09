@@ -131,8 +131,9 @@ const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
 const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
 
 export function TradingPage() {
-  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet, toast, refreshData } = useApp();
+  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet, toast, refreshData, deleteRecord } = useApp();
   const [printing, setPrinting] = useState<CostSheet | null>(null);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   const resetMirror = (cs: CostSheet) => {
     if (!ledgersReady() || ledgerError()) {
@@ -335,6 +336,29 @@ export function TradingPage() {
             <button type="button" className="btn sm" onClick={() => setPrinting(cs)} title="Print this cost sheet now">
               <Icon name="print" size={12} /> Print
             </button>
+            {/* A saved sheet can be deleted; the deal then reads from its records again. */}
+            {!cs.fromRecords &&
+              (confirmDel === cs.id ? (
+                <span className="task-confirm">
+                  Delete {cs.id}?
+                  <button type="button" className="btn sm bad" onClick={() => { deleteRecord('costSheets', cs.id); setConfirmDel(null); }}>
+                    Yes, delete
+                  </button>
+                  <button type="button" className="btn sm" onClick={() => setConfirmDel(null)}>
+                    No
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn sm gh"
+                  onClick={() => setConfirmDel(cs.id)}
+                  title={`Delete ${cs.id}: the deal then reads straight from its records again`}
+                  aria-label={`Delete ${cs.id}`}
+                >
+                  <Icon name="trash" size={12} />
+                </button>
+              ))}
           </span>
         ),
       },

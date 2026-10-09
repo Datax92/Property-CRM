@@ -61,6 +61,7 @@ interface AppContextType {
   setModalField: (key: string, value: any) => void;
   submitModal: () => void;
   voidPayment: (id: string) => void;
+  deleteRecord: (coll: string, id: string) => boolean;
   showTip: (html: string, x: number, y: number) => void;
   hideTip: () => void;
   toast: (msg: string) => void;
@@ -1281,6 +1282,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [user.name, toast]
   );
 
+  // Deleting is refused while the database is unreachable, so nothing comes back on reload.
+  const deleteRecord = useCallback(
+    (coll: string, id: string) => {
+      if (!ledgersReady()) {
+        toast('Your records are still loading — please try again in a moment');
+        return false;
+      }
+      if (ledgerError()) {
+        toast('Not deleted — the database is not reachable');
+        return false;
+      }
+      try {
+        M.deleteRecord(coll, id);
+        setDataVersion((v) => v + 1);
+        toast(id + ' deleted');
+        return true;
+      } catch (err: any) {
+        toast(String(err && err.message ? err.message : err));
+        return false;
+      }
+    },
+    [toast]
+  );
+
   const showTip = useCallback((html: string, x: number, y: number) => {
     setTip({ html, x, y, visible: true });
   }, []);
@@ -1471,6 +1496,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setModalField,
         submitModal,
         voidPayment,
+        deleteRecord,
         showTip,
         hideTip,
         toast,

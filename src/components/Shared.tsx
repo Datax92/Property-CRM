@@ -308,9 +308,11 @@ export function DataTable<T extends { id?: string }>({
   /** Ledger these rows belong to: adds a paperclip column for their attachments. */
   attach?: string;
 }) {
-  const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit } = useApp();
-  // Ledgers with an entry form can have their rows corrected.
+  const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit, deleteRecord } = useApp();
+  // Ledgers with an entry form can have their rows corrected, and most can have a row deleted.
   const editable = !!attach && !!editFormFor(attach);
+  const deletable = !!attach && M.DELETABLE.indexOf(attach) >= 0;
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
   let data = rows;
@@ -379,7 +381,7 @@ export function DataTable<T extends { id?: string }>({
                     </button>
                   </th>
                 ))}
-                {editable && <th data-noexport="1" data-noprint="1" aria-label="Edit" />}
+                {(editable || deletable) && <th data-noexport="1" data-noprint="1" aria-label="Edit or delete" />}
                 {attach && (
                   <th data-noexport="1" data-noprint="1">
                     Files
@@ -400,13 +402,39 @@ export function DataTable<T extends { id?: string }>({
                         </td>
                       );
                     })}
-                    {editable && (
-                      <td data-noexport="1" data-noprint="1">
-                        {r.id ? (
-                          <button type="button" className="btn sm" title={`Edit ${r.id}`} onClick={() => openEdit(attach, r.id as string)}>
-                            <Pencil /> Edit
-                          </button>
-                        ) : null}
+                    {(editable || deletable) && (
+                      <td data-noexport="1" data-noprint="1" className="nowrap">
+                        {!r.id ? null : confirmId === r.id ? (
+                          <span className="task-confirm">
+                            Delete {r.id}?
+                            <button
+                              type="button"
+                              className="btn sm bad"
+                              onClick={() => {
+                                deleteRecord(attach as string, r.id as string);
+                                setConfirmId(null);
+                              }}
+                            >
+                              Yes, delete
+                            </button>
+                            <button type="button" className="btn sm" onClick={() => setConfirmId(null)}>
+                              No
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="rowacts">
+                            {editable && (
+                              <button type="button" className="btn sm" title={`Edit ${r.id}`} onClick={() => openEdit(attach as string, r.id as string)}>
+                                <Pencil /> Edit
+                              </button>
+                            )}
+                            {deletable && (
+                              <button type="button" className="btn sm gh" title={`Delete ${r.id}`} aria-label={`Delete ${r.id}`} onClick={() => setConfirmId(r.id as string)}>
+                                <Icon name="trash" size={12} />
+                              </button>
+                            )}
+                          </span>
+                        )}
                       </td>
                     )}
                     {attach && (
@@ -431,7 +459,7 @@ export function DataTable<T extends { id?: string }>({
                       </td>
                     );
                   })}
-                  {editable && <td data-noexport="1" data-noprint="1" />}
+                  {(editable || deletable) && <td data-noexport="1" data-noprint="1" />}
                   {attach && <td data-noexport="1" data-noprint="1" />}
                 </tr>
               </tfoot>
