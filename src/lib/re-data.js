@@ -298,8 +298,10 @@ export function computeKPIs(r, f) {
   const sellingCosts = soldInRange.reduce((a, s) => a + (s.otherExpenses || 0), 0);
   const directCosts = saleTaxes + sellingCosts;
 
-  const comms = D.commissions.filter((c) => propIds.has(c.propertyId) && inR(c.date, r) && (f.agent === 'all' || c.agentId === f.agent));
-  const commission = comms.reduce((a, c) => a + c.amount, 0);
+  const agentOk = (c) => propIds.has(c.propertyId) && (f.agent === 'all' || c.agentId === f.agent);
+  const comms = D.commissions.filter((c) => agentOk(c) && inR(c.date, r));
+  // Commission is a cost of its plot's deal, so it counts in profit when the plot is sold.
+  const commission = D.commissions.filter((c) => agentOk(c) && inR(profitDate(c), r)).reduce((a, c) => a + c.amount, 0);
   const commissionPaid = comms.reduce((a, c) => a + c.paid, 0);
   const commissionOut = comms.reduce((a, c) => a + c.outstanding, 0);
 
@@ -1049,6 +1051,72 @@ const settled = (amount, paid) => (paid >= amount ? 'Paid' : paid > 0 ? 'Partial
 const dueState = (amount, paid, dueDate) =>
   paid >= amount ? 'Paid' : dueDate instanceof Date && dueDate < TODAY ? 'Overdue' : paid > 0 ? 'Partially Paid' : 'Pending';
 
+/* Commission on a plot, bought or sold, entered straight in the commission ledger: an agent or
+   dealer from the directory or just a name. A sale with an agent picked still makes its own entry. */
+function commissionBody(v) {
+  const p = DATA.properties.find((x) => x.id === v.propertyId);
+  if (!p) throw new Error('Pick the property the commission is for.');
+  const side = v.side === 'Purchase' ? 'Purchase' : 'Sale';
+  const agent = v.agentId ? DATA.agents.find((a) => a.id === v.agentId) : null;
+  const name = agent ? agent.name : String(v.agentName || '').trim();
+  if (!name) throw new Error('Pick the agent, or type the agent or dealer name.');
+  const sale = DATA.sales.find((x) => x.propertyId === p.id);
+  const base = side === 'Purchase' ? p.price : sale ? sale.sellingPrice : p.currentValue;
+  const amount = Math.round(+v.amount || 0);
+  return {
+    propertyId: p.id, property: p.name, txnType: side, agentId: agent ? agent.id : null, agent: name,
+    counterparty: side === 'Purchase' ? p.seller : sale ? sale.buyer : '—',
+    date: parseDate(v.date), amount, pct: base > 0 ? (amount / base) * 100 : 0,
+    office: p.office, note: v.note || '', source: 'ledger',
+  };
+}
+
+export function addCommission(v) {
+  const body = commissionBody(v);
+  const paid = Math.min(Math.round(+v.paid || 0), body.amount);
+  const c = {
+    id: nextId(DATA.commissions, 'CM-', 4), ...body, paid, outstanding: body.amount - paid,
+    status: settled(body.amount, paid), paidDate: paid > 0 ? fmtDate(body.date) : '—', manual: true,
+  };
+  DATA.commissions.push(c);
+  saveRecordToFirestore('commissions', c.id, c);
+  if (paid > 0) addPayment({
+    date: v.date, dir: 'out', category: 'Agent Commission', amount: paid, party: c.agent, propertyId: c.propertyId,
+    agentId: c.agentId, office: c.office, method: v.method, note: 'Commission on ' + c.txnType.toLowerCase() + ' — ' + c.property,
+    settleKey: 'comm:' + c.id,
+  });
+  return c;
+}
+
+export function updateCommission(id, v) {
+  const c = mustFind(DATA.commissions, id, 'Commission');
+  if (c.source !== 'ledger') {
+    const sale = DATA.sales.find((s) => s.propertyId === c.propertyId);
+    throw new Error('This commission comes from ' + (sale ? 'sale ' + sale.id : 'a sale') + ' — change it by editing that sale.');
+  }
+  const body = commissionBody(v);
+  if (c.paid > body.amount) throw alreadyPaid(c.paid, 'the commission');
+  const prev = c.amount;
+  Object.assign(c, body, { outstanding: body.amount - c.paid, status: settled(body.amount, c.paid) });
+  saveRecordToFirestore('commissions', c.id, c);
+  logEdit(c.id, 'Agent Commission', prev, c.amount);
+  return c;
+}
+
+/** Agent fees typed on a cost sheet that the commission ledger does not hold yet, deal by deal. */
+export function unrecordedAgentFees() {
+  const out = [];
+  dealSheets().forEach((cs) => {
+    if (!cs.propertyId) return;
+    const recorded = (side) => DATA.commissions.filter((c) => c.propertyId === cs.propertyId && c.txnType === side).reduce((a, c) => a + c.amount, 0);
+    [['Purchase', cs.buySideAgentFee], ['Sale', cs.sellSideAgentFee]].forEach(([side, onSheet]) => {
+      const missing = Math.round((onSheet || 0) - recorded(side));
+      if (missing > 0) out.push({ id: cs.propertyId + ':' + side, propertyId: cs.propertyId, property: cs.name, sheet: cs.fromRecords ? '' : cs.id, side, onSheet, recorded: recorded(side), missing });
+    });
+  });
+  return out;
+}
+
 export function addAgent(v) {
   const a = {
     id: nextId(DATA.agents, 'AG-', 3), name: v.name, phone: v.phone || '', cnic: v.cnic || '',
@@ -1345,7 +1413,8 @@ export function updateSale(id, v) {
   if (s.received > price) throw new Error(fmt(s.received, 'full') + ' has already been received — the selling price cannot be less. Void the receipt first.');
   const pctRate = !agent ? 0 : v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
   const commission = Math.round((price * pctRate) / 100);
-  const cm = DATA.commissions.find((c) => c.propertyId === s.propertyId && c.txnType === 'Sale');
+  // The sale's own commission entry; one entered in the commission ledger is left alone.
+  const cm = DATA.commissions.find((c) => c.propertyId === s.propertyId && c.txnType === 'Sale' && c.source !== 'ledger');
   if (cm && cm.paid > 0 && (!agent || agent.id !== cm.agentId))
     throw new Error(fmt(cm.paid, 'full') + ' commission has already been paid to ' + cm.agent + ' — void that payment before changing the agent.');
   if (cm && cm.paid > commission) throw alreadyPaid(cm.paid, 'the commission');
@@ -1914,9 +1983,18 @@ export function sheetFromRecords(propertyId) {
     v.zakat += z.amount || 0;
     src(z.id, 'Zakat', z.amount || 0);
   });
+  // Agent fees come from the commission ledger, both sides of the deal. A sale's commission
+  // with no ledger entry of its own still counts.
+  const comms = DATA.commissions.filter((c) => c.propertyId === p.id);
+  comms.forEach((c) => {
+    v[c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee'] += c.amount || 0;
+    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0);
+  });
   if (sale) {
-    v.sellSideAgentFee += sale.commission || 0;
-    if (sale.commission) src(sale.id, 'Agent commission on sale', sale.commission);
+    if (sale.commission && !comms.some((c) => c.txnType === 'Sale' && c.source !== 'ledger')) {
+      v.sellSideAgentFee += sale.commission;
+      src(sale.id, 'Agent commission on sale', sale.commission);
+    }
     // Tax typed on the sale form, unless the same tax has its own tax entry.
     if (!saleTaxRecorded && sale.tax) { v.tax236C += sale.tax; src(sale.id, 'Withholding tax on sale', sale.tax); }
     if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses); }

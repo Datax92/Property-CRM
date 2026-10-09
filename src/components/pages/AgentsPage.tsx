@@ -8,7 +8,7 @@ import { PAGE_META } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function AgentsPage() {
-  const { tab, effectiveFilters: f, range: r, numbers, openModal } = useApp();
+  const { tab, effectiveFilters: f, range: r, numbers, openModal, openCostSheet } = useApp();
 
   const meta = PAGE_META[`agents/${tab}`] || { t: 'Agents' };
 
@@ -28,8 +28,9 @@ export function AgentsPage() {
     const cols = [
       { key: 'id', label: 'ID' },
       { key: 'agent', label: 'Agent' },
+      { key: 'txnType', label: 'On', render: (c: any) => <span className="tag mute">{c.txnType === 'Purchase' ? 'Purchase' : 'Sale'}</span> },
       { key: 'property', label: 'Property' },
-      { key: 'counterparty', label: 'Buyer' },
+      { key: 'counterparty', label: 'Buyer / seller' },
       { key: 'date', label: 'Date', cls: 'mono', render: (c: any) => M.fmtDate(c.date) },
       { key: 'pct', label: 'Rate', a: 'r' as const, cls: 'mono', render: (c: any) => `${c.pct.toFixed(2)}%` },
       { key: 'amount', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (c: any) => M.fmt(c.amount, numbers) },
@@ -53,9 +54,67 @@ export function AgentsPage() {
       },
     ];
 
+    // Agent fees typed on a cost sheet but never entered here: recording one puts it in the ledger,
+    // in payables until it is paid, and in profit when its plot is sold.
+    const missing = M.unrecordedAgentFees();
+    const missingCols = [
+      { key: 'property', label: 'Property' },
+      { key: 'sheet', label: 'Cost sheet', render: (x: any) => x.sheet || <span className="tag mute">From records</span> },
+      { key: 'side', label: 'On', render: (x: any) => <span className="tag mute">{x.side}</span> },
+      { key: 'onSheet', label: 'On the cost sheet', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.onSheet, numbers) },
+      { key: 'recorded', label: 'In the ledger', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.recorded, numbers) },
+      { key: 'missing', label: 'Not recorded', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => <b>{M.fmt(x.missing, numbers)}</b> },
+      {
+        key: 'act',
+        label: '',
+        render: (x: any) => (
+          <span className="rowacts">
+            <button
+              type="button"
+              className="btn sm pri"
+              onClick={() => openModal('commission', { side: x.side, propertyId: x.propertyId, amount: String(x.missing) })}
+              title="Enter this agent fee in the commission ledger"
+            >
+              <Icon name="plus" size={12} /> Record
+            </button>
+            <button type="button" className="btn sm" onClick={() => openCostSheet(x.propertyId)} title="Open the deal's cost sheet">
+              <Icon name="calculator" size={12} /> Cost sheet
+            </button>
+          </span>
+        ),
+      },
+    ];
+
     return (
-      <PageShell title={meta.t} u={meta.u} p={meta.p}>
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <button type="button" className="btn pri" onClick={() => openModal('commission')}>
+            <Icon name="plus" /> Add commission
+          </button>
+        }
+      >
         <SummaryKpis pairs={summaryPairs} />
+        {missing.length > 0 && (
+          <div className="panel" style={{ marginBottom: '14px' }}>
+            <div className="panel-h">
+              <h3>Agent fees on cost sheets, not in the ledger</h3>
+              <span className="sub">
+                {M.fmt(missing.reduce((a: number, x: any) => a + x.missing, 0), numbers)} on {M.fmtNum(missing.length)}{' '}
+                {missing.length === 1 ? 'deal' : 'deals'}
+              </span>
+            </div>
+            <div className="panel-b tight">
+              <p className="muted" style={{ margin: '0 0 8px', fontSize: '12.5px' }}>
+                These were typed on a cost sheet only, so no payment, payable or profit figure knows about them. Record each one
+                with its agent and anything already paid.
+              </p>
+              <DataTable cols={missingCols} rows={missing} totals={true} />
+            </div>
+          </div>
+        )}
         <DataTable cols={cols} rows={rows} totals={true} attach="commissions" />
       </PageShell>
     );

@@ -144,7 +144,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'sales/mirrorPurchaseInvoices': { t: 'Mirror purchase invoices', u: 'نقل خرید رسید', p: 'Copies of purchase invoices that follow their original: only the fields you change on a mirror differ. Changing a mirror never changes the original.' },
   'sales/receivables': { t: 'Accounts receivable', u: 'واجب الوصول', p: 'What customers still owe, and how far past due each balance is.' },
   'agents/directory': { t: 'Agent directory', u: 'ایجنٹ', p: 'Sales, profit generated and commission for every agent in the period.' },
-  'agents/commissions': { t: 'Commission ledger', u: 'کمیشن کھاتہ', p: 'What each agent earned, what has been paid, and what is still owed.' },
+  'agents/commissions': { t: 'Commission ledger', u: 'کمیشن کھاتہ', p: 'Commission on every plot bought or sold: what each agent or dealer earned, what has been paid, and what is still owed.' },
   'finance/pnl': { t: 'Profit & loss', u: 'نفع و نقصان', p: 'The full statement for the selected period, revenue down to net profit.' },
   'finance/profit': { t: 'Profit tracking', u: 'منافع', p: 'Purchases, sales, gross profit, expenses and net profit by week, month or year.' },
   'finance/cashflow': { t: 'Cash flow', u: 'نقدی بہاؤ', p: 'Money received and paid, with opening and closing balance.' },

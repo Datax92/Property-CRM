@@ -612,6 +612,53 @@ export const FORMS_DEF: Record<string, any> = {
       return { id: a.id, msg: 'Agent ' + a.name + ' added', go: 'agents/directory' };
     },
   },
+  commission: {
+    title: 'Add a commission',
+    editTitle: 'Edit commission',
+    coll: 'commissions',
+    load: (c: any) => ({ side: c.txnType, agentName: c.agentId ? '' : c.agent }),
+    update: (id: string, v: any) => M.updateCommission(id, v),
+    sub: 'Commission on buying or selling a plot. It shows on that deal’s cost sheet and counts in profit when the plot is sold.',
+    fields: [
+      { g: 'Commission' },
+      { k: 'side', l: 'Commission on', type: 'select', opts: () => [['Sale', 'Sale of the plot'], ['Purchase', 'Purchase of the plot']], req: true },
+      {
+        k: 'propertyId',
+        l: 'Property',
+        type: 'select',
+        req: true,
+        opts: () => [['', '— Select —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+      },
+      {
+        k: 'agentId',
+        l: 'Agent',
+        type: 'select',
+        opts: () => [['', '— Not in the directory, type the name —'], ...M.DATA.agents.map((a: any) => [a.id, a.name])],
+      },
+      { k: 'agentName', l: 'Agent / dealer name', ph: 'Name, if not in the directory' },
+      { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Commission (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the commission.', addOnly: true },
+      { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      { k: 'note', l: 'Note', ph: 'Optional', full: true },
+    ],
+    calc: (v: any) => [
+      ['Commission', n(v.amount)],
+      ['Paid', n(v.paid)],
+      ['Still to pay', Math.max(0, n(v.amount) - n(v.paid)), true],
+    ],
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      if (!v.agentId && !String(v.agentName || '').trim()) e.agentName = 'Pick an agent above, or type the name here.';
+      if (n(v.paid) > n(v.amount)) e.paid = 'Paid cannot exceed the commission.';
+      return e;
+    },
+    submit: (v: any) => {
+      const c = M.addCommission(v);
+      return { id: c.id, msg: 'Commission ' + c.id + ' recorded', go: 'agents/commissions' };
+    },
+  },
   tax: {
     title: 'Add a tax entry',
     editTitle: 'Edit tax entry',
