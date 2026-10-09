@@ -136,6 +136,52 @@ export function CostsPage() {
     const k = M.computeKPIs(r, f);
     const rows = M.DATA.taxes.filter((t: any) => M.inRange(t.date, r) && (f.office === 'all' || t.office === f.office));
     const fySummary = M.fiscalYearTaxSummary(f);
+    // Tax deal by deal: due on the cost sheet against what has actually been paid.
+    const deals = M.dealTaxes();
+    const dsum = (key: string) => deals.reduce((a: number, x: any) => a + (x[key] || 0), 0);
+    const dealCols = [
+      { key: 'property', label: 'Property' },
+      { key: 'status', label: 'Deal', render: (x: any) => <Tag text={x.status === 'Sold' ? 'Sold' : 'Held'} /> },
+      { key: 'stampCvt', label: 'Stamp duty & CVT', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.stampCvt, numbers) },
+      { key: 'tax236K', label: '§236K', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.tax236K, numbers) },
+      { key: 'tax236C', label: '§236C', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.tax236C, numbers) },
+      { key: 'cgt', label: 'CGT', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.cgt, numbers) },
+      { key: 'due', label: 'Tax due', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => <b>{M.fmt(x.due, numbers)}</b> },
+      { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => <span className="pos">{M.fmt(x.paid, numbers)}</span> },
+      {
+        key: 'remaining',
+        label: 'Remaining',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (x: any) => <b className={x.remaining > 0 ? 'neg' : ''}>{M.fmt(x.remaining, numbers)}</b>,
+      },
+      {
+        key: 'act',
+        label: '',
+        render: (x: any) => (
+          <span className="rowacts">
+            {x.missing.length > 0 && (
+              <button
+                type="button"
+                className="btn sm pri"
+                onClick={() => openModal('tax', { type: x.missing[0].type, propertyId: x.propertyId, amount: String(x.missing[0].amount) })}
+                title={
+                  'Only on the cost sheet: ' +
+                  x.missing.map((m: any) => `${m.label} ${M.fmt(m.amount, 'full')}`).join(', ') +
+                  '. Enter each as a tax entry, with anything already paid.'
+                }
+              >
+                <Icon name="plus" size={12} /> Enter {x.missing[0].label}
+              </button>
+            )}
+            <button type="button" className="btn sm" onClick={() => openCostSheet(x.propertyId)} title="Open the deal's cost sheet">
+              <Icon name="calculator" size={12} /> Cost sheet
+            </button>
+          </span>
+        ),
+      },
+    ];
 
     const summaryPairs: [string, string][] = [
       ['Entries', M.fmtNum(rows.length)],
@@ -180,6 +226,40 @@ export function CostsPage() {
           </button>
         }>
         <SummaryKpis pairs={summaryPairs} />
+
+        {deals.length > 0 && (
+          <div className="panel" style={{ marginBottom: '14px' }}>
+            <div className="panel-h">
+              <h3>Tax on each deal</h3>
+              <span className="sub">due on its cost sheet, against what has been paid · every deal, any date</span>
+            </div>
+            <div className="panel-b tight">
+              <div className="kpis">
+                <div className="kpi">
+                  <span className="k">Tax due on deals</span>
+                  <span className="v"><FigText str={M.fmt(dsum('due'), numbers)} /></span>
+                </div>
+                <div className="kpi">
+                  <span className="k">Paid</span>
+                  <span className="v pos"><FigText str={M.fmt(dsum('paid'), numbers)} /></span>
+                </div>
+                <div className="kpi">
+                  <span className="k">Remaining to pay</span>
+                  <span className="v" style={{ color: dsum('remaining') > 0 ? 'var(--bad)' : 'inherit' }}><FigText str={M.fmt(dsum('remaining'), numbers)} /></span>
+                </div>
+                <div className="kpi">
+                  <span className="k">Only on cost sheets</span>
+                  <span className="v"><FigText str={M.fmt(dsum('notRecorded'), numbers)} /></span>
+                </div>
+              </div>
+              <p className="muted" style={{ margin: '0 0 8px', fontSize: '12.5px' }}>
+                “Only on cost sheets” is tax typed on a sheet but never entered here, so no payment or payable knows about it.
+                Withholding tax taken on a sale counts as paid.
+              </p>
+              <DataTable cols={dealCols} rows={deals} totals={true} />
+            </div>
+          </div>
+        )}
 
         {/* Fiscal Year Tax Summary Panel */}
         <div className="panel" style={{ marginBottom: '14px' }}>
@@ -226,9 +306,9 @@ export function CostsPage() {
             <Icon name="info" />
           </span>
           <div>
-            <b>Two kinds of tax, never added together.</b> Withholding tax on a sale is already deducted
-            inside that sale's net revenue. Only advance and corporate income tax is subtracted again in the
-            profit bridge. The fiscal year closes in <b>June</b> — all tracking below follows July→June.
+            <b>Two kinds of tax, never added together.</b> Withholding tax on a sale is entered on the sale and is
+            already deducted inside that sale's net revenue; it shows above as paid on its deal. Tax entries below are
+            subtracted in the profit bridge. The fiscal year closes in <b>June</b> — the summary above follows July→June.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} attach="taxes" />

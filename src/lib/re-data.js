@@ -1117,6 +1117,34 @@ export function unrecordedAgentFees() {
   return out;
 }
 
+/** The tax lines of a cost sheet: what a deal owes in tax. */
+export const DEAL_TAX_LINES = [
+  ['stampDuty', 'Stamp duty', 'Stamp Duty'], ['cvt', 'CVT', 'Capital Value Tax (CVT)'], ['tax236K', '§236K', 'Advance Tax §236K'],
+  ['tax236C', '§236C', 'Advance Tax §236C'], ['cgtAmount', 'CGT', 'Capital Gains Tax'],
+];
+
+/** Tax on each deal: what its cost sheet says is due, what has been entered (tax entries, tax
+    taken on the sale, expenses on those lines), what of that is paid, and what is left to pay. */
+export function dealTaxes() {
+  const keys = DEAL_TAX_LINES.map((l) => l[0]);
+  return dealSheets().filter((cs) => cs.propertyId).map((cs) => {
+    const fresh = sheetFromRecords(cs.propertyId);
+    const recs = fresh ? fresh.sources.filter((x) => keys.indexOf(x.key) >= 0) : [];
+    const due = keys.reduce((a, k) => a + (cs[k] || 0), 0);
+    const recorded = recs.reduce((a, x) => a + x.amount, 0);
+    const paid = recs.reduce((a, x) => a + x.paid, 0);
+    // Each line's tax that is only on the sheet, entered one line at a time with its own tax type.
+    const missing = DEAL_TAX_LINES.map(([k, label, type]) => ({
+      key: k, label, type, amount: Math.round((cs[k] || 0) - recs.filter((x) => x.key === k).reduce((a, x) => a + x.amount, 0)),
+    })).filter((x) => x.amount > 0);
+    return {
+      id: cs.propertyId, propertyId: cs.propertyId, property: cs.name, sheet: cs.fromRecords ? '' : cs.id, status: cs.status,
+      stampCvt: (cs.stampDuty || 0) + (cs.cvt || 0), tax236K: cs.tax236K || 0, tax236C: cs.tax236C || 0, cgt: cs.cgtAmount || 0,
+      due, recorded, paid, remaining: Math.max(0, due - paid), notRecorded: missing.reduce((a, x) => a + x.amount, 0), missing,
+    };
+  }).filter((x) => x.due > 0 || x.paid > 0);
+}
+
 export function addAgent(v) {
   const a = {
     id: nextId(DATA.agents, 'AG-', 3), name: v.name, phone: v.phone || '', cnic: v.cnic || '',
@@ -1146,7 +1174,7 @@ export function addProject(v) {
   return p;
 }
 
-export const TAX_TYPES = ['Advance Tax §236K', 'Advance Tax §236C', 'Capital Gains Tax', 'Withholding Tax', 'Income Tax', 'Property Tax', 'Other'];
+export const TAX_TYPES = ['Advance Tax §236K', 'Advance Tax §236C', 'Capital Gains Tax', 'Stamp Duty', 'Capital Value Tax (CVT)', 'Withholding Tax', 'Income Tax', 'Property Tax', 'Other'];
 
 export function addTax(v) {
   const amount = Math.round(+v.amount || 0), paid = Math.min(Math.round(+v.paid || 0), amount);
@@ -1962,42 +1990,47 @@ export function sheetFromRecords(propertyId) {
     status: p.status === 'Sold' ? 'Sold' : 'Active Deal',
     sources: [],
   };
-  const src = (id, what, amount) => v.sources.push({ id, what, amount });
+  // Each record behind the sheet: which line it fills, and how much of it has been paid.
+  const src = (id, what, amount, key, paid = amount) => v.sources.push({ id, what, amount, key, paid });
 
   DATA.expenses.filter((e) => e.propertyId === p.id && NON_EXPENSE_GROUPS.indexOf(e.group) < 0).forEach((e) => {
     const text = (e.category || '') + ' ' + (e.note || '');
     const line = DEAL_COST_LINES.find((l) => l[2].test(text));
-    v[line ? line[1] : 'handlingExpenses'] += e.amount;
-    src(e.id, (line ? line[0] : 'Other handling') + ' · ' + e.category, e.amount);
+    const key = line ? line[1] : 'handlingExpenses';
+    v[key] += e.amount;
+    src(e.id, (line ? line[0] : 'Other handling') + ' · ' + e.category, e.amount, key, e.paid || 0);
   });
   let saleTaxRecorded = false;
   DATA.taxes.filter((t) => t.propertyId === p.id).forEach((t) => {
     const key = t.type === 'Advance Tax §236K' ? 'tax236K'
       : t.type === 'Advance Tax §236C' || t.type === 'Withholding Tax' ? 'tax236C'
-      : t.type === 'Capital Gains Tax' ? 'cgtAmount' : 'otherAcquisition';
+      : t.type === 'Capital Gains Tax' ? 'cgtAmount'
+      : t.type === 'Stamp Duty' ? 'stampDuty' : t.type === 'Capital Value Tax (CVT)' ? 'cvt' : 'otherAcquisition';
     if (key === 'tax236C') saleTaxRecorded = true;
     v[key] += t.amount;
-    src(t.id, t.type, t.amount);
+    src(t.id, t.type, t.amount, key, t.paid || 0);
   });
   DATA.zakat.filter((z) => z.propertyId === p.id).forEach((z) => {
     v.zakat += z.amount || 0;
-    src(z.id, 'Zakat', z.amount || 0);
+    src(z.id, 'Zakat', z.amount || 0, 'zakat');
   });
   // Agent fees come from the commission ledger, both sides of the deal. A sale's commission
   // with no ledger entry of its own still counts.
   const comms = DATA.commissions.filter((c) => c.propertyId === p.id);
   comms.forEach((c) => {
-    v[c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee'] += c.amount || 0;
-    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0);
+    const key = c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee';
+    v[key] += c.amount || 0;
+    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0, key, c.paid || 0);
   });
   if (sale) {
     if (sale.commission && !comms.some((c) => c.txnType === 'Sale' && c.source !== 'ledger')) {
       v.sellSideAgentFee += sale.commission;
-      src(sale.id, 'Agent commission on sale', sale.commission);
+      src(sale.id, 'Agent commission on sale', sale.commission, 'sellSideAgentFee');
     }
     // Tax typed on the sale form, unless the same tax has its own tax entry.
-    if (!saleTaxRecorded && sale.tax) { v.tax236C += sale.tax; src(sale.id, 'Withholding tax on sale', sale.tax); }
-    if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses); }
+    // Withholding tax is taken at the sale itself, so it counts as paid.
+    if (!saleTaxRecorded && sale.tax) { v.tax236C += sale.tax; src(sale.id, 'Withholding tax on sale', sale.tax, 'tax236C'); }
+    if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses, 'otherSellingExpenses'); }
   }
   const cs = calculateCostSheet(v);
   // What the records say, kept on a sheet so it can tell later which of it they changed.
