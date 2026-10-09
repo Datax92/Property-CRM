@@ -25,23 +25,23 @@ interface Line {
   k?: string;
   /** A computed line. */
   value?: (cs: CostSheet) => number;
-  /** A quick-fill rate offered beside the input: [label, amount for this sheet]. */
-  rate?: (cs: CostSheet) => [string, number];
+  /** A line worked out at a rate the sheet can change: the field holding the % and what it is a % of. */
+  rate?: { pct: string; base: (cs: CostSheet) => number };
 }
 
 const LINES: Line[] = [
   { kind: 'base', label: 'Net buy cost', basis: 'Price paid for the property', k: 'netBuyCost' },
   { kind: 'section', no: '1', label: 'Society / govt transfer cost' },
   { kind: 'item', no: '1.1', label: 'NDC & verification fee', k: 'ndcFee' },
-  { kind: 'item', no: '1.2', label: 'Provincial stamp duty', basis: '1% of buy cost', k: 'stampDuty', rate: (cs) => ['1%', Math.round(cs.netBuyCost * 0.01)] },
-  { kind: 'item', no: '1.3', label: 'Capital value tax (CVT)', basis: '1% of buy cost', k: 'cvt', rate: (cs) => ['1%', Math.round(cs.netBuyCost * 0.01)] },
+  { kind: 'item', no: '1.2', label: 'Provincial stamp duty', basis: 'of buy cost', k: 'stampDuty', rate: { pct: 'stampDutyPct', base: (cs) => cs.netBuyCost } },
+  { kind: 'item', no: '1.3', label: 'Capital value tax (CVT)', basis: 'of buy cost', k: 'cvt', rate: { pct: 'cvtPct', base: (cs) => cs.netBuyCost } },
   { kind: 'item', no: '1.4', label: 'CDA / RDA transfer fee', k: 'cdaRdaTransferFee' },
   { kind: 'item', no: '1.5', label: 'Society transfer & society expenses', k: 'societyTransferFee' },
   { kind: 'item', no: '1.6', label: 'Legal charges', k: 'legalCharges' },
   { kind: 'item', no: '1.7', label: 'Development charges', k: 'developmentCharges' },
   { kind: 'item', no: '1.8', label: 'Other purchase costs', k: 'otherAcquisition' },
   { kind: 'section', no: '2', label: 'Govt taxes (buy side)' },
-  { kind: 'item', no: '2.1', label: 'FBR §236K advance tax on purchase', basis: 'Filer 3%', k: 'tax236K', rate: (cs) => ['3%', Math.round(cs.netBuyCost * 0.03)] },
+  { kind: 'item', no: '2.1', label: 'FBR §236K advance tax on purchase', basis: 'of buy cost', k: 'tax236K', rate: { pct: 'tax236KPct', base: (cs) => cs.netBuyCost } },
   { kind: 'section', no: '3', label: 'Handling & expenses' },
   { kind: 'item', no: '3.1', label: 'Renovation & repairs', k: 'renovationRepairs' },
   { kind: 'item', no: '3.2', label: 'Maintenance & bills', k: 'maintenanceBills' },
@@ -54,7 +54,7 @@ const LINES: Line[] = [
   { kind: 'total', label: 'Purchase price (landed cost)', value: (cs) => cs.purchasePrice },
   { kind: 'base', label: 'Gross sale price', basis: 'Sale price, or current value if unsold', k: 'grossSalePrice' },
   { kind: 'section', no: '5', label: 'Selling costs' },
-  { kind: 'item', no: '5.1', label: 'FBR §236C advance tax on sale', basis: 'Filer 3%', k: 'tax236C', rate: (cs) => ['3%', Math.round(cs.grossSalePrice * 0.03)] },
+  { kind: 'item', no: '5.1', label: 'FBR §236C advance tax on sale', basis: 'of sale price', k: 'tax236C', rate: { pct: 'tax236CPct', base: (cs) => cs.grossSalePrice } },
   { kind: 'item', no: '5.2', label: 'Agent fee — sell side', k: 'sellSideAgentFee' },
   { kind: 'item', no: '5.3', label: 'Other selling expenses', k: 'otherSellingExpenses' },
   { kind: 'total', label: 'Gross profit', value: (cs) => cs.grossProfit },
@@ -63,9 +63,9 @@ const LINES: Line[] = [
     kind: 'item',
     no: '6.1',
     label: 'Capital gains tax (CGT)',
-    basis: '15% of gross profit, if payable',
+    basis: 'of gross profit, if payable',
     k: 'cgtAmount',
-    rate: (cs) => ['15%', Math.max(0, Math.round(cs.grossProfit * 0.15))],
+    rate: { pct: 'cgtRatePct', base: (cs) => Math.max(0, cs.grossProfit) },
   },
   { kind: 'item', no: '6.2', label: 'Zakat', k: 'zakat' },
   { kind: 'item', no: '6.3', label: 'Charity', k: 'charity' },
@@ -74,6 +74,43 @@ const LINES: Line[] = [
 ];
 
 const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);
+
+/** The rate a line stands at on this sheet (3 for 3%) and the amount that rate gives. Each sheet
+    keeps its own rates, so a non-filer or a different stamp duty is just a different number. */
+const rateOf = (cs: CostSheet, l: Line): [number, number] => {
+  const pct = +(cs as any)[(l.rate as any).pct] || 0;
+  return [pct, Math.round(((l.rate as any).base(cs) * pct) / 100)];
+};
+const pctOf = (n: number) => `${+n.toFixed(2)}%`;
+/** What the basis column says: for a rate line, the sheet's own rate. */
+const basisText = (cs: CostSheet, l: Line) => (l.rate ? `${pctOf(rateOf(cs, l)[0])} ${l.basis}` : l.basis || '');
+
+/** The lines a sheet shows. A line hidden on the sheet stays hidden while it is empty; a section
+    with every line hidden goes too. A line with an amount always shows, so nothing counted is unseen. */
+function shownLines(cs: CostSheet): Line[] {
+  const hidden = new Set<string>((cs as any).hiddenLines || []);
+  const out: Line[] = [];
+  let section: Line | null = null;
+  let items: Line[] = [];
+  const flush = () => {
+    if (section && items.length) out.push(section, ...items);
+    section = null;
+    items = [];
+  };
+  LINES.forEach((l) => {
+    if (l.kind === 'section') {
+      flush();
+      section = l;
+    } else if (l.kind === 'item') {
+      if (!(hidden.has(l.k as string) && !amountOf(cs, l))) (section ? items : out).push(l);
+    } else {
+      flush();
+      out.push(l);
+    }
+  });
+  flush();
+  return out;
+}
 
 /** What each field a mirror can change is called on screen. */
 const SHEET_FIELD_LABEL: Record<string, string> = {
@@ -86,7 +123,7 @@ const SHEET_FIELD_LABEL: Record<string, string> = {
 /** The rate lines of a sheet that stand exactly at their rate. */
 const atRate = (form: any): string[] => {
   const cs = M.calculateCostSheet(form);
-  return LINES.filter((l) => l.rate && l.k && (+form[l.k] || 0) > 0 && Math.round(+form[l.k]) === l.rate(cs)[1]).map((l) => l.k as string);
+  return LINES.filter((l) => l.rate && l.k && (+form[l.k] || 0) > 0 && Math.round(+form[l.k]) === rateOf(cs, l)[1]).map((l) => l.k as string);
 };
 const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
 
@@ -440,7 +477,7 @@ export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
           </tr>
         </thead>
         <tbody>
-          {LINES.map((l, i) =>
+          {shownLines(sheet).map((l, i) =>
             l.kind === 'section' ? (
               <tr key={i} className="sec">
                 <td className="no">{l.no}</td>
@@ -450,7 +487,7 @@ export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
               <tr key={i} className={l.kind}>
                 <td className="no">{l.no || ''}</td>
                 <td>{l.label}</td>
-                <td className="basis">{l.basis || ''}</td>
+                <td className="basis">{basisText(sheet, l)}</td>
                 <td className="r mono">{l.kind === 'item' && !amountOf(sheet, l) ? '—' : full(amountOf(sheet, l))}</td>
               </tr>
             )
@@ -551,7 +588,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   const withRates = (next: any, keys: string[]) => {
     let out = next;
     LINES.forEach((l) => {
-      if (l.rate && l.k && keys.includes(l.k)) out = { ...out, [l.k]: l.rate(M.calculateCostSheet(out))[1] };
+      if (l.rate && l.k && keys.includes(l.k)) out = { ...out, [l.k]: rateOf(M.calculateCostSheet(out), l)[1] };
     });
     return out;
   };
@@ -566,6 +603,20 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
     setFollowing(keys);
     setForm((prev: any) => withRates(prev, keys));
   };
+  // A new rate is meant to be used: the line takes the amount at that rate and keeps following it.
+  const setRate = (l: Line, raw: string) => {
+    const key = l.k as string;
+    const keys = following.filter((k) => k !== key).concat(key);
+    setFollowing(keys);
+    const pct = raw === '' ? '' : Math.min(100, Math.max(0, +raw || 0));
+    setForm((prev: any) => withRates({ ...prev, [(l.rate as any).pct]: pct }, keys));
+  };
+
+  // Lines this deal does not use can be hidden while they are empty, on screen and in print.
+  const hiddenKeys: string[] = form.hiddenLines || [];
+  const emptyItems = LINES.filter((l) => l.kind === 'item' && !amountOf(live, l)).map((l) => l.k as string);
+  const hiddenNow = hiddenKeys.filter((k) => emptyItems.includes(k)).length;
+  const hideLine = (key: string) => updateField('hiddenLines', Array.from(new Set([...hiddenKeys, key])));
 
   const linkProperty = (pid: string) => {
     // A property has one cost sheet, the one every page reads: linking a property that already
@@ -716,6 +767,17 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
               <span className="spacer" />
               {live.mirrorOf && <span className="tag mute">Mirror of {live.mirrorOf}</span>}
               <span className="tag ok">{live.id || (live.propertyId ? 'Not saved yet' : 'Draft')}</span>
+              {hiddenNow > 0 ? (
+                <button type="button" className="btn sm" data-noprint="1" onClick={() => updateField('hiddenLines', [])} title="Show every line of the sheet again">
+                  Show all lines ({hiddenNow} hidden)
+                </button>
+              ) : (
+                emptyItems.length > 0 && (
+                  <button type="button" className="btn sm" data-noprint="1" onClick={() => updateField('hiddenLines', emptyItems)} title="Hide every line with no amount, on screen and in print">
+                    Hide empty lines
+                  </button>
+                )
+              )}
             </div>
             <table className="cs-table">
               <thead>
@@ -727,7 +789,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                 </tr>
               </thead>
               <tbody>
-                {LINES.map((l, i) => {
+                {shownLines(live).map((l, i) => {
                   if (l.kind === 'section') {
                     return (
                       <tr key={i} className="sec">
@@ -736,23 +798,47 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                       </tr>
                     );
                   }
-                  const rate = l.rate ? l.rate(live) : null;
+                  const rate = l.rate ? rateOf(live, l) : null;
                   const changed = !!l.k && differs(l.k);
                   return (
-                    <tr key={i} className={changed ? `${l.kind} mirror-diff` : l.kind}>
+                    <tr key={l.k || i} className={changed ? `${l.kind} mirror-diff` : l.kind}>
                       <td className="no">{l.no || ''}</td>
-                      <td>{l.label}</td>
-                      <td className="basis">
-                        {l.basis || ''}
-                        {rate && rate[1] > 0 && Math.round(+form[l.k as string] || 0) !== rate[1] && (
-                          <button
-                            type="button"
-                            className="ratebtn"
-                            onClick={() => applyRate(l.k as string)}
-                            title={`Fill in ${rate[0]} = ${M.fmt(rate[1], 'full')}`}
-                          >
-                            use {rate[0]}
+                      <td>
+                        {l.label}
+                        {l.kind === 'item' && !amountOf(live, l) && (
+                          <button type="button" className="linehide" data-noprint="1" onClick={() => hideLine(l.k as string)} title="Hide this line while it is empty" aria-label={`Hide ${l.label}`}>
+                            <Icon name="x" size={11} />
                           </button>
+                        )}
+                      </td>
+                      <td className="basis">
+                        {l.rate && rate ? (
+                          <span className="ratefld">
+                            <input
+                              type="number"
+                              className="rate-in"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              aria-label={`${l.label} rate %`}
+                              value={form[l.rate.pct] === '' || form[l.rate.pct] == null ? '' : form[l.rate.pct]}
+                              placeholder={String(rate[0])}
+                              onChange={(e) => setRate(l, e.target.value)}
+                            />
+                            % {l.basis}
+                            {rate[1] > 0 && Math.round(+form[l.k as string] || 0) !== rate[1] && (
+                              <button
+                                type="button"
+                                className="ratebtn"
+                                onClick={() => applyRate(l.k as string)}
+                                title={`Fill in ${pctOf(rate[0])} = ${M.fmt(rate[1], 'full')}`}
+                              >
+                                use {pctOf(rate[0])}
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          l.basis || ''
                         )}
                       </td>
                       <td className="r">

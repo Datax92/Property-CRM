@@ -1417,6 +1417,16 @@ button.pcard:hover { transform: translateY(-2px); box-shadow: var(--sh-2); }
   font-size: 11px; color: var(--brand-2); background: #fff;
 }
 .ratebtn:hover { background: var(--brand-wash); }
+.ratefld { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.cs-table input.rate-in { width: 56px; height: 24px; padding: 0 4px; font-size: 12px; }
+/* Hiding an empty line: a quiet control that shows on the row being pointed at. */
+.linehide {
+  margin-left: 6px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; vertical-align: middle;
+  color: var(--ink-3); background: transparent; opacity: 0; cursor: pointer;
+}
+.cs-table tr:hover .linehide, .linehide:focus-visible { opacity: 1; }
+.linehide:hover { color: var(--bad); background: var(--bad-wash, var(--paper)); }
+@media (hover: none) { .linehide { opacity: .6; } }
 .cs-sources { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 .cs-sources li { display: grid; grid-template-columns: 72px 1fr auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--rule); }
 .cs-sources li:last-child { border-bottom: 0; }
