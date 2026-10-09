@@ -37,8 +37,12 @@ export function AppShell() {
   useEffect(() => {
     if (!authUser) return;
     const unsubscribe = syncFirestoreData(() => {
-      // Every invoice and deal gets its mirror; once all of them have one this does nothing.
-      if (ledgersLoaded()) M.ensureMirrors();
+      // Saved cost sheets take in whatever their records changed, and every invoice and deal gets
+      // its mirror; once everything is up to date this does nothing.
+      if (ledgersLoaded()) {
+        M.syncSheetsWithRecords();
+        M.ensureMirrors();
+      }
       refreshData();
     });
     return () => unsubscribe();

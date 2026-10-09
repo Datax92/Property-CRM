@@ -1785,12 +1785,6 @@ export function saveCostSheet(raw, user) {
     cs.id = nextId(DATA.costSheets.filter((s) => String(s.id).startsWith('CS-')), 'CS-', 4);
   }
   const idx = DATA.costSheets.findIndex((x) => x.id === cs.id);
-  if (idx >= 0) {
-    DATA.costSheets[idx] = cs;
-  } else {
-    DATA.costSheets.unshift(cs);
-  }
-  saveRecordToFirestore('costSheets', cs.id, cs);
 
   // A linked property takes the sheet's base price and, while unsold, its expected sale value.
   // Nothing else is written back: the other lines of a linked sheet are read from the expense,
@@ -1802,7 +1796,16 @@ export function saveCostSheet(raw, user) {
     recomputeProperty(p);
     if (p.status !== 'Sold' && cs.grossSalePrice > 0) p.currentValue = cs.grossSalePrice;
     saveRecordToFirestore('properties', p.id, p);
+    // What the records say as it is saved: from here on the sheet takes in only what they change.
+    cs.recorded = sheetFromRecords(p.id).recorded;
   }
+
+  if (idx >= 0) {
+    DATA.costSheets[idx] = cs;
+  } else {
+    DATA.costSheets.unshift(cs);
+  }
+  saveRecordToFirestore('costSheets', cs.id, cs);
 
   const au = {
     id: nextId(DATA.audit, 'AU-', 4),
@@ -1828,8 +1831,8 @@ export function saveCostSheet(raw, user) {
    COST SHEETS FROM THE RECORDS
    A property's cost sheet is read from what has actually been recorded:
    its purchase, its sale, and every expense, tax and Zakat entry linked
-   to it. A saved sheet is kept as saved; the register flags it when the
-   records have moved on since.
+   to it. A saved sheet follows those records: whatever they change, it
+   takes in by itself.
    ==================================================================== */
 const ZERO_LINES = {
   ndcFee: 0, stampDuty: 0, cvt: 0, cdaRdaTransferFee: 0, societyTransferFee: 0, legalCharges: 0,
@@ -1885,26 +1888,43 @@ export function sheetFromRecords(propertyId) {
     if (!saleTaxRecorded && sale.tax) { v.tax236C += sale.tax; src(sale.id, 'Withholding tax on sale', sale.tax); }
     if (sale.otherExpenses) { v.otherSellingExpenses += sale.otherExpenses; src(sale.id, 'Other selling expenses', sale.otherExpenses); }
   }
-  return calculateCostSheet(v);
+  const cs = calculateCostSheet(v);
+  // The amounts as read, kept on a sheet so it can tell later which of them the records changed.
+  cs.recorded = {};
+  SHEET_AMOUNT_KEYS.forEach((k) => { cs.recorded[k] = Math.round(cs[k] || 0); });
+  return cs;
 }
 
-/** True when a saved sheet's amounts no longer match its property's records. */
-export function sheetOutOfDate(cs) {
-  if (!cs || !cs.propertyId) return false;
+/** A linked sheet brought up to date with its property's records: each line whose recorded
+    amount has changed since the sheet last took it in takes the new amount, while a line typed
+    over on the sheet keeps what was typed until its own records change. A sheet saved before it
+    kept the recorded amounts takes every amount the records have. Mirrors follow their original
+    instead. Returns the very same sheet when there is nothing to change. */
+export function syncSheetWithRecords(cs) {
+  if (!cs || !cs.propertyId || cs.mirrorOf) return cs;
   const fresh = sheetFromRecords(cs.propertyId);
-  if (!fresh) return false;
-  return SHEET_AMOUNT_KEYS.some((k) => fresh[k] > 0 && Math.round(fresh[k]) !== Math.round(cs[k] || 0));
+  if (!fresh) return cs;
+  const was = cs.recorded || {};
+  const moved = SHEET_AMOUNT_KEYS.filter((k) => fresh.recorded[k] !== Math.round(was[k] || 0));
+  if (!moved.length) return cs;
+  const next = { ...cs, recorded: fresh.recorded };
+  moved.forEach((k) => { next[k] = fresh[k]; });
+  return calculateCostSheet(next);
 }
 
-/** A saved sheet brought up to date: every line the records know takes the recorded amount;
-    lines only typed on the sheet (nothing recorded for them) keep what was typed. */
-export function refreshSheetFromRecords(cs) {
-  const fresh = cs && cs.propertyId ? sheetFromRecords(cs.propertyId) : null;
-  if (!fresh) return cs;
-  const next = { ...cs };
-  SHEET_AMOUNT_KEYS.forEach((k) => { if (fresh[k] > 0) next[k] = fresh[k]; });
-  next.sources = fresh.sources;
-  return calculateCostSheet(next);
+/** Every saved cost sheet brought up to date with its property's records, and stored.
+    Run only once every ledger has loaded: records still on their way would read as deleted.
+    Returns how many sheets changed. */
+export function syncSheetsWithRecords() {
+  let changed = 0;
+  DATA.costSheets.forEach((cs, i) => {
+    const next = syncSheetWithRecords(cs);
+    if (next === cs) return;
+    DATA.costSheets[i] = next;
+    saveRecordToFirestore('costSheets', next.id, next);
+    changed++;
+  });
+  return changed;
 }
 
 /** Every deal: the saved cost sheets, plus a sheet read from the records for each property
@@ -1981,7 +2001,7 @@ export function ensureMirrors() {
     const id = 'M-' + key;
     const src = realSheet(key);
     if (!src || DATA.costSheets.some((s) => s.id === id)) return;
-    const { sources, fromRecords, ...rest } = src;
+    const { sources, fromRecords, recorded, ...rest } = src;
     const m = calculateCostSheet({ ...rest, id, mirrorOf: key, mirrorEdits: [], attachments: [] });
     DATA.costSheets.unshift(m);
     saveRecordToFirestore('costSheets', id, m);

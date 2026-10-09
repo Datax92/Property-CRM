@@ -252,15 +252,11 @@ export function TradingPage() {
             <span className="mono" style={{ fontWeight: 700, color: 'var(--brand)' }}>
               {cs.fromRecords ? cs.propertyId : cs.id}
             </span>
-            {cs.fromRecords ? (
+            {cs.fromRecords && (
               <span className="tag mute" style={{ marginLeft: 6 }} title="Read from the property, sale, expense and tax records. Open and save to keep a copy.">
                 From records
               </span>
-            ) : M.sheetOutOfDate(cs) ? (
-              <span className="tag warn" style={{ marginLeft: 6 }} title="The property's records have changed since this sheet was saved. Open it and press “Update from records”.">
-                Records changed
-              </span>
-            ) : null}
+            )}
           </>
         ),
       },
@@ -537,9 +533,20 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   }, [loadKey]);
 
   const live: CostSheet = useMemo(() => M.calculateCostSheet(form), [form]);
-  // A mirror is meant to differ from the records, so it is never offered the real figures.
-  const outOfDate = !!live.id && !live.mirrorOf && M.sheetOutOfDate(live);
-  const sources: any[] = live.propertyId && !live.mirrorOf ? (M.sheetFromRecords(live.propertyId) || { sources: [] }).sources : [];
+  // A linked sheet follows its property's records; a mirror follows its original instead.
+  const records: any = live.propertyId && !live.mirrorOf ? M.sheetFromRecords(live.propertyId) : null;
+  const sources: any[] = records ? records.sources : [];
+
+  // When the records change (here, elsewhere in the app or on another device), the lines they
+  // move take the new amounts at once; a line typed over here keeps what was typed.
+  const recordsKey = records ? JSON.stringify(records.recorded) : '';
+  useEffect(() => {
+    const next = M.syncSheetWithRecords(form);
+    if (next === form) return;
+    load(next);
+    toast(`Brought up to date with the records of ${next.propertyId}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordsKey]);
 
   const withRates = (next: any, keys: string[]) => {
     let out = next;
@@ -571,11 +578,6 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
       }
     }
     updateField('propertyId', pid);
-  };
-
-  const refresh = () => {
-    load(M.refreshSheetFromRecords(form));
-    toast('Updated from the latest records — press Save to keep it');
   };
 
   const handleSave = () => {
@@ -685,18 +687,6 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
             )}
           </div>
         )}
-        {outOfDate && (
-          <div className="note" style={{ marginBottom: '8px' }} data-noprint="1">
-            <span className="ic"><Icon name="warn" /></span>
-            <div style={{ flex: 1 }}>
-              <b>The records for this property have changed since this sheet was saved.</b> Update it to bring in the
-              latest purchase, sale, expense and tax amounts.
-            </div>
-            <button type="button" className="btn pri sm" onClick={refresh}>
-              Update from records
-            </button>
-          </div>
-        )}
 
         {/* HEADLINE FIGURES */}
         {/* Every digit, so each figure moves the moment an amount is typed. */}
@@ -802,7 +792,7 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                         </option>
                       ))}
                     </select>
-                    <span className="hint">Linking fills the sheet from that property’s purchase, sale, expenses and taxes.</span>
+                    <span className="hint">Linking fills the sheet from that property’s purchase, sale, expenses and taxes, and keeps it up to date as they change.</span>
                   </div>
                   <div className={fldCls('name')}>
                     <label htmlFor="cs-name">Property name *</label>
