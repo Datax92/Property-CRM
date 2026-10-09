@@ -47,6 +47,10 @@ export const STATUSES = ['Available','Reserved','Under Process','Sold'];
 export const PAY_STATUS = ['Paid','Partially Paid','Unpaid','Overdue'];
 export const METHODS = ['Cash','Bank Transfer','Cheque','Online Payment','Other'];
 export const ACCOUNTS = ['HBL Current — 0912','Meezan Business — 4471','Petty Cash — Head Office','Alfalah Escrow — 8830'];
+/** Money in that is earned outside property trading. It counts as revenue in profit and loss. */
+export const INCOME_CATEGORIES = ['Rental Income', 'Profit on Deposit', 'Commission Earned', 'Dividend', 'Other Income'];
+/** Money in that is not earned: the owner putting money in, or what an account held to begin with. */
+export const CAPITAL_CATEGORIES = ['Owner Capital', 'Opening Balance'];
 
 const AGENT_NAMES = ['Ahmed Khan','Sana Malik','Bilal Raza','Hina Qureshi','Usman Sheikh','Farah Iqbal','Zain Abbas','Nida Aslam'];
 const BUYERS = ['Kamran Aziz','Ayesha Tariq','Rehan Dar','Mahnoor Sethi','Junaid Butt','Saira Hameed','Adnan Yousaf','Tania Rafiq','Waleed Chaudhry','Noor Fatima','Imran Sial','Beenish Anwar','Shahid Mahmood','Rabia Zafar','Danish Alvi','Komal Nadeem','Tariq Jameel','Sundas Ali','Haris Baig','Mehreen Shah'];
@@ -285,6 +289,11 @@ export function computeKPIs(r, f) {
 
   const soldInRange = D.sales.filter((s) => saleMatch(s, f, propIds) && inR(s.date, r));
   const salesRevenue = soldInRange.reduce((a, s) => a + s.sellingPrice, 0);
+  // Income earned outside property trading (rent, profit on deposits ...), received on the cash ledger.
+  // In a narrowed scope only income picked for a property in it counts.
+  const otherIncome = livePayments().filter((p) => p.dir === 'in' && INCOME_CATEGORIES.indexOf(p.category) >= 0 && inR(p.date, r) && overheadMatch(p, f)
+    && (!scopedToProperty(f) || (p.propertyId && propIds.has(p.propertyId)))).reduce((a, p) => a + p.amount, 0);
+  const totalRevenue = salesRevenue + otherIncome;
   const cashReceived = soldInRange.reduce((a, s) => a + s.received, 0);
   // Company scope: gross profit follows the document definition (revenue − period purchase cost).
   // Narrowed scope (a single agent, project, type or property): the period purchase cost belongs to
@@ -292,7 +301,7 @@ export function computeKPIs(r, f) {
   // the properties actually sold in scope is used instead.
   const scoped = scopedToProperty(f);
   const costOfSales = soldInRange.reduce((a, s) => a + s.propertyCost, 0);
-  const grossProfit = salesRevenue - (scoped ? costOfSales : purchaseCost);
+  const grossProfit = totalRevenue - (scoped ? costOfSales : purchaseCost);
   // Withholding tax and other selling costs typed on each sale, kept apart so neither is taken for the other.
   const saleTaxes = soldInRange.reduce((a, s) => a + (s.tax || 0), 0);
   const sellingCosts = soldInRange.reduce((a, s) => a + (s.otherExpenses || 0), 0);
@@ -377,13 +386,13 @@ export function computeKPIs(r, f) {
       underProcess: props.filter((p) => p.status === 'Under Process').length,
       unsold: unsold.length, purchasedInRange: purchased.length, soldInRange: soldInRange.length,
     },
-    purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, cashReceived, grossProfit,
+    purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, otherIncome, totalRevenue, cashReceived, grossProfit,
     costOfSales, directCosts, saleTaxes, sellingCosts,
     // Two bases for gross profit. grossProfitDoc follows the requirement document literally
     // (period sales − period purchase spend); grossProfitCOGS matches the cost of the properties
     // actually sold, which is the accounting-correct figure. See AUDIT.md finding A3.
-    grossProfitDoc: salesRevenue - purchaseCost,
-    grossProfitCOGS: salesRevenue - costOfSales,
+    grossProfitDoc: totalRevenue - purchaseCost,
+    grossProfitCOGS: totalRevenue - costOfSales,
     costBasis: scoped ? costOfSales : purchaseCost,
     operatingCosts, operatingProfit: grossProfit - operatingCosts - directCosts,
     profitBeforeZakat: grossProfit - operatingCosts - directCosts - tax,
@@ -400,7 +409,7 @@ export function computeKPIs(r, f) {
       ['Property Sellers', payableProps], ['Agent Commission', payableComm], ['Salaries', payableSal],
       ['Bills', payableBills], ['Tax Authority', payableTax], ['Other Vendors', payableVendors],
     ],
-    grossMargin: pctOf(grossProfit, salesRevenue), netMargin: pctOf(netProfit, salesRevenue),
+    grossMargin: pctOf(grossProfit, totalRevenue), netMargin: pctOf(netProfit, totalRevenue),
     scoped,
   };
 }
@@ -412,12 +421,12 @@ export function computeKPIs(r, f) {
 export function basisView(k, basis) {
   const doc = !k.scoped && basis === 'doc';
   const cost = doc ? k.purchaseCost : k.costOfSales;
-  const gross = k.salesRevenue - cost;
+  const gross = k.totalRevenue - cost;
   const op = k.scoped ? gross - k.commission - k.directCosts : gross - k.operatingCosts - k.directCosts;
   const net = k.scoped ? op : op - k.tax - k.zakat;
   return {
     cost, gross, op, net, doc,
-    grossMargin: pctOf(gross, k.salesRevenue), netMargin: pctOf(net, k.salesRevenue),
+    grossMargin: pctOf(gross, k.totalRevenue), netMargin: pctOf(net, k.totalRevenue),
     costLabel: doc ? 'period purchase spend' : 'cost of the units sold',
   };
 }
@@ -578,6 +587,27 @@ export function cashLedger(r, f) {
     opening, cashIn, cashOut, net: cashIn - cashOut, closing: opening + cashIn - cashOut,
     inflows: pickSide('i', 3), outflows: pickSide('o', 4), count: within.length,
   };
+}
+
+/** The bank and cash accounts in use, most used first, then the standard ones. */
+export function accountNames() {
+  const used = {};
+  DATA.payments.forEach((p) => { if (p.account) used[p.account] = (used[p.account] || 0) + 1; });
+  const names = Object.keys(used).sort((a, b) => used[b] - used[a]);
+  return names.concat(ACCOUNTS.filter((a) => names.indexOf(a) < 0));
+}
+
+/** What each account holds on a date: everything received into it less everything paid from it. */
+export function accountBalances(asOf, f) {
+  const by = {};
+  livePayments().filter((p) => p.date <= asOf && (!f || overheadMatch(p, f))).forEach((p) => {
+    const a = p.account || ACCOUNTS[0];
+    const x = by[a] || (by[a] = { id: a, account: a, cashIn: 0, cashOut: 0, count: 0, last: null });
+    if (p.dir === 'in') x.cashIn += p.amount; else x.cashOut += p.amount;
+    x.count++;
+    if (!x.last || p.date > x.last) x.last = p.date;
+  });
+  return Object.keys(by).map((k) => ({ ...by[k], balance: by[k].cashIn - by[k].cashOut })).sort((a, b) => b.balance - a.balance);
 }
 
 /* E4 - Overhead run rate and months of cover. Answers "if we sold nothing else
@@ -750,7 +780,7 @@ export function addProperty(v) {
   saveRecordToFirestore('properties', p.id, p);
   if (p.paid > 0) addPayment({
     date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: p.paid,
-    party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer',
+    party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer', account: v.account,
     note: 'Purchase payment — ' + p.name, settleKey: 'prop:' + p.id,
   });
   return p;
@@ -797,7 +827,7 @@ export function addSale(v) {
   if (received > 0) addPayment({
     date: v.date, dir: 'in', category: 'Property Sale', amount: received,
     party: s.buyer, propertyId: p.id, agentId: agent ? agent.id : null, office: p.office,
-    method: v.method, note: 'Sale receipt — ' + p.name, settleKey: 'sale:' + s.id,
+    method: v.method, account: v.account, note: 'Sale receipt — ' + p.name, settleKey: 'sale:' + s.id,
   });
   return s;
 }
@@ -822,7 +852,7 @@ export function addExpense(v) {
   saveRecordToFirestore('expenses', e.id, e);
   if (paid > 0) addPayment({
     date: v.date, dir: 'out', category: v.group, amount: paid, party: v.vendor, propertyId: e.propertyId,
-    office: v.office, method: v.method, note: e.note, settleKey: 'exp:' + e.id,
+    office: v.office, method: v.method, account: v.account, note: e.note, settleKey: 'exp:' + e.id,
   });
   return e;
 }
@@ -1082,7 +1112,7 @@ export function addCommission(v) {
   saveRecordToFirestore('commissions', c.id, c);
   if (paid > 0) addPayment({
     date: v.date, dir: 'out', category: 'Agent Commission', amount: paid, party: c.agent, propertyId: c.propertyId,
-    agentId: c.agentId, office: c.office, method: v.method, note: 'Commission on ' + c.txnType.toLowerCase() + ' — ' + c.property,
+    agentId: c.agentId, office: c.office, method: v.method, account: v.account, note: 'Commission on ' + c.txnType.toLowerCase() + ' — ' + c.property,
     settleKey: 'comm:' + c.id,
   });
   return c;
@@ -1191,7 +1221,7 @@ export function addTax(v) {
   saveRecordToFirestore('taxes', t.id, t);
   if (paid > 0) addPayment({
     date: v.date, dir: 'out', category: 'Taxes', amount: paid, party: t.authority,
-    propertyId: t.propertyId, office: t.office, method: v.method, note: t.type + (t.ref !== '—' ? ' — ' + t.ref : ''),
+    propertyId: t.propertyId, office: t.office, method: v.method, account: v.account, note: t.type + (t.ref !== '—' ? ' — ' + t.ref : ''),
     settleKey: 'tax:' + t.id,
   });
   return t;
@@ -1211,7 +1241,7 @@ export function addZakat(v) {
   saveRecordToFirestore('zakat', z.id, z);
   if (z.amount > 0) addPayment({
     date: v.date, dir: 'out', category: 'Zakat', amount: z.amount, party: v.paidTo || 'Zakat recipients', propertyId: z.propertyId,
-    method: v.method, note: 'Zakat — ' + z.period, settleKey: 'zakat:' + z.id,
+    method: v.method, account: v.account, note: 'Zakat — ' + z.period, settleKey: 'zakat:' + z.id,
   });
   refreshZakatSummary();
   return z;
@@ -1250,7 +1280,7 @@ export function addBill(v) {
   saveRecordToFirestore('bills', b.id, b);
   if (paid > 0) addPayment({
     date: dateInput(dueDate > TODAY ? TODAY : dueDate), dir: 'out', category: 'Bills', amount: paid, party: b.vendor,
-    office: b.office, method: v.method, note: b.type + ' bill — ' + b.period, settleKey: 'bill:' + b.id,
+    office: b.office, method: v.method, account: v.account, note: b.type + ' bill — ' + b.period, settleKey: 'bill:' + b.id,
   });
   return b;
 }
@@ -1269,7 +1299,7 @@ export function addSalary(v) {
   saveRecordToFirestore('salaries', sl.id, sl);
   if (sl.status === 'Paid' && sl.net > 0) addPayment({
     date: v.date, dir: 'out', category: 'Employee Salaries', amount: sl.net, party: sl.employee,
-    office: sl.office, method: v.method, note: 'Salary — ' + sl.monthLabel, settleKey: 'sal:' + sl.id,
+    office: sl.office, method: v.method, account: v.account, note: 'Salary — ' + sl.monthLabel, settleKey: 'sal:' + sl.id,
   });
   return sl;
 }

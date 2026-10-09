@@ -163,6 +163,16 @@ const invoiceValidate = (v: any) => {
   return e;
 };
 
+/** Which bank or cash account the money moved through: one already in use, or a new one typed in. */
+const accountField = (addOnly = true) => ({
+  k: 'account',
+  l: 'Bank / cash account',
+  list: () => M.accountNames(),
+  def: () => M.accountNames()[0],
+  ph: 'e.g. Bank Islami — 1234',
+  addOnly,
+});
+
 export const FORMS_DEF: Record<string, any> = {
   property: {
     title: 'Add a property',
@@ -199,6 +209,7 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Payment & valuation' },
       { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       {
         k: 'currentValue',
         l: 'Current market value',
@@ -266,6 +277,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'sellingPrice', l: 'Selling price (PKR)', type: 'money', req: true, min: 1 },
       { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true, addOnly: true },
+      accountField(),
       {
         k: 'commissionPct',
         l: 'Commission %',
@@ -362,6 +374,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the amount.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'note', l: 'Note', ph: 'Optional description', full: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -420,8 +433,8 @@ export const FORMS_DEF: Record<string, any> = {
         opts: () => [
           'Property Sale',
           'Customer Payment',
-          'Other Income',
-          'Investment',
+          ...M.INCOME_CATEGORIES,
+          ...M.CAPITAL_CATEGORIES,
           'Property Purchase',
           'Agent Commission',
           'Employee Salaries',
@@ -443,7 +456,7 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Amount' },
       { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'method', l: 'Method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
-      { k: 'account', l: 'Bank / cash account', type: 'select', opts: () => M.ACCOUNTS, req: true },
+      { ...accountField(false), req: true, hint: 'Opening Balance: what an account held to begin with. Owner Capital: money the owner put in.' },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { k: 'ref', l: 'Reference number', ph: 'Cheque or transfer reference' },
       { k: 'note', l: 'Description', ph: 'What this payment is for', full: true },
@@ -472,6 +485,36 @@ export const FORMS_DEF: Record<string, any> = {
     submit: (v: any) => {
       const t = M.recordPayment(v);
       return { id: t.id, msg: 'Transaction ' + t.id + ' posted', go: 'admin/transactions' };
+    },
+  },
+  income: {
+    title: 'Add income',
+    sub: 'Money earned outside property trading: rent, profit on deposits, commission earned and the like. It counts as revenue in profit and loss.',
+    fields: [
+      { g: 'Income' },
+      { k: 'category', l: 'Kind of income', type: 'select', opts: () => M.INCOME_CATEGORIES, req: true },
+      { k: 'party', l: 'Received from', req: true, ph: 'Tenant, bank or payer' },
+      { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      {
+        k: 'propertyId',
+        l: 'Property (optional)',
+        type: 'select',
+        opts: () => [['', '— Not for one property —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
+        hint: 'For rent from a plot or house, pick it here.',
+      },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'method', l: 'Method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
+      { ...accountField(false), req: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { k: 'ref', l: 'Reference number', ph: 'Receipt or transfer reference' },
+      { k: 'note', l: 'Description', ph: 'What this income is for', full: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
+    ],
+    validate: () => ({}),
+    submit: (v: any) => {
+      const t = M.recordPayment({ ...v, dir: 'in', settle: '' });
+      return { id: t.id, msg: 'Income ' + t.id + ' recorded', go: 'finance/income' };
     },
   },
   saleInvoice: {
@@ -641,6 +684,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Commission (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the commission.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'note', l: 'Note', ph: 'Optional', full: true },
     ],
     calc: (v: any) => [
@@ -683,6 +727,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Tax amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the tax amount.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
@@ -721,6 +766,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { k: 'paidTo', l: 'Paid to', ph: 'Recipient or organisation', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'ref', l: 'Reference', ph: 'Receipt or transfer reference' },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
@@ -758,6 +804,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'amount', l: 'Bill amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'paid', l: 'Amount paid', type: 'money', hint: 'Cannot exceed the bill amount.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [
@@ -790,6 +837,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'deduction', l: 'Deduction', type: 'money' },
       { k: 'status', l: 'Status', type: 'select', opts: () => ['Paid', 'Pending'], def: 'Paid', req: true, addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [

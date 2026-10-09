@@ -21,6 +21,7 @@ export function FinancePage() {
     numbers,
     exportCsv,
     print,
+    voidPayment,
   } = useApp();
 
   const meta = PAGE_META[`finance/${tab}`] || { t: 'Finance' };
@@ -132,6 +133,85 @@ export function FinancePage() {
     );
   }
 
+  if (tab === 'income') {
+    // Income earned outside property trading, as received on the cash ledger.
+    const all = M.DATA.payments.filter(
+      (p: any) => p.dir === 'in' && M.INCOME_CATEGORIES.indexOf(p.category) >= 0 && M.inRange(p.date, r) && (f.office === 'all' || p.office === f.office)
+    );
+    // A voided entry stays listed for the record but counts nothing.
+    const rows = all.map((p: any) => ({
+      ...p,
+      amount: p.status === 'Voided' ? 0 : p.amount,
+      property: (M.DATA.properties.find((x: any) => x.id === p.propertyId) || {}).name || '—',
+    }));
+    const live = rows.filter((p: any) => p.status !== 'Voided');
+    const byCat = M.INCOME_CATEGORIES.map((c: string) => [c, live.filter((p: any) => p.category === c).reduce((a: number, p: any) => a + p.amount, 0)]).filter(
+      (x: any) => x[1] > 0
+    );
+
+    const summaryPairs: [string, string][] = [
+      ['Entries', M.fmtNum(live.length)],
+      ['Other income', M.fmt(live.reduce((a: number, p: any) => a + p.amount, 0), numbers)],
+      ...byCat.slice(0, 3).map((x: any) => [x[0], M.fmt(x[1], numbers)] as [string, string]),
+    ];
+
+    const cols = [
+      { key: 'id', label: 'Txn ID' },
+      { key: 'date', label: 'Date', cls: 'mono', render: (p: any) => M.fmtDate(p.date) },
+      { key: 'category', label: 'Kind of income' },
+      { key: 'party', label: 'Received from' },
+      { key: 'property', label: 'Property' },
+      {
+        key: 'amount',
+        label: 'Amount',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (p: any) => <span className={p.status === 'Voided' ? 'muted' : 'pos'}>{M.fmt(p.amount, numbers)}</span>,
+      },
+      { key: 'method', label: 'Method' },
+      { key: 'account', label: 'Account' },
+      { key: 'note', label: 'Description' },
+      {
+        key: 'status',
+        label: '',
+        render: (p: any) =>
+          p.status === 'Voided' ? (
+            <span className="tag bad">Voided</span>
+          ) : (
+            <button type="button" className="btn sm" onClick={() => voidPayment(p.id)} title="Void this entry — it stays on record but no longer counts">
+              Void
+            </button>
+          ),
+      },
+    ];
+
+    return (
+      <PageShell
+        title={meta.t}
+        u={meta.u}
+        p={meta.p}
+        acts={
+          <button type="button" className="btn pri" onClick={() => openModal('income')}>
+            <Icon name="plus" /> Add income
+          </button>
+        }
+      >
+        <SummaryKpis pairs={summaryPairs} />
+        <div className="note calm" style={{ marginBottom: '14px' }}>
+          <span className="ic">
+            <Icon name="info" />
+          </span>
+          <div>
+            Income here counts as <b>other revenue</b> in profit and loss and goes into the account it was received in. Money
+            the owner puts in is not income: record it as <b>owner capital</b> on the cash flow page.
+          </div>
+        </div>
+        <DataTable cols={cols} rows={rows} totals={true} />
+      </PageShell>
+    );
+  }
+
   if (tab === 'cashflow') {
     const cl = M.cashLedger(r, f);
     const rows = M.livePayments()
@@ -168,6 +248,23 @@ export function FinancePage() {
       { key: 'account', label: 'Account' },
     ];
 
+    // What each bank and cash account holds at the end of the period.
+    const balances = M.accountBalances(r.end, f);
+    const balanceCols = [
+      { key: 'account', label: 'Account', render: (b: any) => <b>{b.account}</b> },
+      { key: 'cashIn', label: 'Received into it', a: 'r' as const, sum: true, cls: 'mono', render: (b: any) => M.fmt(b.cashIn, numbers) },
+      { key: 'cashOut', label: 'Paid from it', a: 'r' as const, sum: true, cls: 'mono', render: (b: any) => M.fmt(b.cashOut, numbers) },
+      {
+        key: 'balance',
+        label: 'Balance',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (b: any) => <b className={b.balance < 0 ? 'neg' : 'pos'}>{M.fmt(b.balance, numbers)}</b>,
+      },
+      { key: 'last', label: 'Last used', cls: 'mono', render: (b: any) => M.fmtDate(b.last) },
+    ];
+
     return (
       <PageShell
         title={meta.t}
@@ -180,6 +277,28 @@ export function FinancePage() {
         }
       >
         <SummaryKpis pairs={summaryPairs} />
+        <div className="panel" style={{ marginBottom: '14px' }}>
+          <div className="panel-h">
+            <h3>Cash &amp; bank balances</h3>
+            <span className="sub">on {M.fmtDate(r.end)}</span>
+            <span className="spacer" />
+            <button type="button" className="btn sm" data-noprint="1" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
+              <Icon name="plus" size={12} /> Opening balance
+            </button>
+            <button type="button" className="btn sm" data-noprint="1" onClick={() => openModal('payment', { dir: 'in', category: 'Owner Capital' })}>
+              <Icon name="plus" size={12} /> Owner capital
+            </button>
+          </div>
+          <div className="panel-b tight">
+            {balances.some((b: any) => b.balance < 0) && (
+              <p className="muted" style={{ margin: '0 0 8px', fontSize: '12.5px' }}>
+                An account below zero has paid out money that was never shown coming in. Enter what it held to begin with as an
+                <b> opening balance</b>, and money the owner put in as <b>owner capital</b>.
+              </p>
+            )}
+            <DataTable cols={balanceCols} rows={balances} totals={true} />
+          </div>
+        </div>
         <div className="grid c2" style={{ marginBottom: '14px' }}>
           <div className="panel">
             <div className="panel-h">
@@ -309,8 +428,8 @@ export function FinancePage() {
   const pnlRows = [
     L('REVENUE', null, 'h'),
     L('Property sales', k.salesRevenue),
-    L('Other revenue', 0),
-    L('Total revenue', k.salesRevenue, 't'),
+    L('Other revenue', k.otherIncome),
+    L('Total revenue', k.totalRevenue, 't'),
     L('COST OF SALES', null, 'h'),
     ...(bv.doc
       ? [
@@ -357,14 +476,14 @@ export function FinancePage() {
 
   const wf = k.scoped
     ? [
-        { k: 'Selling revenue', v: k.salesRevenue, total: true },
+        { k: 'Revenue', v: k.totalRevenue, total: true, why: k.otherIncome ? 'Property sales and other income' : undefined },
         { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
         { k: 'Gross profit', v: bv.gross, total: true },
         { k: 'Direct costs', v: -(k.commission + k.directCosts), why: 'Commission, withholding tax and selling costs on these sales' },
         { k: 'Net contribution', v: bv.net, total: true },
       ]
     : [
-        { k: 'Selling revenue', v: k.salesRevenue, total: true },
+        { k: 'Revenue', v: k.totalRevenue, total: true, why: k.otherIncome ? 'Property sales and other income' : undefined },
         { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
         { k: 'Gross profit', v: bv.gross, total: true },
         {
