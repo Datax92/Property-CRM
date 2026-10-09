@@ -86,7 +86,7 @@ export const NAV: NavSection[] = [
     group: 'Finance',
     tabs: [
       { id: 'pnl', label: 'Profit & loss', need: 'pnl' },
-      { id: 'profit', label: 'Profit tracking', need: 'profit' },
+      { id: 'profit', label: 'Net margin tracking', need: 'profit' },
       { id: 'cashflow', label: 'Cash flow', need: 'cashflow' },
       { id: 'income', label: 'Other income', need: 'pnl' },
       { id: 'payables', label: 'Payables', need: 'payables' },
@@ -148,7 +148,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'agents/directory': { t: 'Agent directory', u: 'ایجنٹ', p: 'Sales, profit generated and commission for every agent in the period.' },
   'agents/commissions': { t: 'Commission ledger', u: 'کمیشن کھاتہ', p: 'Commission on every plot bought or sold: what each agent or dealer earned, what has been paid, and what is still owed.' },
   'finance/pnl': { t: 'Profit & loss', u: 'نفع و نقصان', p: 'The full statement for the selected period, revenue down to net profit.' },
-  'finance/profit': { t: 'Profit tracking', u: 'منافع', p: 'Purchases, sales, gross profit, expenses and net profit by week, month or year.' },
+  'finance/profit': { t: 'Net margin tracking', u: 'منافع', p: 'Revenue, expenses, net profit and net margin % by financial year (July to June), month by month or year on year.' },
   'finance/investments': { t: 'Investment tracking', u: 'سرمایہ کاری', p: 'Everything the business has money in and still holds — unsold plots and assets such as gold, shares and savings — against what each is worth today.' },
   'finance/income': { t: 'Other income', u: 'دیگر آمدنی', p: 'Money earned outside property trading — rent, profit on deposits, commission earned — counted as revenue.' },
   'finance/cashflow': { t: 'Cash flow', u: 'نقدی بہاؤ', p: 'Money received and paid, what each bank and cash account holds, and the opening and closing balance.' },

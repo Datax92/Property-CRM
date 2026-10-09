@@ -487,7 +487,7 @@ export function DashboardPage() {
                     <span className="sub">{M.TODAY.getFullYear()}, by month</span>
                     <span className="spacer" />
                     <button type="button" className="link" onClick={() => goto('finance/profit')}>
-                      Profit tracking
+                      Net margin tracking
                     </button>
                   </div>
                   <div className="panel-b">

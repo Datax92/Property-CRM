@@ -1,15 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable } from '../Shared';
-import { ChartWaterfall, ChartLines, RankedList } from '../Charts';
+import { PageShell, SummaryKpis, DataTable, KpiCard } from '../Shared';
+import { ChartWaterfall, ChartBarGroups, RankedList } from '../Charts';
 import { InvestmentKpis, InvestmentCharts, Kind, GainPill } from '../Investments';
 import { Icon } from '../Icons';
 import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 
 export function FinancePage() {
+  // The financial year picked on net margin tracking (its first year, e.g. 2025 for FY 2025-26).
+  const [fyYear, setFyYear] = useState<number | null>(null);
   const {
     tab,
     effectiveFilters: f,
@@ -29,47 +31,39 @@ export function FinancePage() {
   const meta = PAGE_META[`finance/${tab}`] || { t: 'Finance' };
 
   if (tab === 'profit') {
+    // Tracked by financial year (July to June): a year's months, or year against year.
+    const years: number[] = M.fiscalYears();
+    const fy = years.indexOf(fyYear as number) >= 0 ? (fyYear as number) : years[0];
+    const line = (label: string, full: string, k: any) => {
+      const bv = M.basisView(k, grossBasis);
+      return {
+        label,
+        full,
+        purchase: k.purchaseCost,
+        sales: k.totalRevenue,
+        gross: bv.gross,
+        commission: k.commission,
+        expenses: k.totalExpenses,
+        net: bv.net,
+        margin: M.pctOf(bv.net, k.totalRevenue),
+      };
+    };
     const rows =
       period === 'weekly'
-        ? M.weeklySeries(12, f).map((w: any) => ({
-            label: w.label,
-            full: w.full,
-            purchase: w.k.purchaseCost,
-            sales: w.k.salesRevenue,
-            gross: M.basisView(w.k, grossBasis).gross,
-            commission: w.k.commission,
-            expenses: w.k.totalExpenses,
-            net: M.basisView(w.k, grossBasis).net,
-          }))
+        ? M.weeklySeries(12, f).map((w: any) => line(w.label, w.full, w.k))
         : period === 'yearly'
-        ? [M.TODAY.getFullYear() - 1, M.TODAY.getFullYear()].map((y: number) => {
-            const kk = M.computeKPIs(M.rangeFor(y === M.TODAY.getFullYear() ? 'thisYear' : 'lastYear'), f);
-            return {
-              label: 'FY ' + y,
-              full: 'FY ' + y,
-              purchase: kk.purchaseCost,
-              sales: kk.salesRevenue,
-              gross: M.basisView(kk, grossBasis).gross,
-              commission: kk.commission,
-              expenses: kk.totalExpenses,
-              net: M.basisView(kk, grossBasis).net,
-            };
-          })
-        : M.monthlySeries(M.TODAY.getFullYear(), f).map((m: any) => ({
-            label: m.label,
-            full: m.full,
-            purchase: m.k.purchaseCost,
-            sales: m.k.salesRevenue,
-            gross: M.basisView(m.k, grossBasis).gross,
-            commission: m.k.commission,
-            expenses: m.k.totalExpenses,
-            net: M.basisView(m.k, grossBasis).net,
-          }));
+        ? years
+            .slice()
+            .reverse()
+            .map((y: number) => line(M.fyLabel(y), M.fyLabel(y) + ' (July to June)', M.computeKPIs(M.fyRange(y), f)))
+        : M.fyMonthlySeries(fy, f).map((m: any) => line(m.label, m.full, m.k));
+    const fyLine = line(M.fyLabel(fy), M.fyLabel(fy), M.computeKPIs(M.fyRange(fy), f));
+    const pctCell = (n: number) => (isFinite(n) ? `${n.toFixed(1)}%` : '—');
 
     const cols = [
       { key: 'full', label: 'Period' },
       { key: 'purchase', label: 'Purchase cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.purchase, numbers) },
-      { key: 'sales', label: 'Sales', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.sales, numbers) },
+      { key: 'sales', label: 'Revenue', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.sales, numbers) },
       {
         key: 'gross',
         label: 'Gross profit',
@@ -88,6 +82,13 @@ export function FinancePage() {
         cls: 'mono',
         render: (p: any) => <span className={p.net > 0 ? 'pos' : p.net < 0 ? 'neg' : ''}>{M.fmt(p.net, numbers)}</span>,
       },
+      {
+        key: 'margin',
+        label: 'Net margin %',
+        a: 'r' as const,
+        cls: 'mono',
+        render: (p: any) => <b className={p.margin > 0 ? 'pos' : p.margin < 0 ? 'neg' : ''}>{pctCell(p.margin)}</b>,
+      },
     ];
 
     return (
@@ -101,10 +102,20 @@ export function FinancePage() {
                 aria-pressed={period === p}
                 onClick={() => setPeriod(p)}
               >
-                {p[0].toUpperCase() + p.slice(1)}
+                {p === 'monthly' ? 'Monthly' : p === 'yearly' ? 'Year on year' : 'Weekly'}
               </button>
             ))}
           </span>
+          <label className="vs" htmlFor="fy-pick">
+            Financial year
+          </label>
+          <select id="fy-pick" className="fldsel" value={fy} onChange={(e) => setFyYear(+e.target.value)} title="July to June">
+            {years.map((y: number) => (
+              <option key={y} value={y}>
+                {M.fyLabel(y)} (Jul {y} – Jun {y + 1})
+              </option>
+            ))}
+          </select>
           <span className="spacer" />
           <button type="button" className="btn" onClick={exportCsv}>
             <Icon name="down" /> CSV
@@ -114,15 +125,27 @@ export function FinancePage() {
           </button>
         </div>
 
+        <div className="kpis">
+          <KpiCard k={`Revenue · ${fyLine.label}`} v={fyLine.sales} />
+          <KpiCard k="Gross profit" v={fyLine.gross} tone={fyLine.gross >= 0 ? 'pos' : 'neg'} />
+          <KpiCard k="Expenses" v={fyLine.expenses} />
+          <KpiCard k="Net profit" v={fyLine.net} tone={fyLine.net >= 0 ? 'pos' : 'neg'} cls="lead" />
+          <KpiCard k="Net margin %" raw={pctCell(fyLine.margin)} tone={fyLine.margin >= 0 ? 'pos' : 'neg'} f="net profit as a share of revenue" />
+        </div>
         <div className="panel" style={{ marginBottom: '14px' }}>
           <div className="panel-h">
             <h3>Revenue, expenses and net profit</h3>
+            <span className="sub">
+              {period === 'yearly' ? 'each financial year' : period === 'weekly' ? 'the last 12 weeks' : `${M.fyLabel(fy)}, month by month`}
+            </span>
           </div>
           <div className="panel-b">
-            <ChartLines
+            <ChartBarGroups
+              width={1180}
+              label="Revenue, expenses and net profit by period"
               rows={rows}
               series={[
-                { key: 'sales', label: 'Sales', c: 'var(--s1)' },
+                { key: 'sales', label: 'Revenue', c: 'var(--s1)' },
                 { key: 'expenses', label: 'Expenses', c: 'var(--s2)' },
                 { key: 'net', label: 'Net profit', c: 'var(--s3)' },
               ]}

@@ -442,6 +442,35 @@ export function weeklySeries(n, f) {
   }
   return out;
 }
+/* Pakistan's financial year runs July to June: FY 2025-26 starts on 1 July 2025. */
+export const fyStartYear = (d) => (d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1);
+export const fyLabel = (y) => 'FY ' + y + '–' + String(y + 1).slice(2);
+export const fyRange = (y) => ({ start: new Date(y, 6, 1), end: endOfDay(new Date(y + 1, 5, 30)), label: fyLabel(y), key: 'custom' });
+
+/** Every financial year that has records in it, newest first, always including the current one. */
+export function fiscalYears() {
+  const dates = [...DATA.sales.map((s) => s.date), ...DATA.properties.map((p) => p.purchaseDate), ...DATA.payments.map((p) => p.date)]
+    .filter((d) => d instanceof Date && d <= TODAY);
+  const now = fyStartYear(TODAY);
+  const first = dates.length ? Math.min(now, ...dates.map(fyStartYear)) : now;
+  const out = [];
+  for (let y = now; y >= first; y--) out.push(y);
+  return out;
+}
+
+/** The months of one financial year, July to June, up to the current month. */
+export function fyMonthlySeries(y, f) {
+  const out = [];
+  for (let i = 0; i < 12; i++) {
+    const m = (6 + i) % 12, yr = i < 6 ? y : y + 1;
+    const start = new Date(yr, m, 1);
+    if (start > TODAY) break;
+    const r = { start, end: endOfDay(new Date(yr, m + 1, 0)), label: MONTHS[m] + ' ' + yr, key: 'custom' };
+    out.push({ label: MONTHS[m], full: r.label, k: computeKPIs(r, f) });
+  }
+  return out;
+}
+
 export function monthlySeries(year, f) {
   const out = [];
   const last = year === TODAY.getFullYear() ? TODAY.getMonth() : 11;
