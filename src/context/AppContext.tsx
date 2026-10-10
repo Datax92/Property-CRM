@@ -306,9 +306,10 @@ export const FORMS_DEF: Record<string, any> = {
       const rate = !ag ? 0 : v.commissionPct === '' || v.commissionPct == null ? ag.rate : n(v.commissionPct);
       const comm = Math.round((price * rate) / 100);
       const tax = saleTax(v);
-      const cost = p ? p.totalCost : 0;
+      // What the plot cost all in, as its cost sheet adds it up, so this preview matches the sheet.
+      const cost = p ? M.landedCost(p.id) : 0;
       return [
-        ['Property cost', cost],
+        ['Landed cost (from cost sheet)', cost],
         ['Selling price', price],
         ['Gross profit', price - cost, false, true],
         ['Commission (' + rate + '%)', -comm],

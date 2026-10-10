@@ -2267,6 +2267,14 @@ export function syncSheetMirror(m) {
     Returns how many mirrors were made. */
 export function ensureMirrors() {
   let made = 0;
+  // A mirror whose original is gone (its plot, sheet or invoice was deleted) is cleared away, so
+  // it neither lingers in the lists nor attaches itself to a new record that reuses the number.
+  const orphanSheets = DATA.costSheets.filter((s) => s.mirrorOf
+    && !DATA.costSheets.some((x) => x.id === s.mirrorOf && !x.mirrorOf)
+    && !DATA.properties.some((p) => p.id === s.mirrorOf)).map((s) => s.id);
+  orphanSheets.forEach((id) => removeFrom('costSheets', id));
+  const orphanInvoices = DATA.invoices.filter((i) => i.mirrorOf && !DATA.invoices.some((x) => x.id === i.mirrorOf)).map((i) => i.id);
+  orphanInvoices.forEach((id) => removeFrom('invoices', id));
   const mirroredInvoices = new Set(DATA.invoices.filter((i) => i.mirrorOf).map((i) => i.mirrorOf));
   DATA.invoices
     .filter((i) => !i.mirrorOf && (i.type === 'sale' || i.type === 'purchase') && !mirroredInvoices.has(i.id))
