@@ -688,8 +688,8 @@ export function FinancePage() {
           {k.scoped
             ? 'With an agent, project, type or property filter on, only the costs of those sales are shown; company overheads, tax and Zakat are not allocated.'
             : 'Zakat sits below the operating line, separate from operating expenses.'}{' '}
-          Withholding tax and other selling costs entered on a sale are deducted here — do not also record
-          the same amount in the Tax register, or it will be counted twice.
+          Withholding tax and other selling costs entered on a sale are deducted here; when the plot has its own
+          §236C entry in the Tax register, that entry is counted instead of the figure on the sale, never both.
         </div>
       </div>
     </PageShell>
