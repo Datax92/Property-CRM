@@ -73,6 +73,23 @@ const LINES: Line[] = [
   { kind: 'result', label: 'Net margin (clean profit)', value: (cs) => cs.netMargin },
 ];
 
+/** A sheet line's name, for the list of lines that do not match the records. */
+const gapLabel = (key: string) => (key === 'grossSalePrice' ? 'Sale price' : LINES.find((l) => l.k === key)?.label || key);
+/** What “Record them” does with a line that does not match. */
+function gapAction(g: any, propertyId: string) {
+  if (g.diff < 0 || g.how === 'sheet') return 'the sheet takes the recorded amount';
+  const sale: any = M.DATA.sales.find((s: any) => s.propertyId === propertyId);
+  const what: Record<string, string> = {
+    tax: 'entered as a tax entry',
+    expense: 'entered as an expense of this plot',
+    commission: 'entered as agent commission',
+    saleTax: 'entered as a §236C tax entry' + (sale && sale.tax ? ' (it then stands for the tax on sale ' + sale.id + ')' : ''),
+    zakat: 'entered as Zakat paid',
+  };
+  const amount = g.how === 'saleTax' && !M.DATA.taxes.some((t: any) => t.propertyId === propertyId && (t.type === 'Advance Tax §236C' || t.type === 'Withholding Tax')) ? g.onSheet : g.diff;
+  return `${M.fmt(amount, 'full')} ${what[g.how] || 'entered'}`;
+}
+
 const amountOf = (cs: CostSheet, l: Line) => (l.value ? l.value(cs) : +cs[l.k as string] || 0);
 
 /** The rate a line stands at on this sheet (3 for 3%) and the amount that rate gives. Each sheet
@@ -559,7 +576,7 @@ function findSheet(key: string): CostSheet | null {
 }
 
 function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null }) {
-  const { toast, setActiveCostSheetId } = useApp();
+  const { toast, setActiveCostSheetId, refreshData } = useApp();
   const allSheets: CostSheet[] = M.dealSheets();
   const mirrors: CostSheet[] = M.mirrorSheets();
   const [printing, setPrinting] = useState(false);
@@ -597,6 +614,10 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
   // A linked sheet follows its property's records; a mirror follows its original instead.
   const records: any = live.propertyId && !live.mirrorOf ? M.sheetFromRecords(live.propertyId) : null;
   const sources: any[] = records ? records.sources : [];
+  // Lines where this sheet and its records disagree: typed here only, or recorded but not here.
+  const gaps: any[] = records ? M.sheetGaps(live) : [];
+  const [gapPaid, setGapPaid] = useState(true);
+  const [gapAccount, setGapAccount] = useState<string>(() => M.accountNames()[0] || '');
 
   // When the records change (here, elsewhere in the app or on another device), the lines they
   // move take the new amounts at once; a line typed over here keeps what was typed.
@@ -661,6 +682,32 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
       }
     }
     updateField('propertyId', pid);
+  };
+
+  // Enter every amount typed only on this sheet on its own ledger, so profit, tax and cash count it.
+  const matchRecords = () => {
+    if (!String(form.name || '').trim()) {
+      toast('Enter the property name under “Deal details” first');
+      return;
+    }
+    if (!ledgersReady() || ledgerError()) {
+      toast('Not done — your records are not reachable right now');
+      return;
+    }
+    try {
+      const { fromRecords, sources: _s, ...rest } = live as any;
+      const saved = M.saveCostSheet(rest);
+      const res = M.recordSheetGaps(saved.id, { paid: gapPaid, account: gapAccount });
+      load(res.sheet);
+      setActiveCostSheetId(res.sheet.id);
+      refreshData();
+      toast(
+        `${res.sheet.id} now matches the records` +
+          (res.made.length ? ` — entered ${res.made.join(', ')}` : '')
+      );
+    } catch (err: any) {
+      toast(String(err && err.message ? err.message : err));
+    }
   };
 
   const handleSave = () => {
@@ -768,6 +815,45 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                 Reset to original
               </button>
             )}
+          </div>
+        )}
+
+        {gaps.length > 0 && (
+          <div className="note bad" style={{ marginBottom: '8px' }} data-noprint="1">
+            <span className="ic"><Icon name="warn" /></span>
+            <div style={{ flex: 1 }}>
+              <b>This sheet and the records don’t match.</b> Profit &amp; loss, Tax and Cash in hand count only what is
+              recorded, so these lines are not in them yet:
+              <ul style={{ margin: '6px 0', paddingLeft: '18px' }}>
+                {gaps.map((g: any) => (
+                  <li key={g.key}>
+                    {gapLabel(g.key)}: {M.fmt(g.onSheet, 'full')} on the sheet, {M.fmt(g.recorded, 'full')} recorded —{' '}
+                    {gapAction(g, live.propertyId)}
+                  </li>
+                ))}
+              </ul>
+              <label style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', marginRight: '10px' }}>
+                <input type="checkbox" checked={gapPaid} onChange={(e) => setGapPaid(e.target.checked)} /> Already paid, from
+              </label>
+              <select className="fldsel" value={gapAccount} disabled={!gapPaid} onChange={(e) => setGapAccount(e.target.value)} style={{ height: '26px' }}>
+                {M.accountNames().map((a: string) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+              {!gapPaid && <span> — entered as still to pay</span>}
+            </div>
+            <button type="button" className="btn sm pri" onClick={matchRecords} title="Enter these on their ledgers and save the sheet">
+              <Icon name="ok" size={12} /> Record them
+            </button>
+          </div>
+        )}
+        {live.propertyId && !live.mirrorOf && (live as any).officeExpenseDeduction > 0 && (
+          <div className="note calm" style={{ marginBottom: '8px' }} data-noprint="1">
+            <span className="ic"><Icon name="info" /></span>
+            <div>
+              The office expense share ({M.fmt((live as any).officeExpenseDeduction, 'full')}) is on this sheet only: it is a
+              share of office costs that Profit &amp; loss already counts, so it is not entered again for this plot.
+            </div>
           </div>
         )}
 

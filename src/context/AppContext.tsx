@@ -136,8 +136,8 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
     { k: 'attachments', l: 'Attachments', type: 'files', full: true },
   ];
 }
-/** Withholding tax on a sale: what was typed, else 1% of the selling price. */
-const saleTax = (v: any) => (v.tax === '' || v.tax == null ? Math.round(n(v.sellingPrice) * 0.01) : n(v.tax));
+/** Withholding tax on a sale: what was typed, else the §236C rate on the plot's cost sheet. */
+const saleTax = (v: any) => (v.tax === '' || v.tax == null ? M.defaultSaleTax(v.propertyId, n(v.sellingPrice)) : n(v.tax));
 
 /** The balance is always the total less the token, worked out as either is typed. */
 const invoiceBalance = (v: any) => Math.max(0, n(v.totalAmount) - n(v.tokenAmount));
@@ -249,7 +249,7 @@ export const FORMS_DEF: Record<string, any> = {
     load: (s: any) => {
       const ag = M.DATA.agents.find((a: any) => a.id === s.agentId);
       return {
-        tax: s.tax === Math.round(s.sellingPrice * 0.01) ? '' : s.tax,
+        tax: s.tax === M.defaultSaleTax(s.propertyId, s.sellingPrice) ? '' : s.tax,
         commissionPct: !ag || s.commissionPct === ag.rate ? '' : s.commissionPct,
       };
     },
@@ -293,8 +293,8 @@ export const FORMS_DEF: Record<string, any> = {
         k: 'tax',
         l: 'Withholding tax',
         type: 'money',
-        auto: (v: any) => `Auto: ${M.fmt(saleTax(v), 'full')} (1%)`,
-        hint: 'Leave blank for 1% of the selling price.',
+        auto: (v: any) => `Auto: ${M.fmt(saleTax(v), 'full')} (${M.saleTaxPct(v.propertyId)}% §236C, as on the cost sheet)`,
+        hint: 'Leave blank to use the §236C rate on the plot’s cost sheet (3% filer, 6% late filer, 10% non-filer). Type the challan amount if it differs.',
       },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },

@@ -303,7 +303,7 @@ export function computeKPIs(r, f) {
   const costOfSales = soldInRange.reduce((a, s) => a + s.propertyCost, 0);
   const grossProfit = totalRevenue - (scoped ? costOfSales : purchaseCost);
   // Withholding tax and other selling costs typed on each sale, kept apart so neither is taken for the other.
-  const saleTaxes = soldInRange.reduce((a, s) => a + (s.tax || 0), 0);
+  const saleTaxes = soldInRange.reduce((a, s) => a + saleTaxCounted(s), 0);
   const sellingCosts = soldInRange.reduce((a, s) => a + (s.otherExpenses || 0), 0);
   const directCosts = saleTaxes + sellingCosts;
 
@@ -358,7 +358,14 @@ export function computeKPIs(r, f) {
   const totalExpenses = operatingCosts + directCosts + tax + zakat;
   // In a narrowed scope only directly attributable costs are subtracted (a scope-level contribution);
   // company overheads are not allocated to a single agent or project.
-  const netProfit = scoped ? grossProfit - commission - directCosts : grossProfit - totalExpenses;
+  // Expenses, tax and Zakat picked for a plot in scope are its own costs, so they count there too,
+  // and one property's profit matches its cost sheet.
+  const dealOwn = (x) => x.propertyId && propIds.has(x.propertyId) && inR(profitDate(x), r);
+  const dealCosts = scoped
+    ? D.expenses.filter((e) => NON_EXPENSE_GROUPS.indexOf(e.group) < 0 && dealOwn(e)).reduce((a, e) => a + e.amount, 0)
+      + D.taxes.filter(dealOwn).reduce((a, t) => a + t.amount, 0) + D.zakat.filter(dealOwn).reduce((a, z) => a + (z.amount || 0), 0)
+    : 0;
+  const netProfit = scoped ? grossProfit - commission - directCosts - dealCosts : grossProfit - totalExpenses;
 
   const pay = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
   const cashIn = pay.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
@@ -762,7 +769,8 @@ export function projectSummary(r, f) {
   DATA.sales.filter((s) => saleMatch(s, f, ids) && inR(s.date, r)).forEach((s) => {
     const p = props.find((q) => q.id === s.propertyId);
     const x = row(p.project, p.location);
-    x.sold++; x.revenue += s.sellingPrice; x.netProfit += s.netProfit;
+    const cs = realSheet(p.id);
+    x.sold++; x.revenue += s.sellingPrice; x.netProfit += cs ? cs.netMargin : s.netProfit;
   });
   return Object.keys(by).map((k) => ({ ...by[k], upside: by[k].heldValue - by[k].heldCost }))
     .sort((a, b) => b.total - a.total || b.revenue - a.revenue);
@@ -832,8 +840,12 @@ export function sourceCount(view, r, f) {
    insert real records into the same arrays every report reads from, so
    anything entered immediately shows up in the KPIs, charts and ledgers.
    ==================================================================== */
+// A number once used is never handed out again, not even after its record was deleted: the audit
+// trail remembers every deleted one, so a new record can never pick up an old one's mirror or links.
+const deletedIds = (prefix) =>
+  prefix === 'AU-' ? [] : DATA.audit.filter((a) => a.action === 'Deleted' && String(a.txnId).startsWith(prefix)).map((a) => ({ id: a.txnId }));
 const nextId = (arr, prefix, pad) =>
-  prefix + String(arr.reduce((m, x) => Math.max(m, +String(x.id).replace(/\D/g, '') || 0), 0) + 1).padStart(pad, '0');
+  prefix + String(arr.concat(deletedIds(prefix)).reduce((m, x) => Math.max(m, +String(x.id).replace(/\D/g, '') || 0), 0) + 1).padStart(pad, '0');
 
 export const USERS = [
   { id: 'U-01', name: 'Admin', role: 'CEO', title: 'Administrator', initials: 'AD', office: OFFICES[0] },
@@ -870,6 +882,21 @@ export function addProperty(v) {
   return p;
 }
 
+/** The §236C advance tax rate on a plot's sale: the rate on its cost sheet (3% for a filer,
+    6% late filer, 10% non-filer), so the sale form and the cost sheet always agree. */
+export function saleTaxPct(propertyId) {
+  const cs = propertyId ? realSheet(propertyId) : null;
+  return cs && cs.tax236CPct !== undefined && cs.tax236CPct !== '' && cs.tax236CPct != null ? +cs.tax236CPct : 3;
+}
+export const defaultSaleTax = (propertyId, price) => Math.round(((+price || 0) * saleTaxPct(propertyId)) / 100);
+
+/** Withholding tax on a sale as profit counts it: none when the same tax has its own tax entry
+    for the plot (the cost sheet then reads the entry instead), so it is never counted twice. */
+export function saleTaxCounted(s) {
+  const own = DATA.taxes.some((t) => t.propertyId === s.propertyId && (t.type === 'Advance Tax §236C' || t.type === 'Withholding Tax'));
+  return own ? 0 : s.tax || 0;
+}
+
 export function addSale(v) {
   const p = DATA.properties.find((x) => x.id === v.propertyId);
   if (!p) throw new Error('Unknown property');
@@ -878,7 +905,7 @@ export function addSale(v) {
   const price = +v.sellingPrice, received = Math.min(+v.received || 0, price);
   const pctRate = !agent ? 0 : v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
   const commission = Math.round((price * pctRate) / 100);
-  const saleTax = v.tax === '' || v.tax == null ? Math.round(price * 0.01) : Math.round(+v.tax);
+  const saleTax = v.tax === '' || v.tax == null ? defaultSaleTax(p.id, price) : Math.round(+v.tax);
   const other = +v.otherExpenses || 0;
   const dueDate = addDays(parseDate(v.date), 60);
   const s = {
@@ -931,6 +958,7 @@ export function addExpense(v) {
     vendor: v.vendor, office: v.office, method: v.method,
     note: v.note || v.category, manual: true, attachments: v.attachments || [],
     status: paid >= amount ? 'Paid' : paid === 0 ? 'Unpaid' : 'Partially Paid',
+    ...(v.sheetLine ? { sheetLine: v.sheetLine } : {}),
   };
   DATA.expenses.push(e);
   saveRecordToFirestore('expenses', e.id, e);
@@ -1336,6 +1364,8 @@ export function refreshZakatSummary() {
   const byPeriod = {};
   let latest = null;
   DATA.zakat.forEach((z) => {
+    // Zakat paid on one deal (from its cost sheet) is a payment, not an assessment of the period.
+    if (z.propertyId && !z.eligibleAssets) return;
     if (!byPeriod[z.period] || z.date >= byPeriod[z.period].date) byPeriod[z.period] = z;
     if (!latest || z.date >= latest.date) latest = z;
   });
@@ -1565,7 +1595,7 @@ export function updateSale(id, v) {
   Object.assign(s, {
     buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date,
     sellingPrice: price, dueDate: addDays(date, 60), commissionPct: pctRate, commission,
-    tax: v.tax === '' || v.tax == null ? Math.round(price * 0.01) : Math.round(+v.tax),
+    tax: v.tax === '' || v.tax == null ? defaultSaleTax(s.propertyId, price) : Math.round(+v.tax),
     otherExpenses: +v.otherExpenses || 0, attachments: v.attachments || s.attachments || [],
   });
   if (p) s.propertyCost = p.totalCost;
@@ -1770,7 +1800,7 @@ export function fiscalYearTaxSummary(f) {
   const advanceTax236K = taxes.filter((t) => t.type === 'Advance Tax §236K').reduce((a, t) => a + t.amount, 0);
   const advanceTax236C = taxes.filter((t) => t.type === 'Advance Tax §236C').reduce((a, t) => a + t.amount, 0);
   const cgt = taxes.filter((t) => t.type === 'Capital Gains Tax').reduce((a, t) => a + t.amount, 0);
-  const withholdingTax = sales.reduce((a, s) => a + s.tax, 0);
+  const withholdingTax = sales.reduce((a, s) => a + saleTaxCounted(s), 0);
   const totalTax = taxes.reduce((a, t) => a + t.amount, 0);
   const totalPaid = taxes.reduce((a, t) => a + t.paid, 0);
   const totalPending = taxes.reduce((a, t) => a + t.outstanding, 0);
@@ -2128,6 +2158,12 @@ export function sheetFromRecords(propertyId) {
   const src = (id, what, amount, key, paid = amount) => v.sources.push({ id, what, amount, key, paid });
 
   DATA.expenses.filter((e) => e.propertyId === p.id && NON_EXPENSE_GROUPS.indexOf(e.group) < 0).forEach((e) => {
+    // An expense entered from a cost sheet goes back on the very line it came from.
+    if (e.sheetLine && ZERO_LINES[e.sheetLine] !== undefined) {
+      v[e.sheetLine] += e.amount;
+      src(e.id, e.category, e.amount, e.sheetLine, e.paid || 0);
+      return;
+    }
     const text = (e.category || '') + ' ' + (e.note || '');
     const line = DEAL_COST_LINES.find((l) => l[2].test(text));
     const key = line ? line[1] : 'handlingExpenses';
@@ -2245,6 +2281,107 @@ export function realSheet(key) {
 export function landedCost(propertyId) {
   const cs = realSheet(propertyId);
   return cs ? cs.purchasePrice : 0;
+}
+
+/* ====================================================================
+   AMOUNTS ONLY ON A COST SHEET
+   A line typed on a sheet that no record holds counts on the sheet but
+   not in profit, tax or cash. Each such line can be entered on its own
+   ledger in one go, after which the sheet and the reports agree.
+   ==================================================================== */
+/** The ledger each line of a cost sheet goes on. */
+export const SHEET_LINE_RECORDS = {
+  ndcFee: ['expense', 'Property Expenses', 'Transfer Charges'],
+  stampDuty: ['tax', 'Stamp Duty'],
+  cvt: ['tax', 'Capital Value Tax (CVT)'],
+  cdaRdaTransferFee: ['expense', 'Property Expenses', 'Transfer Charges'],
+  societyTransferFee: ['expense', 'Property Expenses', 'Transfer Charges'],
+  legalCharges: ['expense', 'Property Expenses', 'Legal Fees'],
+  developmentCharges: ['expense', 'Property Expenses', 'Development Charges'],
+  otherAcquisition: ['expense', 'Property Expenses', 'Documentation'],
+  tax236K: ['tax', 'Advance Tax §236K'],
+  renovationRepairs: ['expense', 'Property Expenses', 'Renovation'],
+  maintenanceBills: ['expense', 'Property Expenses', 'Property Maintenance'],
+  marketingExpenses: ['expense', 'Marketing Expenses', 'Property Portals'],
+  fuelTravelling: ['expense', 'Employee Expenses', 'Travel'],
+  salaryExpenses: ['expense', 'Employee Expenses', 'Allowances'],
+  handlingExpenses: ['expense', 'Property Expenses', 'Property Maintenance'],
+  buySideAgentFee: ['commission', 'Purchase'],
+  tax236C: ['saleTax'],
+  sellSideAgentFee: ['commission', 'Sale'],
+  otherSellingExpenses: ['expense', 'Property Expenses', 'Selling Costs'],
+  cgtAmount: ['tax', 'Capital Gains Tax'],
+  zakat: ['zakat'],
+  charity: ['expense', 'Other Expenses', 'Charity'],
+};
+/** Lines about the sale: on an unsold plot they are estimates, so they wait for the sale. */
+const SALE_SIDE_LINES = ['tax236C', 'sellSideAgentFee', 'otherSellingExpenses', 'cgtAmount', 'zakat', 'charity'];
+
+/** Where a linked cost sheet and its property's records disagree, line by line: a positive
+    difference is typed on the sheet only, a negative one is recorded but not on the sheet.
+    A sold plot's sale price comes from its sale. */
+export function sheetGaps(cs) {
+  if (!cs || !cs.propertyId || cs.mirrorOf) return [];
+  const fresh = sheetFromRecords(cs.propertyId);
+  if (!fresh) return [];
+  const sale = DATA.sales.find((s) => s.propertyId === cs.propertyId);
+  const out = Object.keys(SHEET_LINE_RECORDS)
+    .filter((k) => sale || SALE_SIDE_LINES.indexOf(k) < 0)
+    .map((k) => ({ key: k, how: SHEET_LINE_RECORDS[k][0], onSheet: Math.round(cs[k] || 0), recorded: Math.round(fresh[k] || 0) }));
+  if (sale) out.push({ key: 'grossSalePrice', how: 'sheet', onSheet: Math.round(cs.grossSalePrice || 0), recorded: Math.round(sale.sellingPrice) });
+  return out.map((x) => ({ ...x, diff: x.onSheet - x.recorded })).filter((x) => x.diff !== 0);
+}
+
+/** Bring a saved cost sheet and the ledgers into line: every amount typed only on the sheet is
+    entered on its ledger (tax, expense, commission or Zakat), paid from the account given or left to pay; a line the records hold
+    more of takes the recorded amount. Returns the sheet and what was entered. */
+export function recordSheetGaps(sheetId, opts = {}) {
+  const idx = DATA.costSheets.findIndex((s) => s.id === sheetId && !s.mirrorOf);
+  if (idx < 0) throw new Error('Save the cost sheet first.');
+  const cs = DATA.costSheets[idx];
+  const p = DATA.properties.find((x) => x.id === cs.propertyId);
+  if (!p) throw new Error('Link the cost sheet to its property first.');
+  const sale = DATA.sales.find((s) => s.propertyId === p.id);
+  const made = [];
+  const back = {};
+  sheetGaps(cs).forEach((g) => {
+    if (g.diff < 0 || g.how === 'sheet') { back[g.key] = g.recorded; return; }
+    const [how, a, b] = SHEET_LINE_RECORDS[g.key];
+    const date = SALE_SIDE_LINES.indexOf(g.key) >= 0 && sale ? sale.date : p.purchaseDate;
+    // Withholding tax gets a tax entry of its own, paid like the rest. The plot's tax entries then
+    // stand for it in place of the figure on the sale, so the entry carries the whole amount.
+    const ownSaleTax = DATA.taxes.some((t) => t.propertyId === p.id && (t.type === 'Advance Tax §236C' || t.type === 'Withholding Tax'));
+    const amount = how === 'saleTax' && !ownSaleTax ? g.onSheet : g.diff, paid = opts.paid ? amount : 0;
+    const pay = { date, method: opts.method || 'Bank Transfer', account: opts.account, office: p.office };
+    const note = 'From cost sheet ' + cs.id;
+    if (how === 'tax' || how === 'saleTax') {
+      const t = addTax({ ...pay, type: how === 'tax' ? a : 'Advance Tax §236C', propertyId: p.id, amount, paid, dueDate: date, ref: cs.id });
+      made.push(t.id);
+    } else if (how === 'expense') {
+      const e = addExpense({ ...pay, group: a, category: b, propertyId: p.id, amount, paid, vendor: 'As per cost sheet', note, sheetLine: g.key });
+      made.push(e.id);
+    } else if (how === 'commission') {
+      const agent = a === 'Sale' && sale && sale.agentId ? sale.agentId : '';
+      const c = addCommission({ ...pay, side: a, propertyId: p.id, agentId: agent, agentName: agent ? '' : 'Agent / dealer', amount, paid, note });
+      made.push(c.id);
+    } else if (how === 'zakat') {
+      const z = addZakat({ ...pay, period: fyLabel(fyStartYear(date)), eligibleAssets: 0, liabilities: 0, rate: '', amount, propertyId: p.id, ref: cs.id });
+      made.push(z.id);
+    }
+  });
+  // The sheet now agrees with its records, and remembers them as they stand.
+  const fresh = sheetFromRecords(p.id);
+  const next = calculateCostSheet({ ...cs, ...back, recorded: fresh.recorded });
+  DATA.costSheets[idx] = next;
+  saveRecordToFirestore('costSheets', next.id, next);
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: next.id, action: 'Edited', user: ACTOR,
+    entity: 'Trading Cost Sheet', prevAmount: cs.netMargin, newAmount: next.netMargin,
+    note: 'Cost sheet ' + next.id + ' matched to its records' + (made.length ? ': entered ' + made.join(', ') : ''), manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+  return { sheet: next, made, fromRecords: Object.keys(back) };
 }
 
 /** The fields of a mirror cost sheet that differ from its original. */
