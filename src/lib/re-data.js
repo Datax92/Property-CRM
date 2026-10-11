@@ -2227,6 +2227,10 @@ export function syncSheetWithRecords(cs) {
   if (!moved.length) return cs;
   const next = { ...cs, recorded: fresh.recorded };
   moved.forEach((k) => { next[k] = fresh[k] == null ? null : fresh[k]; });
+  // CGT left at its rate keeps following it, so a different sale price or sale tax moves it too.
+  const cgtAtRate = (cs.cgtAmount || 0) > 0
+    && Math.abs((cs.cgtAmount || 0) - Math.max(0, Math.round(((cs.grossProfit || 0) * (cs.cgtRatePct || 0)) / 100))) <= 1;
+  if (cgtAtRate && moved.indexOf('cgtAmount') < 0) next.cgtAmount = '';
   return calculateCostSheet(next);
 }
 
@@ -2382,6 +2386,17 @@ export function recordSheetGaps(sheetId, opts = {}) {
   DATA.audit.unshift(au);
   saveRecordToFirestore('audit', au.id, au);
   return { sheet: next, made, fromRecords: Object.keys(back) };
+}
+
+/** What a plot's saved cost sheet holds that is not recorded yet, besides the withholding tax a
+    sale brings: what a sale entered in the sales register can enter on the ledgers with it. */
+export function sheetCostsToRecord(propertyId) {
+  const cs = DATA.costSheets.find((s) => s.propertyId === propertyId && !s.mirrorOf);
+  const fresh = cs ? sheetFromRecords(propertyId) : null;
+  if (!fresh) return null;
+  const amount = Object.keys(SHEET_LINE_RECORDS).filter((k) => k !== 'tax236C')
+    .reduce((a, k) => a + Math.max(0, Math.round((cs[k] || 0) - (fresh[k] || 0))), 0);
+  return { sheet: cs.id, amount };
 }
 
 /** The fields of a mirror cost sheet that differ from its original. */

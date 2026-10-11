@@ -297,6 +297,27 @@ export const FORMS_DEF: Record<string, any> = {
         hint: 'Leave blank to use the §236C rate on the plot’s cost sheet (3% filer, 6% late filer, 10% non-filer). Type the challan amount if it differs.',
       },
       { k: 'otherExpenses', l: 'Other selling expenses', type: 'money' },
+      {
+        k: 'sheetCosts',
+        l: 'Costs on the cost sheet',
+        type: 'select',
+        addOnly: true,
+        def: 'paid',
+        opts: () => [
+          ['paid', 'Enter them too, as paid'],
+          ['unpaid', 'Enter them too, still to pay'],
+          ['no', 'Leave them on the sheet only'],
+        ],
+        auto: (v: any) => {
+          const x = M.sheetCostsToRecord(v.propertyId);
+          return !x
+            ? 'This plot has no saved cost sheet'
+            : x.amount > 0
+              ? `${M.fmt(x.amount, 'full')} on ${x.sheet} is not recorded yet (stamp duty, CVT, §236K, CGT, agent fee …)`
+              : `Everything on ${x.sheet} is recorded`;
+        },
+        hint: 'Entered as tax, expense and commission entries, so Profit & loss, Tax and Cash in hand match the cost sheet.',
+      },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => {
@@ -306,16 +327,34 @@ export const FORMS_DEF: Record<string, any> = {
       const rate = !ag ? 0 : v.commissionPct === '' || v.commissionPct == null ? ag.rate : n(v.commissionPct);
       const comm = Math.round((price * rate) / 100);
       const tax = saleTax(v);
-      // What the plot cost all in, as its cost sheet adds it up, so this preview matches the sheet.
-      const cost = p ? M.landedCost(p.id) : 0;
+      // The plot's cost sheet as it will stand after this sale, so the preview is the sheet's own figure.
+      const cs: any = p ? M.realSheet(p.id) : null;
+      const rec: any = p ? M.sheetFromRecords(p.id) : null;
+      const cgtAtRate = cs && cs.cgtAmount > 0 && Math.abs(cs.cgtAmount - Math.max(0, Math.round((cs.grossProfit * cs.cgtRatePct) / 100))) <= 1;
+      const sim: any = cs
+        ? M.calculateCostSheet({
+            ...cs,
+            grossSalePrice: price,
+            tax236C: tax,
+            // A line the sale fills takes what is recorded for it, as the sheet itself will.
+            sellSideAgentFee: comm ? (rec ? rec.sellSideAgentFee : 0) + comm : cs.sellSideAgentFee,
+            otherSellingExpenses: n(v.otherExpenses) ? (rec ? rec.otherSellingExpenses : 0) + n(v.otherExpenses) : cs.otherSellingExpenses,
+            cgtAmount: cgtAtRate ? '' : cs.cgtAmount,
+          })
+        : null;
+      const cost = sim ? sim.purchasePrice : 0;
+      const agentFee = sim ? sim.sellSideAgentFee : comm;
+      const otherSell = sim ? sim.otherSellingExpenses : n(v.otherExpenses);
+      const after = sim ? sim.cgtAmount + sim.zakat + sim.charity + sim.officeExpenseDeduction : 0;
       return [
         ['Landed cost (from cost sheet)', cost],
         ['Selling price', price],
-        ['Gross profit', price - cost, false, true],
-        ['Commission (' + rate + '%)', -comm],
-        ['Withholding tax', -tax],
-        ['Other selling costs', -n(v.otherExpenses)],
-        ['Net profit on this sale', price - cost - comm - tax - n(v.otherExpenses), true],
+        ['Withholding tax §236C', -tax],
+        ['Agent fee — sell side' + (comm ? ' (' + rate + '%)' : ''), -agentFee],
+        ['Other selling costs', -otherSell],
+        ['Gross profit', price - cost - tax - agentFee - otherSell, false, true],
+        ['CGT, Zakat & charity (cost sheet)', -after],
+        ['Net margin (as on the cost sheet)', sim ? sim.netMargin : price - cost - tax - agentFee - otherSell, true],
       ];
     },
     validate: (v: any, editId?: string) => {
@@ -332,7 +371,15 @@ export const FORMS_DEF: Record<string, any> = {
     },
     submit: (v: any) => {
       const s = M.addSale(v);
-      return { id: s.id, msg: 'Sale ' + s.id + ' recorded', go: 'sales/register' };
+      // The cost sheet takes in the sale, then whatever is still only on it goes on the ledgers.
+      let extra = '';
+      const x = v.sheetCosts === 'no' ? null : M.sheetCostsToRecord(s.propertyId);
+      if (x) {
+        M.syncSheetsWithRecords();
+        const res = M.recordSheetGaps(x.sheet, { paid: v.sheetCosts !== 'unpaid', account: v.account, method: v.method });
+        if (res.made.length) extra = '; from ' + x.sheet + ' entered ' + res.made.join(', ');
+      }
+      return { id: s.id, msg: 'Sale ' + s.id + ' recorded' + extra, go: 'sales/register' };
     },
   },
   expense: {
