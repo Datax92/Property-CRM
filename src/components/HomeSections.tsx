@@ -132,7 +132,7 @@ export function HomeSections({
   const [picker, setPicker] = useState<string | null>(null);
   // The card being carried, where the pointer is, and the place it would land.
   const [drag, setDrag] = useState<{ sec: string; idx: number; x: number; y: number; w: number; over: Spot | null } | null>(null);
-  const pending = useRef<{ sec: string; idx: number; x: number; y: number; w: number; id: number } | null>(null);
+  const pending = useRef<{ sec: string; idx: number; x: number; y: number; w: number; id: number; moved?: boolean } | null>(null);
   const justDragged = useRef(false);
 
   const commit = (next: HomeSection[]) => {
@@ -200,7 +200,8 @@ export function HomeSections({
     const onMove = (e: PointerEvent) => {
       const p = pending.current;
       if (!p || e.pointerId !== p.id) return;
-      if (!drag && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+      if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+      p.moved = true;
       e.preventDefault();
       setDrag({ sec: p.sec, idx: p.idx, x: e.clientX, y: e.clientY, w: p.w, over: spotAt(e.clientX, e.clientY) });
     };
@@ -208,7 +209,7 @@ export function HomeSections({
       const p = pending.current;
       if (!p || e.pointerId !== p.id) return;
       pending.current = null;
-      if (!drag) return;
+      if (!p.moved) return;
       const to = spotAt(e.clientX, e.clientY);
       setDrag(null);
       justDragged.current = true;
