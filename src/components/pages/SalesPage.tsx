@@ -346,7 +346,18 @@ export function SalesPage() {
     { key: 'sellingPrice', label: 'Selling price', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.sellingPrice, numbers) },
     { key: 'received', label: 'Received', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.received, numbers) },
     { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.outstanding, numbers) },
-    { key: 'method', label: 'Method' },
+    {
+      key: 'method',
+      label: 'Method',
+      render: (s: any) =>
+        s.method2 ? (
+          <span title={`${M.fmt(s.received - s.amount2, 'full')} by ${s.method}, ${M.fmt(s.amount2, 'full')} by ${s.method2}`}>
+            {s.method} + {s.method2}
+          </span>
+        ) : (
+          s.method || '—'
+        ),
+    },
     { key: 'commission', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.commission, numbers) },
     { key: 'netRevenue', label: 'Net revenue', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.netRevenue, numbers) },
     {

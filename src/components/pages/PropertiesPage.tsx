@@ -41,6 +41,18 @@ export function PropertiesPage() {
       { key: 'expenses', label: 'Expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
       { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.landed, numbers) },
       { key: 'paid', label: 'Paid to seller', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
+      {
+        key: 'method',
+        label: 'Paid by',
+        render: (p: any) =>
+          p.method2 ? (
+            <span title={`${M.fmt(p.paid - p.amount2, 'full')} by ${p.method}, ${M.fmt(p.amount2, 'full')} by ${p.method2}`}>
+              {p.method} + {p.method2}
+            </span>
+          ) : (
+            p.method || '—'
+          ),
+      },
       { key: 'remaining', label: 'Remaining', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.remaining, numbers) },
       { key: 'payStatus', label: 'Payment', render: (p: any) => <Tag text={p.payStatus} /> },
       { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },

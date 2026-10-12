@@ -2114,3 +2114,4 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-print .mr-tbl td, .mr-print .mr-tbl th { padding: 2.5px 5px; }
 .mr-print .tblwrap { overflow: visible; }
 .mr-print .mr-note { font-size: 7.5pt; }
+.exp-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; font-size: 12.5px; }

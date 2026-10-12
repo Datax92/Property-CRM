@@ -11,6 +11,8 @@ export function CostsPage() {
   const { tab, effectiveFilters: f, range: r, openModal, openCostSheet, numbers } = useApp();
 
   const meta = PAGE_META[`costs/${tab}`] || { t: 'Costs' };
+  // Expenses: the company's own, or the costs picked for a plot (part of that plot's cost sheet).
+  const [expView, setExpView] = React.useState<'company' | 'plots'>('company');
 
   if (tab === 'salaries') {
     const rows = M.DATA.salaries.filter((s: any) => M.inRange(s.date, r) && (f.office === 'all' || s.office === f.office));
@@ -421,18 +423,34 @@ export function CostsPage() {
 
   // Expenses tab (default)
   // Assets are bought to keep, not spent: they are listed under Finance → Assets instead.
-  const rows = M.DATA.expenses.filter(
+  // A cost picked for a plot belongs to that plot: it is on its cost sheet and counts in profit
+  // when the plot is sold, so it is kept apart from the company's own expenses.
+  const plotIds = new Set(M.DATA.properties.map((p: any) => p.id));
+  const ofPlot = (e: any) => !!e.propertyId && plotIds.has(e.propertyId) && e.group !== 'Personal Expenses';
+  const all = M.DATA.expenses.filter(
     (e: any) => e.group !== 'Assets' && M.inRange(e.date, r) && (f.office === 'all' || e.office === f.office)
   );
+  const plotRows = all.filter(ofPlot);
+  const rows = expView === 'plots' ? plotRows : all.filter((e: any) => !ofPlot(e));
   const sumOf = (pred: (e: any) => boolean) => rows.filter(pred).reduce((a: number, e: any) => a + e.amount, 0);
+  const plotsCount = new Set(plotRows.map((e: any) => e.propertyId)).size;
 
-  const summaryPairs: [string, string][] = [
-    ['Entries', M.fmtNum(rows.length)],
-    ['Business expenses', M.fmt(sumOf((e) => e.group !== 'Personal Expenses'), numbers)],
-    ['Personal expenses', M.fmt(sumOf((e) => e.group === 'Personal Expenses'), numbers)],
-    ['Paid', M.fmt(rows.reduce((a: number, e: any) => a + e.paid, 0), numbers)],
-    ['Unpaid', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
-  ];
+  const summaryPairs: [string, string][] =
+    expView === 'plots'
+      ? [
+          ['Entries', M.fmtNum(rows.length)],
+          ['Plots', M.fmtNum(plotsCount)],
+          ['Plot costs', M.fmt(sumOf(() => true), numbers)],
+          ['Paid', M.fmt(rows.reduce((a: number, e: any) => a + e.paid, 0), numbers)],
+          ['Unpaid', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
+        ]
+      : [
+          ['Entries', M.fmtNum(rows.length)],
+          ['Business expenses', M.fmt(sumOf((e) => e.group !== 'Personal Expenses'), numbers)],
+          ['Personal expenses', M.fmt(sumOf((e) => e.group === 'Personal Expenses'), numbers)],
+          ['Paid', M.fmt(rows.reduce((a: number, e: any) => a + e.paid, 0), numbers)],
+          ['Unpaid', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
+        ];
 
   const cols = [
     { key: 'id', label: 'ID' },
@@ -486,6 +504,21 @@ export function CostsPage() {
         </button>
       }
     >
+      <div className="exp-switch" data-noprint="1">
+        <span className="seg" role="group" aria-label="Which expenses">
+          <button type="button" aria-pressed={expView === 'company'} onClick={() => setExpView('company')}>
+            Company expenses
+          </button>
+          <button type="button" aria-pressed={expView === 'plots'} onClick={() => setExpView('plots')}>
+            Plot costs ({M.fmtNum(plotRows.length)})
+          </button>
+        </span>
+        <span className="muted">
+          {expView === 'plots'
+            ? 'Costs picked for a plot. Each is on that plot’s cost sheet and counts in profit when the plot is sold.'
+            : 'Office, salaries, marketing and other costs not picked for any plot. A plot’s own costs are under Plot costs and on its cost sheet.'}
+        </span>
+      </div>
       <SummaryKpis pairs={summaryPairs} />
       <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
     </PageShell>

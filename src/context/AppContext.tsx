@@ -174,6 +174,27 @@ const accountField = (addOnly = true) => ({
   addOnly,
 });
 
+/** A second payment mode, for money paid or received two ways (e.g. part cash, part bank). */
+const splitFields = (what: string) => [
+  {
+    k: 'method2',
+    l: 'Second payment mode',
+    type: 'select',
+    opts: () => [['', '— None, one way only —'], ...M.METHODS.map((m: string) => [m, m])],
+    addOnly: true,
+    hint: 'For money ' + what + ' two ways, e.g. part cash and part bank transfer.',
+  },
+  { k: 'amount2', l: 'Amount by the second mode (PKR)', type: 'money', addOnly: true, hint: 'The rest goes by the first mode.' },
+  { k: 'account2', l: 'Second bank / cash account', list: () => M.accountNames(), ph: 'e.g. Cash in hand', addOnly: true },
+];
+/** The second mode must differ from the first and carry part of the amount. */
+const splitErrors = (v: any, total: number, e: Record<string, string>) => {
+  if (!v.method2) return;
+  if (v.method2 === v.method && (v.account2 || '') === (v.account || '')) e.method2 = 'Pick a different mode or account from the first one.';
+  else if (n(v.amount2) <= 0) e.amount2 = 'Enter how much went by the second mode.';
+  else if (n(v.amount2) > total) e.amount2 = 'Cannot be more than the amount paid (' + M.fmt(total, 'full') + ').';
+};
+
 export const FORMS_DEF: Record<string, any> = {
   property: {
     title: 'Add a property',
@@ -211,6 +232,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       accountField(),
+      ...splitFields('paid'),
       {
         k: 'currentValue',
         l: 'Current market value',
@@ -234,6 +256,7 @@ export const FORMS_DEF: Record<string, any> = {
       const e: Record<string, string> = {};
       const total = n(v.price) + n(v.registration) + n(v.legal) + n(v.development) + n(v.otherCost);
       if (n(v.paid) > total) e.paid = 'Paid cannot exceed the total cost of ' + M.fmt(total, 'cr') + '.';
+      splitErrors(v, n(v.paid), e);
       return e;
     },
     submit: (v: any) => {
@@ -279,6 +302,7 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true, addOnly: true },
       accountField(),
+      ...splitFields('received'),
       {
         k: 'commissionPct',
         l: 'Commission %',
@@ -362,6 +386,7 @@ export const FORMS_DEF: Record<string, any> = {
       if (!editId && !M.DATA.properties.some((p: any) => p.status !== 'Sold'))
         e.propertyId = 'No unsold property in the register — add the property purchase first.';
       if (n(v.received) > n(v.sellingPrice)) e.received = 'Received cannot exceed the selling price.';
+      if (!editId) splitErrors(v, n(v.received), e);
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
       if (p && v.date && M.parseDate(v.date) < p.purchaseDate)
         e.date = 'Sale date is before the property was purchased (' + M.fmtDate(p.purchaseDate) + ').';

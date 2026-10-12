@@ -283,10 +283,14 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
   const [showFilters, setShowFilters] = useState(false);
   const [fStatus, setFStatus] = useState('Open');
   const [fType, setFType] = useState('');
+  const [fWho, setFWho] = useState('');
 
-  const projects = M.taskProjectStats().filter((p: any) => (!fStatus || p.status === fStatus) && (!fType || p.type === fType));
+  // Picking a person counts only their tasks, and leaves out projects with none of theirs.
+  const projects = M.taskProjectStats(fWho).filter(
+    (p: any) => (!fStatus || p.status === fStatus) && (!fType || p.type === fType) && (!fWho || p.total > 0)
+  );
   // Tasks outside any project still count, under "No project", while no project type is picked.
-  const loose = M.looseTaskStats();
+  const loose = M.looseTaskStats(fWho);
   const bars = loose.total && !fType ? [...projects, { id: '', name: 'No project', ...loose, loose: true }] : projects;
 
   const total = bars.reduce((a: number, p: any) => a + p.total, 0);
@@ -300,7 +304,7 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
   const step = max <= 5 ? 1 : max <= 10 ? 2 : max <= 50 ? 10 : Math.ceil(max / 50) * 10;
   const top = Math.ceil(max / step) * step;
   const ticks = Array.from({ length: top / step + 1 }, (_, i) => i * step);
-  const filtered = fStatus !== 'Open' || !!fType;
+  const filtered = fStatus !== 'Open' || !!fType || !!fWho;
 
   const tip = (e: React.MouseEvent, p: any) =>
     showTip(
@@ -317,7 +321,7 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
           <h3>Project Summary</h3>
           {filtered && (
             <span className="sub">
-              {[fStatus ? fStatus + ' projects' : 'All projects', fType].filter(Boolean).join(' · ')}
+              {[fStatus ? fStatus + ' projects' : 'All projects', fType, fWho ? 'assigned to ' + fWho : ''].filter(Boolean).join(' · ')}
             </span>
           )}
           <span className="spacer" />
@@ -346,8 +350,14 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+            <select value={fWho} onChange={(e) => setFWho(e.target.value)} aria-label="Assigned to">
+              <option value="">Everyone</option>
+              {M.taskAssignees().map((s: string) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
             {filtered && (
-              <button type="button" className="btn sm" onClick={() => { setFStatus('Open'); setFType(''); }}>
+              <button type="button" className="btn sm" onClick={() => { setFStatus('Open'); setFType(''); setFWho(''); }}>
                 Reset
               </button>
             )}

@@ -963,16 +963,36 @@ export function addProperty(v) {
     extras: { registration: +v.registration || 0, legal: +v.legal || 0, development: +v.development || 0, other: +v.otherCost || 0 },
     paid: +v.paid || 0, status: v.status, office: v.office,
     currentValue: +v.currentValue || +v.price,
+    method: v.method || 'Bank Transfer', ...splitOf(v, +v.paid || 0),
     manual: true, attachments: v.attachments || [],
   });
   DATA.properties.push(p);
   saveRecordToFirestore('properties', p.id, p);
-  if (p.paid > 0) addPayment({
+  postSplit({
     date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: p.paid,
     party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer', account: v.account,
     note: 'Purchase payment — ' + p.name, settleKey: 'prop:' + p.id,
-  });
+  }, v);
   return p;
+}
+
+/** A payment made two ways (e.g. part cash, part bank transfer): the second mode's part is
+    posted on its own, from its own account, and the rest by the first mode. One way when no
+    second mode is given. */
+function postSplit(base, v) {
+  const second = v.method2 ? Math.min(Math.max(0, Math.round(+v.amount2 || 0)), base.amount) : 0;
+  const first = base.amount - second;
+  const made = [];
+  if (first > 0) made.push(addPayment({ ...base, amount: first }));
+  if (second > 0) {
+    made.push(addPayment({ ...base, amount: second, method: v.method2, account: v.account2 || base.account }));
+  }
+  return made;
+}
+/** The payment modes of a purchase or sale paid two ways, as the register shows them. */
+export function splitOf(v, total) {
+  const second = v.method2 ? Math.min(Math.max(0, Math.round(+v.amount2 || 0)), total) : 0;
+  return second > 0 ? { method2: v.method2, amount2: second, account2: v.account2 || '' } : {};
 }
 
 /** The §236C advance tax rate on a plot's sale: the rate on its cost sheet (3% for a filer,
@@ -1005,7 +1025,7 @@ export function addSale(v) {
     id: nextId(DATA.sales, 'S-', 4), propertyId: p.id, property: p.name,
     buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date: parseDate(v.date),
     sellingPrice: price, received, outstanding: Math.max(0, price - received), dueDate,
-    method: v.method, commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
+    method: v.method, ...splitOf(v, received), commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
     netRevenue: price - commission - saleTax - other,
     propertyCost: p.totalCost, grossProfit: price - p.totalCost,
     netProfit: price - p.totalCost - commission - saleTax - other,
@@ -1028,11 +1048,11 @@ export function addSale(v) {
     DATA.commissions.push(cm);
     saveRecordToFirestore('commissions', cm.id, cm);
   }
-  if (received > 0) addPayment({
+  postSplit({
     date: v.date, dir: 'in', category: 'Property Sale', amount: received,
     party: s.buyer, propertyId: p.id, agentId: agent ? agent.id : null, office: p.office,
     method: v.method, account: v.account, note: 'Sale receipt — ' + p.name, settleKey: 'sale:' + s.id,
-  });
+  }, v);
   return s;
 }
 
@@ -2801,9 +2821,9 @@ export function deleteTaskProject(id) {
 }
 
 /** Progress of each project: cancelled tasks do not count either way. */
-export function taskProjectStats() {
+export function taskProjectStats(who = '') {
   return DATA.taskProjects.map((p) => {
-    const ts = DATA.tasks.filter((t) => t.projectId === p.id && taskStatus(t) !== 'Cancelled');
+    const ts = DATA.tasks.filter((t) => t.projectId === p.id && taskStatus(t) !== 'Cancelled' && (!who || (t.assignee || '') === who));
     const completed = ts.filter((t) => taskStatus(t) === 'Completed').length;
     const overdue = ts.filter((t) => taskStatus(t) === 'Overdue').length;
     return {
@@ -2814,8 +2834,8 @@ export function taskProjectStats() {
 }
 
 /** Tasks not in any project, counted the same way as a project's. */
-export function looseTaskStats() {
-  const ts = DATA.tasks.filter((t) => !t.projectId && taskStatus(t) !== 'Cancelled');
+export function looseTaskStats(who = '') {
+  const ts = DATA.tasks.filter((t) => !t.projectId && taskStatus(t) !== 'Cancelled' && (!who || (t.assignee || '') === who));
   const completed = ts.filter((t) => taskStatus(t) === 'Completed').length;
   const overdue = ts.filter((t) => taskStatus(t) === 'Overdue').length;
   return { total: ts.length, completed, overdue, open: ts.length - completed - overdue, pct: ts.length ? (completed / ts.length) * 100 : 0 };
