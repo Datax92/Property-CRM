@@ -136,6 +136,10 @@ export function CostsPage() {
     const k = M.computeKPIs(r, f);
     const rows = M.DATA.taxes.filter((t: any) => M.inRange(t.date, r) && (f.office === 'all' || t.office === f.office));
     const fySummary = M.fiscalYearTaxSummary(f);
+    // Withholding tax taken on the period's sales that is not also a tax entry: part of the tax total.
+    const saleTax = M.DATA.sales
+      .filter((s: any) => M.inRange(s.date, r) && (f.office === 'all' || s.office === f.office))
+      .reduce((a: number, s: any) => a + M.saleTaxCounted(s), 0);
     // Tax deal by deal: due on the cost sheet against what has actually been paid.
     const deals = M.dealTaxes();
     const dsum = (key: string) => deals.reduce((a: number, x: any) => a + (x[key] || 0), 0);
@@ -185,8 +189,8 @@ export function CostsPage() {
 
     const summaryPairs: [string, string][] = [
       ['Entries', M.fmtNum(rows.length)],
-      ['Total tax', M.fmt(rows.reduce((a: number, t: any) => a + t.amount, 0), numbers)],
-      ['Paid', M.fmt(rows.reduce((a: number, t: any) => a + t.paid, 0), numbers)],
+      ['Total tax', M.fmt(rows.reduce((a: number, t: any) => a + t.amount, 0) + saleTax, numbers)],
+      ['Paid', M.fmt(rows.reduce((a: number, t: any) => a + t.paid, 0) + saleTax, numbers)],
       ['Outstanding', M.fmt(rows.reduce((a: number, t: any) => a + t.outstanding, 0), numbers)],
       ['Due in 30 days', M.fmt(k.taxDueSoon, numbers)],
     ];
@@ -270,21 +274,30 @@ export function CostsPage() {
           <div className="panel-b">
             <div className="kpis">
               <div className="kpi">
+                <span className="k">Stamp duty &amp; CVT</span>
+                <span className="v"><FigText str={M.fmt(fySummary.stampCvt, numbers)} /></span>
+              </div>
+              <div className="kpi">
                 <span className="k">Advance Tax §236K (buy)</span>
                 <span className="v"><FigText str={M.fmt(fySummary.advanceTax236K, numbers)} /></span>
               </div>
               <div className="kpi">
                 <span className="k">Advance Tax §236C (sell)</span>
                 <span className="v"><FigText str={M.fmt(fySummary.advanceTax236C, numbers)} /></span>
+                {fySummary.withholdingTax > 0 && (
+                  <span className="f">incl. {M.fmt(fySummary.withholdingTax, numbers)} taken on sales</span>
+                )}
               </div>
               <div className="kpi">
                 <span className="k">Capital Gains Tax</span>
                 <span className="v"><FigText str={M.fmt(fySummary.cgt, numbers)} /></span>
               </div>
-              <div className="kpi">
-                <span className="k">Withholding tax (from sales)</span>
-                <span className="v"><FigText str={M.fmt(fySummary.withholdingTax, numbers)} /></span>
-              </div>
+              {fySummary.otherTax > 0 && (
+                <div className="kpi">
+                  <span className="k">Other tax</span>
+                  <span className="v"><FigText str={M.fmt(fySummary.otherTax, numbers)} /></span>
+                </div>
+              )}
               <div className="kpi">
                 <span className="k">Total tax (FY)</span>
                 <span className="v"><FigText str={M.fmt(fySummary.totalTax, numbers)} /></span>
@@ -306,9 +319,10 @@ export function CostsPage() {
             <Icon name="info" />
           </span>
           <div>
-            <b>Two kinds of tax, never added together.</b> Withholding tax on a sale is entered on the sale and is
-            already deducted inside that sale's net revenue; it shows above as paid on its deal. Tax entries below are
-            subtracted in the profit bridge. The fiscal year closes in <b>June</b> — the summary above follows July→June.
+            <b>Each tax is counted once.</b> Total tax adds up every tax entry below, plus the withholding tax taken
+            on a sale whose plot has no §236C entry of its own (that tax is paid at the sale). Once a plot has its own
+            §236C entry, the entry is counted instead of the figure on the sale. The fiscal year closes in <b>June</b> —
+            the summary above follows July→June.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} attach="taxes" />

@@ -26,6 +26,7 @@ export function FinancePage() {
     exportCsv,
     print,
     voidPayment,
+    openCostSheet,
   } = useApp();
 
   const meta = PAGE_META[`finance/${tab}`] || { t: 'Finance' };
@@ -544,27 +545,30 @@ export function FinancePage() {
     L('Property sales', k.salesRevenue),
     L('Other revenue', k.otherIncome),
     L('Total revenue', k.totalRevenue, 't'),
-    L('COST OF SALES', null, 'h'),
-    ...(bv.doc
-      ? [
-          L('Property purchase cost', -(bv.cost - k.acquisitionCosts)),
-          L('Property acquisition costs', -k.acquisitionCosts),
-        ]
-      : [L('Cost of properties sold', -bv.cost)]),
+    L('COST OF PROPERTIES SOLD — AS ON THEIR COST SHEETS', null, 'h'),
+    bv.doc
+      ? L('Purchase price of plots bought in the period', -k.purchasePrice)
+      : L('Purchase price (net buy cost)', -k.deal.buyPrice),
+    L('Society / govt transfer cost (incl. stamp duty & CVT)', -k.deal.transfer),
+    L('§236K advance tax on purchase', -k.deal.buyTax),
+    L('Handling & expenses', -k.deal.handling),
+    L('Agent fee — buy side', -k.deal.buyAgent),
+    L('Purchase price (landed cost)', -bv.cost, 't'),
+    L('SELLING COSTS', null, 'h'),
+    L('§236C advance tax on sale', -k.saleTaxes),
+    L('Agent fee — sell side', -k.deal.sellAgent),
+    L('Other selling expenses', -k.sellingCosts),
     L('Gross profit', bv.gross, 't'),
     ...(k.scoped
       ? [
-          L('DIRECT COSTS OF THESE SALES', null, 'h'),
-          L('Agent commission', -k.commission),
-          L('Withholding tax on sales', -k.saleTaxes),
-          L('Selling costs on sales', -k.sellingCosts),
-          L('NET CONTRIBUTION', bv.net, 'g'),
+          L('DEDUCTIONS FROM PROFIT', null, 'h'),
+          L('Capital gains tax (CGT)', -k.tax),
+          L('Zakat', -k.zakat),
+          L('Charity', -k.charity),
+          L('NET MARGIN', bv.net, 'g'),
         ]
       : [
-          L('OPERATING EXPENSES', null, 'h'),
-          L('Agent commission', -k.commission),
-          L('Withholding tax on sales', -k.saleTaxes),
-          L('Selling costs on sales', -k.sellingCosts),
+          L('COMPANY EXPENSES — NOT PICKED FOR ANY PLOT', null, 'h'),
           L('Salaries', -k.salaries),
           L('Office expenses', -k.officeExp),
           L('Marketing', -k.marketing),
@@ -573,9 +577,11 @@ export function FinancePage() {
           L('Employee expenses', -k.employeeExp),
           L('Other expenses', -k.other),
           L('Operating profit', bv.op, 't'),
-          L('OTHER FINANCIAL OBLIGATIONS', null, 'h'),
-          L('Tax', -k.tax),
+          L('DEDUCTIONS FROM PROFIT', null, 'h'),
+          L('Capital gains tax (CGT)', -k.deal.cgt),
+          L('Other tax not picked for a plot', -k.overheadTax),
           L('Zakat', -k.zakat),
+          L('Charity', -k.charity),
           L('NET PROFIT', bv.net, 'g'),
           // The owner's personal spending is drawn out of profit, not a cost of earning it.
           ...(k.personal > 0
@@ -588,28 +594,24 @@ export function FinancePage() {
         ]),
   ];
 
-  const wf = k.scoped
-    ? [
-        { k: 'Revenue', v: k.totalRevenue, total: true, why: k.otherIncome ? 'Property sales and other income' : undefined },
-        { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
-        { k: 'Gross profit', v: bv.gross, total: true },
-        { k: 'Direct costs', v: -(k.commission + k.directCosts), why: 'Commission, withholding tax and selling costs on these sales' },
-        { k: 'Net contribution', v: bv.net, total: true },
-      ]
-    : [
-        { k: 'Revenue', v: k.totalRevenue, total: true, why: k.otherIncome ? 'Property sales and other income' : undefined },
-        { k: 'Cost of property sold', v: -bv.cost, why: bv.costLabel },
-        { k: 'Gross profit', v: bv.gross, total: true },
-        {
-          k: 'Operating costs',
-          v: -(k.operatingCosts + k.directCosts),
-          why: 'Commission, withholding tax and selling costs on sales, salaries, office, marketing, property, bills, other',
-        },
-        { k: 'Operating profit', v: bv.op, total: true },
-        { k: 'Tax', v: -k.tax },
-        { k: 'Zakat', v: -k.zakat, why: 'Kept separate from operating expenses' },
-        { k: 'Net profit', v: bv.net, total: true },
-      ];
+  const wf = [
+    { k: 'Revenue', v: k.totalRevenue, total: true, why: k.otherIncome ? 'Property sales and other income' : undefined },
+    { k: 'Landed cost', v: -bv.cost, why: 'Price, transfer costs, stamp duty, CVT, §236K, handling and buy-side agent fee' },
+    { k: 'Selling costs', v: -k.directCosts, why: '§236C tax, sell-side agent fee and other selling expenses' },
+    { k: 'Gross profit', v: bv.gross, total: true },
+    ...(k.scoped ? [] : [
+      { k: 'Company expenses', v: -k.operatingCosts, why: 'Salaries, office, marketing, bills and other costs not picked for a plot' },
+      { k: 'Operating profit', v: bv.op, total: true },
+    ]),
+    { k: 'Deductions', v: -(k.tax + k.zakat + k.charity), why: 'CGT and other tax, Zakat and charity' },
+    { k: k.scoped ? 'Net margin' : 'Net profit', v: bv.net, total: true },
+  ];
+
+  // The same deals on their saved cost sheets: the two agree unless a sheet holds amounts no
+  // record has (the sheet shows them in red, with a button that records them).
+  const sheetRows = k.deal.propertyIds.map((id: string) => ({ id, sheet: M.realSheet(id), gaps: M.sheetGaps(M.realSheet(id)) }));
+  const sheetNet = sheetRows.reduce((a: number, x: any) => a + (x.sheet ? x.sheet.netMargin : 0), 0);
+  const unmatched = sheetRows.filter((x: any) => x.gaps.length);
 
   return (
     <PageShell title={meta.t} u={meta.u} p={meta.p} toolProps={{ search: false }}>
@@ -679,17 +681,45 @@ export function FinancePage() {
         </div>
       </div>
 
+      {sheetRows.length > 0 && (
+        <div className={`note ${unmatched.length ? 'bad' : 'calm'}`} style={{ marginTop: '14px' }}>
+          <span className="ic">
+            <Icon name={unmatched.length ? 'warn' : 'ok'} />
+          </span>
+          <div>
+            {unmatched.length ? (
+              <>
+                The cost sheets of these {sheetRows.length} sales add up to <b>{M.fmt(sheetNet, 'full')}</b> net margin,
+                against <b>{M.fmt(k.deal.net, 'full')}</b> from the records. The difference is amounts typed on{' '}
+                {unmatched.map((x: any, i: number) => (
+                  <span key={x.id}>
+                    {i > 0 ? ', ' : ''}
+                    <button type="button" className="link" onClick={() => openCostSheet(x.sheet.id || x.id)}>{x.sheet.id || x.id}</button>
+                  </span>
+                ))}{' '}
+                and not recorded yet. Open the sheet and press <b>Record them</b>.
+              </>
+            ) : (
+              <>
+                Matches the cost sheets: the {sheetRows.length} {sheetRows.length === 1 ? 'sale' : 'sales'} in this period
+                add up to <b>{M.fmt(sheetNet, 'full')}</b> net margin on their cost sheets, line for line as above.
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="note calm" style={{ marginTop: '14px' }}>
         <span className="ic">
           <Icon name="info" />
         </span>
         <div>
-          Cost of sales is measured as the <b>{bv.costLabel}</b>.{' '}
+          Each plot sold counts once, whole, in the period of its sale, with the same lines as its cost sheet. Every tax is
+          on one line only: stamp duty, CVT and §236K in the landed cost, §236C in the selling costs, CGT under deductions.
+          When the plot has its own §236C entry in the Tax register, that entry is counted instead of the figure on the sale.
           {k.scoped
-            ? 'With an agent, project, type or property filter on, only the costs of those sales are shown; company overheads, tax and Zakat are not allocated.'
-            : 'Zakat sits below the operating line, separate from operating expenses.'}{' '}
-          Withholding tax and other selling costs entered on a sale are deducted here; when the plot has its own
-          §236C entry in the Tax register, that entry is counted instead of the figure on the sale, never both.
+            ? ' With an agent, project, type or property filter on, company expenses not picked for a plot are left out.'
+            : ''}
         </div>
       </div>
     </PageShell>

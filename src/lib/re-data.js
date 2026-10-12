@@ -300,23 +300,56 @@ export function computeKPIs(r, f) {
   // the whole company, so matching it against a slice of revenue would be meaningless — the cost of
   // the properties actually sold in scope is used instead.
   const scoped = scopedToProperty(f);
-  const costOfSales = soldInRange.reduce((a, s) => a + s.propertyCost, 0);
-  const grossProfit = totalRevenue - (scoped ? costOfSales : purchaseCost);
-  // Withholding tax and other selling costs typed on each sale, kept apart so neither is taken for the other.
-  const saleTaxes = soldInRange.reduce((a, s) => a + saleTaxCounted(s), 0);
-  const sellingCosts = soldInRange.reduce((a, s) => a + (s.otherExpenses || 0), 0);
-  const directCosts = saleTaxes + sellingCosts;
+
+  // Each plot sold in the period counts whole, exactly as its cost sheet adds it up from the
+  // records: price, transfer costs, buy-side tax, handling and agent fee (the landed cost), then
+  // the selling costs, then CGT, Zakat and charity. So the profit of a deal here and on its cost
+  // sheet is the same figure, and each tax is counted once, on its own line.
+  const deal = {
+    count: 0, buyPrice: 0, transfer: 0, buyTax: 0, handling: 0, buyAgent: 0,
+    saleTax: 0, sellAgent: 0, otherSelling: 0, cgt: 0, zakat: 0, charity: 0,
+    landed: 0, selling: 0, gross: 0, deductions: 0, net: 0, propertyIds: /** @type {string[]} */ ([]),
+  };
+  soldInRange.forEach((s) => {
+    deal.count++;
+    const rec = s.propertyId && D.properties.some((p) => p.id === s.propertyId) ? sheetFromRecords(s.propertyId) : null;
+    if (!rec) {
+      // A sale whose plot is gone: only what is on the sale itself is known.
+      deal.buyPrice += s.propertyCost || 0; deal.saleTax += saleTaxCounted(s);
+      deal.sellAgent += s.commission || 0; deal.otherSelling += s.otherExpenses || 0;
+      return;
+    }
+    deal.propertyIds.push(s.propertyId);
+    deal.buyPrice += rec.netBuyCost; deal.transfer += rec.totalSocietyGovtTransfer; deal.buyTax += rec.tax236K;
+    deal.handling += rec.totalHandlingExpenses; deal.buyAgent += rec.buySideAgentFee;
+    deal.saleTax += rec.tax236C; deal.sellAgent += rec.sellSideAgentFee; deal.otherSelling += rec.otherSellingExpenses;
+    deal.cgt += rec.cgtAmount; deal.zakat += rec.zakat; deal.charity += rec.charity;
+  });
+  deal.landed = deal.buyPrice + deal.transfer + deal.buyTax + deal.handling + deal.buyAgent;
+  deal.selling = deal.saleTax + deal.sellAgent + deal.otherSelling;
+  deal.gross = salesRevenue - deal.landed - deal.selling;
+  deal.deductions = deal.cgt + deal.zakat + deal.charity;
+  deal.net = deal.gross - deal.deductions;
+
+  const costOfSales = deal.landed;
+  const saleTaxes = deal.saleTax;
+  const sellingCosts = deal.otherSelling;
+  const directCosts = deal.selling;
+  const grossProfit = totalRevenue - costOfSales - directCosts;
+
+  // A record picked for a plot belongs to that deal (above, once it is sold); anything else is
+  // a company overhead, counted on its own date.
+  const plotIds = new Set(D.properties.map((p) => p.id));
+  const ofDeal = (x) => !!x.propertyId && plotIds.has(x.propertyId) && NON_EXPENSE_GROUPS.indexOf(x.group) < 0;
 
   const agentOk = (c) => propIds.has(c.propertyId) && (f.agent === 'all' || c.agentId === f.agent);
   const comms = D.commissions.filter((c) => agentOk(c) && inR(c.date, r));
-  // Commission is a cost of its plot's deal, so it counts in profit when the plot is sold.
-  const commission = D.commissions.filter((c) => agentOk(c) && inR(profitDate(c), r)).reduce((a, c) => a + c.amount, 0);
+  // Agent fees of the deals closed in the period, both sides.
+  const commission = deal.buyAgent + deal.sellAgent;
   const commissionPaid = comms.reduce((a, c) => a + c.paid, 0);
   const commissionOut = comms.reduce((a, c) => a + c.outstanding, 0);
 
-  // A plot's purchase cost counts when it is sold (cost of sales above), and so does every
-  // expense, tax and Zakat entry picked for it: profit carries each deal whole, once it closes.
-  const exp = D.expenses.filter((e) => inR(profitDate(e), r) && overheadMatch(e, f));
+  const exp = D.expenses.filter((e) => !ofDeal(e) && inR(e.date, r) && overheadMatch(e, f));
   const byGroup = {};
   Object.keys(EXPENSE_TREE).forEach((g) => (byGroup[g] = 0));
   exp.forEach((e) => (byGroup[e.group] += e.amount));
@@ -336,12 +369,16 @@ export function computeKPIs(r, f) {
   const taxBooked = txs.reduce((a, t) => a + t.amount, 0);
   const taxPaid = txs.reduce((a, t) => a + t.paid, 0);
   const taxOut = txs.reduce((a, t) => a + t.outstanding, 0);
-  const tax = D.taxes.filter((t) => inR(profitDate(t), r) && overheadMatch(t, f)).reduce((a, t) => a + t.amount, 0);
+  // Tax below the operating line: CGT on the deals closed, and tax not picked for any plot.
+  // Stamp duty, CVT and §236K are in the landed cost and §236C in the selling costs, as on the sheet.
+  const overheadTax = D.taxes.filter((t) => !ofDeal(t) && inR(t.date, r) && overheadMatch(t, f)).reduce((a, t) => a + t.amount, 0);
+  const tax = deal.cgt + (scoped ? 0 : overheadTax);
   const taxDueSoon = D.taxes.filter((t) => !t.paid && t.dueDate >= TODAY && t.dueDate <= addDays(TODAY, 30)).reduce((a, t) => a + t.amount, 0);
 
   const zk = D.zakat.filter((z) => inR(z.date, r));
   const zakatPaid = zk.reduce((a, z) => a + z.amount, 0);
-  const zakat = D.zakat.filter((z) => inR(profitDate(z), r)).reduce((a, z) => a + z.amount, 0);
+  const zakat = deal.zakat + (scoped ? 0 : D.zakat.filter((z) => !ofDeal(z) && inR(z.date, r)).reduce((a, z) => a + (z.amount || 0), 0));
+  const charity = deal.charity;
 
   const officeExp = byGroup['Office Expenses'], marketing = byGroup['Marketing Expenses'],
     propertyExp = byGroup['Property Expenses'], employeeExp = byGroup['Employee Expenses'],
@@ -351,21 +388,12 @@ export function computeKPIs(r, f) {
   // Operating costs exclude tax and Zakat: tax is a statutory charge and Zakat (§17) is an
   // appropriation of profit, not an operating expense. Keeping the three stages apart is what
   // lets the waterfall show Gross → Operating → Net without double counting.
-  const operatingCosts = commission + salaries + officeExp + marketing + propertyExp + employeeExp + bills + other;
-  // Withholding tax and other selling costs typed on a sale are real costs of that sale. They are
-  // part of each sale's own net profit, so the company figures must carry them too — otherwise
-  // the P&L shows more profit than the sales it is made of.
-  const totalExpenses = operatingCosts + directCosts + tax + zakat;
-  // In a narrowed scope only directly attributable costs are subtracted (a scope-level contribution);
-  // company overheads are not allocated to a single agent or project.
-  // Expenses, tax and Zakat picked for a plot in scope are its own costs, so they count there too,
-  // and one property's profit matches its cost sheet.
-  const dealOwn = (x) => x.propertyId && propIds.has(x.propertyId) && inR(profitDate(x), r);
-  const dealCosts = scoped
-    ? D.expenses.filter((e) => NON_EXPENSE_GROUPS.indexOf(e.group) < 0 && dealOwn(e)).reduce((a, e) => a + e.amount, 0)
-      + D.taxes.filter(dealOwn).reduce((a, t) => a + t.amount, 0) + D.zakat.filter(dealOwn).reduce((a, z) => a + (z.amount || 0), 0)
-    : 0;
-  const netProfit = scoped ? grossProfit - commission - directCosts - dealCosts : grossProfit - totalExpenses;
+  // Company overheads: costs not picked for any plot. In a narrowed scope (one agent, project,
+  // type or property) they are not allocated, so only the deals' own costs count there.
+  const operatingCosts = scoped ? 0 : salaries + officeExp + marketing + propertyExp + employeeExp + bills + other;
+  // Everything spent besides the price paid for the plots sold.
+  const totalExpenses = (costOfSales - deal.buyPrice) + directCosts + operatingCosts + tax + zakat + charity;
+  const netProfit = grossProfit - operatingCosts - tax - zakat - charity;
 
   const pay = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
   const cashIn = pay.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
@@ -394,15 +422,15 @@ export function computeKPIs(r, f) {
       unsold: unsold.length, purchasedInRange: purchased.length, soldInRange: soldInRange.length,
     },
     purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, otherIncome, totalRevenue, cashReceived, grossProfit,
-    costOfSales, directCosts, saleTaxes, sellingCosts,
+    costOfSales, directCosts, saleTaxes, sellingCosts, deal, charity, overheadTax,
     // Two bases for gross profit. grossProfitDoc follows the requirement document literally
     // (period sales − period purchase spend); grossProfitCOGS matches the cost of the properties
     // actually sold, which is the accounting-correct figure. See AUDIT.md finding A3.
-    grossProfitDoc: totalRevenue - purchaseCost,
-    grossProfitCOGS: totalRevenue - costOfSales,
-    costBasis: scoped ? costOfSales : purchaseCost,
-    operatingCosts, operatingProfit: grossProfit - operatingCosts - directCosts,
-    profitBeforeZakat: grossProfit - operatingCosts - directCosts - tax,
+    grossProfitDoc: totalRevenue - (purchasePrice + costOfSales - deal.buyPrice) - directCosts,
+    grossProfitCOGS: grossProfit,
+    costBasis: costOfSales,
+    operatingCosts, operatingProfit: grossProfit - operatingCosts,
+    profitBeforeZakat: grossProfit - operatingCosts - tax,
     commission, commissionPaid, commissionOut,
     officeExp, marketing, propertyExp, employeeExp, other, salaries, salariesPaid,
     personal, assetsBought, retainedAfterPersonal: netProfit - personal,
@@ -427,10 +455,12 @@ export function computeKPIs(r, f) {
    basis and carries only its own direct costs, never company overheads. */
 export function basisView(k, basis) {
   const doc = !k.scoped && basis === 'doc';
-  const cost = doc ? k.purchaseCost : k.costOfSales;
-  const gross = k.totalRevenue - cost;
-  const op = k.scoped ? gross - k.commission - k.directCosts : gross - k.operatingCosts - k.directCosts;
-  const net = k.scoped ? op : op - k.tax - k.zakat;
+  // Document wording: the price of the plots bought in the period stands in for the price of the
+  // plots sold; their other costs stay as on their cost sheets.
+  const cost = doc ? k.purchasePrice + k.costOfSales - k.deal.buyPrice : k.costOfSales;
+  const gross = k.totalRevenue - cost - k.directCosts;
+  const op = gross - k.operatingCosts;
+  const net = op - k.tax - k.zakat - k.charity;
   return {
     cost, gross, op, net, doc,
     grossMargin: pctOf(gross, k.totalRevenue), netMargin: pctOf(net, k.totalRevenue),
@@ -488,13 +518,76 @@ export function monthlySeries(year, f) {
   return out;
 }
 
+/** The monthly target as the owner sets it: a share of the capital each month for inflation,
+    growth, profit and Zakat (the "Monthly comparison report" workbook). */
+export const DEFAULT_MONTHLY_TARGET = { capital: 45000000, inflation: 0.83, growth: 0.3, profit: 0.5, zakat: 0.2083 };
+export const monthlyTargetPct = (t) => (+t.inflation || 0) + (+t.growth || 0) + (+t.profit || 0) + (+t.zakat || 0);
+
+/** What the business holds at the end of a day: unsold plots at landed cost, assets at cost,
+    bank and cash, and what buyers still owe. */
+export function holdingsAt(asOf, f) {
+  const sold = (p) => DATA.sales.some((s) => s.propertyId === p.id && s.date <= asOf);
+  // A plot at what it had cost by that day: its landed cost less what was recorded for it later.
+  const costBy = (p) => {
+    const rec = sheetFromRecords(p.id);
+    if (!rec) return 0;
+    const later = rec.sources.filter((x) => x.date && x.date > asOf && SALE_SIDE_LINES.indexOf(x.key) < 0).reduce((a, x) => a + x.amount, 0);
+    return rec.purchasePrice - later;
+  };
+  const property = DATA.properties
+    .filter((p) => (!f || propMatch(p, f)) && p.purchaseDate <= asOf && !sold(p))
+    .reduce((a, p) => a + costBy(p), 0);
+  const byType = {};
+  DATA.expenses.filter((e) => e.group === 'Assets' && e.date <= asOf && (!f || overheadMatch(e, f))).forEach((e) => {
+    const t = investmentType(e);
+    byType[t] = (byType[t] || 0) + e.amount;
+  });
+  const cash = accountBalances(asOf, f).reduce((a, b) => a + b.balance, 0);
+  const receivable = DATA.sales.filter((s) => s.date <= asOf).reduce((a, s) => {
+    const got = livePayments().filter((p) => p.settleKey === 'sale:' + s.id && p.date <= asOf).reduce((x, p) => x + p.amount, 0);
+    return a + Math.max(0, s.sellingPrice - got);
+  }, 0);
+  const assets = Object.keys(byType).reduce((a, k) => a + byType[k], 0);
+  return { property, byType, assets, cash, receivable, total: property + assets + cash + receivable };
+}
+
+/** Month by month for one calendar year, up to the current month: profit as the P&L counts it,
+    against the monthly target, and what the business holds at each month end. */
+export function monthlyComparison(year, f, target = DEFAULT_MONTHLY_TARGET) {
+  const targetPct = monthlyTargetPct(target);
+  const targetProfit = Math.round(((+target.capital || 0) * targetPct) / 100);
+  const last = year === TODAY.getFullYear() ? TODAY.getMonth() : year < TODAY.getFullYear() ? 11 : -1;
+  const before = holdingsAt(endOfDay(new Date(year, 0, 0)), f);
+  const months = [];
+  let prev = before;
+  for (let m = 0; m <= last; m++) {
+    const r = { start: new Date(year, m, 1), end: endOfDay(new Date(year, m + 1, 0)), label: MONTHS[m] + ' ' + year, key: 'custom' };
+    const k = computeKPIs(r, f);
+    const bv = basisView(k, 'cogs');
+    const asOf = r.end > TODAY ? endOfDay(TODAY) : r.end;
+    const h = holdingsAt(asOf, f);
+    months.push({
+      month: m, label: MONTHS[m], full: r.label,
+      revenue: k.totalRevenue, sold: k.counts.soldInRange, landed: bv.cost, selling: k.directCosts, gross: bv.gross,
+      expenses: k.operatingCosts, deductions: k.tax + k.zakat + k.charity, net: bv.net, margin: pctOf(bv.net, k.totalRevenue),
+      target: targetProfit, vsTarget: bv.net - targetProfit,
+      holdings: h, growth: h.total - prev.total, growthPct: pctOf(h.total - prev.total, prev.total),
+    });
+    prev = h;
+  }
+  const types = INVESTMENT_TYPES.filter((t) => months.some((x) => x.holdings.byType[t]));
+  return { year, months, types, targetPct, targetProfit, opening: before };
+}
+
 export function expenseBreakdown(k) {
   return [
+    ['Transfer costs, stamp duty & CVT', k.deal.transfer, 200], ['§236K tax on purchase', k.deal.buyTax, 20],
+    ['Handling expenses on plots', k.deal.handling, 230], ['Agent Commission', k.commission, 300],
+    ['§236C tax on sale', k.saleTaxes, 10], ['Other selling costs', k.sellingCosts, 280],
     ['Employee Salaries', k.salaries, 160], ['Office Expenses', k.officeExp, 250],
-    ['Agent Commission', k.commission, 300], ['Marketing', k.marketing, 45],
-    ['Bills', k.bills, 100], ['Property Expenses', k.propertyExp, 200],
-    ['Tax', k.tax, 20], ['Zakat', k.zakat, 130], ['Other', k.other + k.employeeExp, 340],
-    ['Withholding tax on sales', k.saleTaxes, 20], ['Selling costs on sales', k.sellingCosts, 280],
+    ['Marketing', k.marketing, 45], ['Bills', k.bills, 100], ['Property Expenses', k.propertyExp, 190],
+    ['Other', k.other + k.employeeExp, 340], ['CGT & other tax', k.tax, 30], ['Zakat', k.zakat, 130],
+    ['Charity', k.charity, 150],
   ].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
 }
 
@@ -1272,16 +1365,20 @@ export function dealTaxes() {
   return dealSheets().filter((cs) => cs.propertyId).map((cs) => {
     const fresh = sheetFromRecords(cs.propertyId);
     const recs = fresh ? fresh.sources.filter((x) => keys.indexOf(x.key) >= 0) : [];
-    const due = keys.reduce((a, k) => a + (cs[k] || 0), 0);
+    // Each line is due as on the sheet, or as recorded when more was recorded (tax taken on the
+    // sale is a fact), so what is paid is never counted against a smaller, older figure.
+    const rec = (k) => recs.filter((x) => x.key === k).reduce((a, x) => a + x.amount, 0);
+    const line = (k) => Math.max(cs[k] || 0, rec(k));
+    const due = keys.reduce((a, k) => a + line(k), 0);
     const recorded = recs.reduce((a, x) => a + x.amount, 0);
     const paid = recs.reduce((a, x) => a + x.paid, 0);
     // Each line's tax that is only on the sheet, entered one line at a time with its own tax type.
     const missing = DEAL_TAX_LINES.map(([k, label, type]) => ({
-      key: k, label, type, amount: Math.round((cs[k] || 0) - recs.filter((x) => x.key === k).reduce((a, x) => a + x.amount, 0)),
+      key: k, label, type, amount: Math.round((cs[k] || 0) - rec(k)),
     })).filter((x) => x.amount > 0);
     return {
       id: cs.propertyId, propertyId: cs.propertyId, property: cs.name, sheet: cs.fromRecords ? '' : cs.id, status: cs.status,
-      stampCvt: (cs.stampDuty || 0) + (cs.cvt || 0), tax236K: cs.tax236K || 0, tax236C: cs.tax236C || 0, cgt: cs.cgtAmount || 0,
+      stampCvt: line('stampDuty') + line('cvt'), tax236K: line('tax236K'), tax236C: line('tax236C'), cgt: line('cgtAmount'),
       due, recorded, paid, remaining: Math.max(0, due - paid), notRecorded: missing.reduce((a, x) => a + x.amount, 0), missing,
     };
   }).filter((x) => x.due > 0 || x.paid > 0);
@@ -1797,18 +1894,23 @@ export function fiscalYearTaxSummary(f) {
   const taxes = DATA.taxes.filter((t) => inR(t.date, fyRange) && (f.office === 'all' || t.office === f.office));
   const sales = DATA.sales.filter((s) => inR(s.date, fyRange));
 
-  const advanceTax236K = taxes.filter((t) => t.type === 'Advance Tax §236K').reduce((a, t) => a + t.amount, 0);
-  const advanceTax236C = taxes.filter((t) => t.type === 'Advance Tax §236C').reduce((a, t) => a + t.amount, 0);
-  const cgt = taxes.filter((t) => t.type === 'Capital Gains Tax').reduce((a, t) => a + t.amount, 0);
+  const of = (...types) => taxes.filter((t) => types.indexOf(t.type) >= 0).reduce((a, t) => a + t.amount, 0);
+  const advanceTax236K = of('Advance Tax §236K');
+  const stampCvt = of('Stamp Duty', 'Capital Value Tax (CVT)');
+  const cgt = of('Capital Gains Tax');
+  // Withholding tax taken on a sale whose plot has no §236C entry of its own: the same tax as a
+  // §236C entry, so the two are one figure, and it is paid at the sale.
   const withholdingTax = sales.reduce((a, s) => a + saleTaxCounted(s), 0);
-  const totalTax = taxes.reduce((a, t) => a + t.amount, 0);
-  const totalPaid = taxes.reduce((a, t) => a + t.paid, 0);
+  const advanceTax236C = of('Advance Tax §236C', 'Withholding Tax') + withholdingTax;
+  const totalTax = taxes.reduce((a, t) => a + t.amount, 0) + withholdingTax;
+  const otherTax = totalTax - advanceTax236K - stampCvt - cgt - advanceTax236C;
+  const totalPaid = taxes.reduce((a, t) => a + t.paid, 0) + withholdingTax;
   const totalPending = taxes.reduce((a, t) => a + t.outstanding, 0);
 
   return {
     fyLabel: 'FY ' + fyStart.getFullYear() + '–' + fyEnd.getFullYear(),
     fyStart, fyEnd,
-    advanceTax236K, advanceTax236C, cgt, withholdingTax,
+    advanceTax236K, advanceTax236C, cgt, withholdingTax, stampCvt, otherTax,
     totalTax, totalPaid, totalPending,
     taxEntries: taxes,
     salesCount: sales.length,
@@ -2155,20 +2257,20 @@ export function sheetFromRecords(propertyId) {
     sources: [],
   };
   // Each record behind the sheet: which line it fills, and how much of it has been paid.
-  const src = (id, what, amount, key, paid = amount) => v.sources.push({ id, what, amount, key, paid });
+  const src = (id, what, amount, key, paid = amount, date = null) => v.sources.push({ id, what, amount, key, paid, date });
 
   DATA.expenses.filter((e) => e.propertyId === p.id && NON_EXPENSE_GROUPS.indexOf(e.group) < 0).forEach((e) => {
     // An expense entered from a cost sheet goes back on the very line it came from.
     if (e.sheetLine && ZERO_LINES[e.sheetLine] !== undefined) {
       v[e.sheetLine] += e.amount;
-      src(e.id, e.category, e.amount, e.sheetLine, e.paid || 0);
+      src(e.id, e.category, e.amount, e.sheetLine, e.paid || 0, e.date);
       return;
     }
     const text = (e.category || '') + ' ' + (e.note || '');
     const line = DEAL_COST_LINES.find((l) => l[2].test(text));
     const key = line ? line[1] : 'handlingExpenses';
     v[key] += e.amount;
-    src(e.id, (line ? line[0] : 'Other handling') + ' · ' + e.category, e.amount, key, e.paid || 0);
+    src(e.id, (line ? line[0] : 'Other handling') + ' · ' + e.category, e.amount, key, e.paid || 0, e.date);
   });
   let saleTaxRecorded = false;
   DATA.taxes.filter((t) => t.propertyId === p.id).forEach((t) => {
@@ -2178,11 +2280,11 @@ export function sheetFromRecords(propertyId) {
       : t.type === 'Stamp Duty' ? 'stampDuty' : t.type === 'Capital Value Tax (CVT)' ? 'cvt' : 'otherAcquisition';
     if (key === 'tax236C') saleTaxRecorded = true;
     v[key] += t.amount;
-    src(t.id, t.type, t.amount, key, t.paid || 0);
+    src(t.id, t.type, t.amount, key, t.paid || 0, t.date);
   });
   DATA.zakat.filter((z) => z.propertyId === p.id).forEach((z) => {
     v.zakat += z.amount || 0;
-    src(z.id, 'Zakat', z.amount || 0, 'zakat');
+    src(z.id, 'Zakat', z.amount || 0, 'zakat', z.amount || 0, z.date);
   });
   // Agent fees come from the commission ledger, both sides of the deal. A sale's commission
   // with no ledger entry of its own still counts.
@@ -2190,7 +2292,7 @@ export function sheetFromRecords(propertyId) {
   comms.forEach((c) => {
     const key = c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee';
     v[key] += c.amount || 0;
-    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0, key, c.paid || 0);
+    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0, key, c.paid || 0, c.date);
   });
   if (sale) {
     if (sale.commission && !comms.some((c) => c.txnType === 'Sale' && c.source !== 'ledger')) {

@@ -9,6 +9,7 @@ import { Wallpaper } from '../Wallpapers';
 import { useAppearance } from '../../context/AppearanceContext';
 import { SHORTCUTS, MAX_SHORTCUTS, findWallpaper, type ShortcutDef } from '../../lib/appearance';
 import * as M from '../../lib/re-data';
+import { HomeSections, loadHomeView, saveHomeView, type HomeView } from '../HomeSections';
 
 interface Tile {
   icon: string;
@@ -165,6 +166,14 @@ export function HomePage() {
   }, []);
 
   const [editing, setEditing] = useState(false);
+  // Icons in a grid, or cards under headings (normal or big).
+  const [view, setViewState] = useState<HomeView>('icons');
+  useEffect(() => setViewState(loadHomeView()), []);
+  const setView = (v: HomeView) => {
+    setViewState(v);
+    saveHomeView(v);
+  };
+  const [sectionsReset, setSectionsReset] = useState(0);
   const [picker, setPicker] = useState<number | null>(null);
   const [scPicker, setScPicker] = useState(false);
   const [drag, setDrag] = useState<{ from: number; over: number | null; x: number; y: number } | null>(null);
@@ -306,8 +315,25 @@ export function HomePage() {
       )}
 
       <div className="launch-bar" data-noprint="1">
-        <span className="kicker">{editing ? 'Drag icons to move them · × removes · + adds' : 'Your apps'}</span>
+        <span className="kicker">
+          {!editing
+            ? 'Your apps'
+            : view === 'icons'
+            ? 'Drag icons to move them · × removes · + adds'
+            : 'Rename a heading by typing in it · drag cards between headings · × removes · + adds'}
+        </span>
         <span className="spacer" />
+        <span className="seg" role="group" aria-label="Home view">
+          <button type="button" aria-pressed={view === 'icons'} onClick={() => setView('icons')} title="Icons in a grid">
+            Icons
+          </button>
+          <button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')} title="Cards under headings">
+            Cards
+          </button>
+          <button type="button" aria-pressed={view === 'big'} onClick={() => setView('big')} title="Big cards with large labels and today's figure">
+            Big cards
+          </button>
+        </span>
         {!editing && (
           <>
             <button type="button" className="btn sm dice" onClick={surprise} title="A new matching theme, wallpaper and icon pack">
@@ -319,7 +345,11 @@ export function HomePage() {
           </>
         )}
         {editing && (
-          <button type="button" className="btn sm" onClick={() => commit(DEFAULT_LAYOUT.slice())}>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => (view === 'icons' ? commit(DEFAULT_LAYOUT.slice()) : setSectionsReset((n) => n + 1))}
+          >
             Reset
           </button>
         )}
@@ -328,6 +358,19 @@ export function HomePage() {
         </button>
       </div>
 
+      {view !== 'icons' && (
+        <HomeSections
+          tiles={TILES}
+          view={view}
+          editing={editing}
+          denied={denied}
+          openTile={open}
+          runShortcut={runShortcut}
+          resetKey={sectionsReset}
+        />
+      )}
+
+      {view === 'icons' && (
       <nav className={`launch ${editing ? 'editing' : ''} ${drag ? 'dragging' : ''}`} aria-label="All sections">
         {(editing || drag ? cells : cells.slice(0, lastFilled + 1)).map((id, i) => {
           const t = id && visible(id) ? TILES[id] : null;
@@ -367,6 +410,7 @@ export function HomePage() {
           );
         })}
       </nav>
+      )}
 
       {/* The icon being carried. It lives on <body> so nothing on the page can pin it in place. */}
       {drag &&

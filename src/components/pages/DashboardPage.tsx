@@ -3,12 +3,13 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { KpiCard, PageShell, PeriodControl, Tag } from '../Shared';
-import { ChartGroupedBars, ChartDonut, ShareBar, RankedList } from '../Charts';
+import { ChartDonut, RankedList } from '../Charts';
 import { PropArt, Icon } from '../Icons';
-import { PAGE_META, SC, OC } from '../../lib/constants';
+import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 import { HomePage } from './HomePage';
 import { InvestmentKpis, InvestmentCharts } from '../Investments';
+import { MonthlyReport } from '../MonthlyReport';
 
 export function DashboardPage() {
   const {
@@ -108,10 +109,14 @@ export function DashboardPage() {
       Marketing: 'costs/expenses',
       Bills: 'costs/bills',
       'Property Expenses': 'costs/expenses',
-      Tax: 'costs/tax',
+      'CGT & other tax': 'costs/tax',
+      '§236K tax on purchase': 'costs/tax',
+      '§236C tax on sale': 'costs/tax',
+      'Transfer costs, stamp duty & CVT': 'trading/sheets',
+      'Handling expenses on plots': 'trading/sheets',
       Zakat: 'costs/zakat',
-      'Withholding tax on sales': 'costs/tax',
-      'Selling costs on sales': 'sales/register',
+      Charity: 'costs/charity',
+      'Other selling costs': 'sales/register',
     };
     return map[label] || 'costs/expenses';
   };
@@ -422,14 +427,6 @@ export function DashboardPage() {
 
       {role === 'CEO' && (() => {
         const netDelta = M.deltaPct(bv.net, bvPrev.net);
-        const series = M.monthlySeries(M.TODAY.getFullYear(), f).map((m: any) => ({
-          label: m.label,
-          full: m.full,
-          purchase: m.k.purchaseCost,
-          sales: m.k.salesRevenue,
-          net: M.basisView(m.k, grossBasis).net,
-          expenses: m.k.totalExpenses,
-        }));
         const al = M.alerts().filter((a: any) => !denied(a.view));
         const rawExp = M.expenseBreakdown(k);
         const exp = rawExp.slice(0, 5).map((x: any, i: number) => ({ k: x[0], v: x[1], c: SC[i] }));
@@ -439,13 +436,6 @@ export function DashboardPage() {
         // What the business has money in and still holds, and what each bank and cash account holds.
         const inv = M.investments(f);
         const balances = M.accountBalances(r.end, f);
-
-        const portfolioItems = [
-          ['Available', k.counts.available],
-          ['Reserved', k.counts.reserved],
-          ['Under process', k.counts.underProcess],
-          ['Sold', k.counts.sold],
-        ];
 
         return (
           <>
@@ -482,26 +472,6 @@ export function DashboardPage() {
 
             <div className="grid c2u">
               <div style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
-                <div className="panel">
-                  <div className="panel-h">
-                    <h3>Sales against purchases</h3>
-                    <span className="sub">{M.TODAY.getFullYear()}, by month</span>
-                    <span className="spacer" />
-                    <button type="button" className="link" onClick={() => goto('finance/profit')}>
-                      Net margin tracking
-                    </button>
-                  </div>
-                  <div className="panel-b">
-                    <ChartGroupedBars
-                      rows={series}
-                      s1="purchase"
-                      s2="sales"
-                      l1="Purchase cost"
-                      l2="Selling revenue"
-                    />
-                  </div>
-                </div>
-
                 <div className="panel">
                   <div className="panel-h">
                     <h3>Where the money went</h3>
@@ -562,42 +532,6 @@ export function DashboardPage() {
 
                 <div className="panel">
                   <div className="panel-h">
-                    <h3>Portfolio</h3>
-                    <span className="sub">{M.fmtNum(k.counts.total)} properties</span>
-                  </div>
-                  <div className="panel-b tight">
-                    <ShareBar
-                      items={portfolioItems.map((x, i) => ({
-                        k: x[0] as string,
-                        v: x[1] as number,
-                        c: OC[i],
-                        disp: `${M.fmtNum(x[1] as number)} properties`,
-                      }))}
-                      total={k.counts.total}
-                    />
-                    <RankedList
-                      items={portfolioItems.map((x, i) => ({
-                        k: x[0] as string,
-                        v: x[1] as number,
-                        c: OC[i],
-                        disp: M.fmtNum(x[1] as number),
-                        go: 'properties/inventory',
-                      }))}
-                      total={k.counts.total}
-                    />
-                    <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      <span className="vs">
-                        Portfolio cost <b>{M.fmt(k.portfolioCost, numbers)}</b>
-                      </span>
-                      <span className="vs">
-                        Market value <b>{M.fmt(k.portfolioValue, numbers)}</b>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="panel">
-                  <div className="panel-h">
                     <h3>Cash &amp; bank balances</h3>
                     <span className="sub">{M.fmtDate(r.end)}</span>
                     <span className="spacer" />
@@ -634,6 +568,8 @@ export function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            <MonthlyReport />
 
             <div className="sech">
               <h2>Investments</h2>
