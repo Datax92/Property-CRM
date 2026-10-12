@@ -87,6 +87,15 @@ function saveSections(list: HomeSection[]) {
   }
 }
 
+/** Buttons that start a new entry are named for what they do, so they read apart from the pages. */
+const ACTION_LABELS: Record<string, string> = {
+  sale: 'Record a sale', proforma: 'New proforma', saleInvoice: 'New sale invoice', purchaseInvoice: 'New purchase invoice',
+  property: 'Add a purchase', costSheet: 'New cost sheet', expense: 'Add an expense', asset: 'Add an asset',
+  payment: 'Record a payment', task: 'New task', tax: 'Add a tax entry', zakat: 'Record Zakat', salary: 'Pay a salary',
+  bill: 'Add a bill', agent: 'Add an agent',
+};
+const actionLabel = (s: ShortcutDef) => ACTION_LABELS[s.id] || s.label;
+
 const shortcutOf = (item: string) => (item.startsWith('sc:') ? SHORTCUTS.find((s) => s.id === item.slice(3)) : undefined);
 
 export function HomeSections({
@@ -180,7 +189,7 @@ export function HomeSections({
     const sc = shortcutOf(item);
     const t = sc ? null : tiles[item];
     if (!sc && !t) return null;
-    const label = sc ? sc.label : t!.label;
+    const label = sc ? actionLabel(sc) : t!.label;
     const sub = sc ? sc.sub : t!.value;
     const icon = sc ? sc.icon : t!.icon;
     const dragging = drag && drag.sec === sec && drag.idx === idx;
@@ -357,7 +366,7 @@ export function HomeSections({
                         )}
                       </span>
                       <span className="hcard-t">
-                        <b>{sc ? sc.label : t!.label}</b>
+                        <b>{sc ? actionLabel(sc) : t!.label}</b>
                         <small>{sc ? sc.sub : placed.has(item) ? 'Also under another heading' : 'Page'}</small>
                       </span>
                     </button>

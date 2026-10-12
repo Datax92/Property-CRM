@@ -701,8 +701,8 @@ export function FinancePage() {
               </>
             ) : (
               <>
-                Matches the cost sheets: the {sheetRows.length} {sheetRows.length === 1 ? 'sale' : 'sales'} in this period
-                add up to <b>{M.fmt(sheetNet, 'full')}</b> net margin on their cost sheets, line for line as above.
+                Matches the cost sheets: {sheetRows.length === 1 ? 'the sale in this period comes' : `the ${sheetRows.length} sales in this period come`} to{' '}
+                <b>{M.fmt(sheetNet, 'full')}</b> net margin on {sheetRows.length === 1 ? 'its cost sheet' : 'their cost sheets'}, line for line as above.
               </>
             )}
           </div>
