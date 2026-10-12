@@ -2038,8 +2038,20 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .hgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .hgrid.picker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .hcard-cell { position: relative; min-width: 0; border-radius: 8px; }
-.hcard-cell.over::before { content: ''; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--brand-2); }
-.hcard-cell.lifted { opacity: .4; }
+.hcard-cell.over::before, .hcard-cell.over-after::after { content: ''; position: absolute; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--brand-2); }
+.hcard-cell.over::before { left: -9px; }
+.hcard-cell.over-after::after { right: -9px; }
+.hcard-cell.lifted { opacity: .35; }
+.hsections { user-select: none; -webkit-user-select: none; }
+.hsections .hcard { cursor: grab; }
+.hsections.editing .hcard { touch-action: none; }
+.hsections.dragging, .hsections.dragging * { cursor: grabbing !important; }
+/* The card in the hand: follows the pointer, slightly lifted and tilted. */
+.hcard-ghost { position: fixed; z-index: 10050; pointer-events: none; transform: translate(-50%, -50%) rotate(-2deg) scale(1.04); }
+.hcard-ghost .hcard { box-shadow: 0 18px 34px -12px rgba(17,24,39,.55); border-color: var(--brand-2); }
+.hcard-ghost.big .hcard { padding: 22px; gap: 18px; border-radius: 10px; }
+.hcard-ghost.big .hcard-t b { font-size: 21px; font-weight: 700; }
+.hcard-ghost.big .hcard-t small { font-size: 14px; margin-top: 4px; }
 .hcard {
   display: flex; align-items: center; gap: 16px; width: 100%; min-width: 0; text-align: left;
   padding: 16px 18px; border-radius: 8px; background: var(--card); border: 1px solid var(--rule);

@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AppIcon } from './AppIcons';
 import { Icon } from './Icons';
 import { SHORTCUTS, type ShortcutDef } from '../lib/appearance';
 
 /* The home screen as cards under headings: each heading (Sales, Purchases ...) holds the pages
    and the "new entry" buttons that belong together. Headings are renamed, added, removed and
-   reordered under "Customize", and cards are dragged from one heading to another. An item is a
+   reordered under "Customize". Cards are dragged within and between headings — with a mouse at
+   any time, with a finger under "Customize" (so the page still scrolls). An item is a
    page tile id, or "sc:<shortcut id>" for a button that opens a new entry. Kept in this browser. */
 
 export interface HomeTile {
@@ -24,6 +26,7 @@ export interface HomeSection {
   items: string[];
 }
 export type HomeView = 'icons' | 'cards' | 'big';
+type Spot = { sec: string; idx: number | null; after: boolean };
 
 const SECTIONS_KEY = 'home-sections-v1';
 const VIEW_KEY = 'home-view-v1';
@@ -127,8 +130,10 @@ export function HomeSections({
   }, [resetKey]);
 
   const [picker, setPicker] = useState<string | null>(null);
-  const [drag, setDrag] = useState<{ sec: string; idx: number } | null>(null);
-  const [over, setOver] = useState<string | null>(null);
+  // The card being carried, where the pointer is, and the place it would land.
+  const [drag, setDrag] = useState<{ sec: string; idx: number; x: number; y: number; w: number; over: Spot | null } | null>(null);
+  const pending = useRef<{ sec: string; idx: number; x: number; y: number; w: number; id: number } | null>(null);
+  const justDragged = useRef(false);
 
   const commit = (next: HomeSection[]) => {
     setSections(next);
@@ -155,25 +160,71 @@ export function HomeSections({
     commit([...sections, { id, title: 'New heading', items: [] }]);
   };
 
-  // Drop the card being dragged before position `idx` of section `to` (at the end when idx is null).
-  const drop = (to: string, idx: number | null) => {
-    if (!drag) return;
-    const from = sections.find((s) => s.id === drag.sec);
-    if (!from) return;
-    const item = from.items[drag.idx];
-    let next = sections.map((s) => (s.id === drag.sec ? { ...s, items: s.items.filter((_, i) => i !== drag.idx) } : s));
-    next = next.map((s) => {
-      if (s.id !== to) return s;
-      const items = s.items.slice();
-      let at = idx == null ? items.length : idx;
-      if (to === drag.sec && idx != null && idx > drag.idx) at -= 1;
-      items.splice(at, 0, item);
-      return { ...s, items };
+  // Move card `idx` of section `from` to position `at` of section `to` (at the end when at is null).
+  const move = (from: string, idx: number, to: string, at: number | null) => {
+    const src = sections.find((x) => x.id === from);
+    if (!src) return;
+    const item = src.items[idx];
+    let next = sections.map((x) => (x.id === from ? { ...x, items: x.items.filter((_, i) => i !== idx) } : x));
+    next = next.map((x) => {
+      if (x.id !== to) return x;
+      const items = x.items.slice();
+      let pos = at == null ? items.length : at;
+      if (to === from && at != null && at > idx) pos -= 1;
+      items.splice(pos, 0, item);
+      return { ...x, items };
     });
-    setDrag(null);
-    setOver(null);
     commit(next);
   };
+
+  // What is under the pointer: a card (land before or after it, by which half) or a heading's empty space.
+  const spotAt = (x: number, y: number): Spot | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const cell = el && (el.closest('[data-hcard]') as HTMLElement | null);
+    if (cell) {
+      const r = cell.getBoundingClientRect();
+      return { sec: cell.dataset.sec as string, idx: +(cell.dataset.hcard as string), after: x > r.left + r.width / 2 };
+    }
+    const sec = el && (el.closest('[data-hsec]') as HTMLElement | null);
+    return sec ? { sec: sec.dataset.hsec as string, idx: null, after: false } : null;
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLElement>, sec: string, idx: number) => {
+    // A mouse can drag at any time; on a touch screen dragging is for "Customize", so scrolling still works.
+    if (e.button !== 0 || (!editing && e.pointerType !== 'mouse')) return;
+    const w = e.currentTarget.getBoundingClientRect().width;
+    pending.current = { sec, idx, x: e.clientX, y: e.clientY, w, id: e.pointerId };
+  };
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const p = pending.current;
+      if (!p || e.pointerId !== p.id) return;
+      if (!drag && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 6) return;
+      e.preventDefault();
+      setDrag({ sec: p.sec, idx: p.idx, x: e.clientX, y: e.clientY, w: p.w, over: spotAt(e.clientX, e.clientY) });
+    };
+    const onUp = (e: PointerEvent) => {
+      const p = pending.current;
+      if (!p || e.pointerId !== p.id) return;
+      pending.current = null;
+      if (!drag) return;
+      const to = spotAt(e.clientX, e.clientY);
+      setDrag(null);
+      justDragged.current = true;
+      window.setTimeout(() => (justDragged.current = false), 0);
+      if (!to) return;
+      move(p.sec, p.idx, to.sec, to.idx == null ? null : to.idx + (to.after ? 1 : 0));
+    };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  });
 
   const pickerSection = sections.find((s) => s.id === picker);
   const placed = new Set(sections.flatMap((s) => s.items));
@@ -184,69 +235,56 @@ export function HomeSections({
   // Items on no heading yet come first.
   candidates.sort((a, b) => Number(placed.has(a)) - Number(placed.has(b)));
 
-  // A plain render function, not a component: the card must not remount while it is being dragged.
-  const card = (item: string, sec: string, idx: number) => {
+  const cardParts = (item: string) => {
     const sc = shortcutOf(item);
     const t = sc ? null : tiles[item];
     if (!sc && !t) return null;
-    const label = sc ? actionLabel(sc) : t!.label;
-    const sub = sc ? sc.sub : t!.value;
-    const icon = sc ? sc.icon : t!.icon;
-    const dragging = drag && drag.sec === sec && drag.idx === idx;
+    return { sc, t, label: sc ? actionLabel(sc) : t!.label, sub: sc ? sc.sub : t!.value, icon: sc ? sc.icon : t!.icon };
+  };
+  const cardFace = (c: NonNullable<ReturnType<typeof cardParts>>) => (
+    <>
+      <span className="hcard-ic">
+        <AppIcon name={c.icon} size={view === 'big' ? 40 : 30} />
+        {c.sc && (
+          <span className="hcard-plus" aria-hidden="true">
+            <Icon name="plus" size={10} />
+          </span>
+        )}
+      </span>
+      <span className="hcard-t">
+        <b>{c.label}</b>
+        {view === 'big' && c.sub && <small>{c.sub}</small>}
+      </span>
+    </>
+  );
+
+  // A plain render function, not a component: the card must not remount while it is being dragged.
+  const card = (item: string, sec: string, idx: number) => {
+    const c = cardParts(item);
+    if (!c) return null;
+    const o = drag && drag.over;
+    const self = !!drag && drag.sec === sec && drag.idx === idx;
+    const mark = o && o.sec === sec && o.idx === idx && !self ? (o.after ? 'over-after' : 'over') : '';
     return (
-      <div
-        key={item + ':' + idx}
-        className={`hcard-cell ${over === sec + ':' + idx ? 'over' : ''} ${dragging ? 'lifted' : ''}`}
-        draggable={editing}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', item);
-          setDrag({ sec, idx });
-        }}
-        onDragEnd={() => {
-          setDrag(null);
-          setOver(null);
-        }}
-        onDragOver={(e) => {
-          if (!drag) return;
-          e.preventDefault();
-          e.stopPropagation();
-          setOver(sec + ':' + idx);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          drop(sec, idx);
-        }}
-      >
+      <div key={item + ':' + idx} data-hcard={idx} data-sec={sec} className={`hcard-cell ${mark} ${self ? 'lifted' : ''}`}>
         <button
           type="button"
-          className={`hcard ${sc ? 'act' : ''}`}
-          title={sub ? `${label} — ${sub}` : label}
+          className={`hcard ${c.sc ? 'act' : ''}`}
+          title={c.sub ? `${c.label} — ${c.sub}` : c.label}
+          onPointerDown={(e) => onPointerDown(e, sec, idx)}
           onClick={() => {
-            if (editing) return;
-            if (sc) runShortcut(sc);
-            else openTile(t!);
+            if (editing || justDragged.current) return;
+            if (c.sc) runShortcut(c.sc);
+            else openTile(c.t!);
           }}
         >
-          <span className="hcard-ic">
-            <AppIcon name={icon} size={view === 'big' ? 40 : 30} />
-            {sc && (
-              <span className="hcard-plus" aria-hidden="true">
-                <Icon name="plus" size={10} />
-              </span>
-            )}
-          </span>
-          <span className="hcard-t">
-            <b>{label}</b>
-            {view === 'big' && sub && <small>{sub}</small>}
-          </span>
+          {cardFace(c)}
         </button>
         {editing && (
           <button
             type="button"
             className="tile-x hcard-x"
-            aria-label={`Remove ${label} from this heading`}
+            aria-label={`Remove ${c.label} from this heading`}
             onClick={() => patch(sec, (s) => ({ ...s, items: s.items.filter((_, i) => i !== idx) }))}
           >
             ×
@@ -256,24 +294,18 @@ export function HomeSections({
     );
   };
 
+  const carried = drag ? cardParts((sections.find((x) => x.id === drag.sec) || { items: [] as string[] }).items[drag.idx]) : null;
+
   return (
-    <div className={`hsections ${view === 'big' ? 'big' : ''} ${editing ? 'editing' : ''}`}>
+    <div className={`hsections ${view === 'big' ? 'big' : ''} ${editing ? 'editing' : ''} ${drag ? 'dragging' : ''}`}>
       {sections.map((s, si) => {
         const items = s.items.filter(allowed);
         if (!editing && !items.length) return null;
         return (
           <section
             key={s.id}
-            className={`hsec ${over === s.id ? 'over' : ''}`}
-            onDragOver={(e) => {
-              if (!drag) return;
-              e.preventDefault();
-              setOver(s.id);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              drop(s.id, null);
-            }}
+            data-hsec={s.id}
+            className={`hsec ${drag && drag.over && drag.over.sec === s.id ? 'over' : ''}`}
           >
             <div className="hsec-h">
               {editing ? (
@@ -329,6 +361,16 @@ export function HomeSections({
           <Icon name="plus" /> Add a heading
         </button>
       )}
+
+      {/* The card being carried. It lives on <body> so nothing on the page can pin it in place. */}
+      {drag &&
+        carried &&
+        createPortal(
+          <div className={`hcard-ghost ${view === 'big' ? 'big' : ''}`} style={{ left: drag.x, top: drag.y, width: drag.w }} aria-hidden="true">
+            <div className={`hcard ${carried.sc ? 'act' : ''}`}>{cardFace(carried)}</div>
+          </div>,
+          document.body
+        )}
 
       {pickerSection && (
         <div className="overlay" onClick={() => setPicker(null)}>
