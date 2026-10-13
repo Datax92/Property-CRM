@@ -55,7 +55,8 @@ export function PrintSheet({
       else hi = mid;
     }
     fits(Math.floor(lo * 1000) / 1000);
-  });
+    // A printed page is laid out once, when it is put up for printing.
+  }, []);
 
   return (
     <div className={`mrp-page ${className}`}>
