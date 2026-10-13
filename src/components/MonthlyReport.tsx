@@ -134,10 +134,12 @@ export function MonthlyReport({
     );
   };
 
-  const body = (forPrint: boolean) => (
+  const body = (forPrint: boolean, part: 'all' | 'top' | 'table' = 'all') => (
     <>
       {cur ? (
         <>
+          {part !== 'table' && (
+          <>
           <div className="kpis mr-kpis">
             {compare('Revenue', cur.revenue, prev && prev.revenue)}
             {compare('Gross profit', cur.gross, prev && prev.gross)}
@@ -164,6 +166,7 @@ export function MonthlyReport({
                     { key: 'target', label: 'Target', c: 'var(--s2)' },
                   ]}
                   label="Net profit against target by month"
+                  width={forPrint ? 560 : undefined}
                 />
               </div>
             </div>
@@ -173,12 +176,17 @@ export function MonthlyReport({
                 <span className="sub">change on the month before</span>
               </div>
               <div className="panel-b">
-                <ChartBars signed rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))} label="Growth by month" />
+                <ChartBars signed rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))} label="Growth by month" width={forPrint ? 560 : undefined} />
               </div>
             </div>
           </div>
 
-          <div className={`panel ${forPrint ? 'mrp-table' : ''}`}>
+          </>
+          )}
+
+          {part !== 'top' && (
+          <>
+          <div className="panel">
             <div className="tblwrap">
               <table className="tbl mr-tbl">
                 <thead>
@@ -228,6 +236,8 @@ export function MonthlyReport({
             what the business has at each month end — unsold plots at landed cost, assets at what was paid for them, bank
             and cash, and what buyers still owe. Growth is the change in that total from the month before.
           </p>
+          </>
+          )}
         </>
       ) : (
         <div className="empty" style={{ padding: '24px' }}>
@@ -316,30 +326,44 @@ export function MonthlyReport({
             setExtra(false);
           }}
           page="A4 landscape"
-          margin="7mm"
+          margin="0"
         >
           <div className="mr-print">
-            <div className="mrp-head">
-              <div className="mrp-brand">
-                <BrandBanner />
+            <div className="mrp-page">
+              <div className="mrp-head">
+                <div className="mrp-brand">
+                  <BrandBanner />
+                </div>
+                <div className="mrp-meta">
+                  <span>Printed {M.fmtDate(M.TODAY)}</span>
+                  <span>{M.COMPANY_PHONE}</span>
+                  <span>{M.COMPANY_EMAIL}</span>
+                </div>
               </div>
-              <div className="mrp-meta">
-                <span>Printed {M.fmtDate(M.TODAY)}</span>
-                <span>{M.COMPANY_PHONE}</span>
-                <span>{M.COMPANY_EMAIL}</span>
+              <div className="mrp-band">
+                <div>
+                  <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'}</span>
+                  <b>{cur.full}</b>
+                </div>
+                <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
               </div>
+              {extra && printTop}
+              {body(true, 'top')}
+              <div className="mrp-pageno">Page 1 of 2</div>
             </div>
-            <div className="mrp-band">
-              <div>
-                <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'}</span>
-                <b>{cur.full}</b>
+            <div className="mrp-page">
+              <div className="mrp-band slim">
+                <div>
+                  <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'} · MONTH BY MONTH</span>
+                  <b>{year}</b>
+                </div>
+                <span>{M.COMPANY}</span>
               </div>
-              <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
-            </div>
-            {extra && printTop}
-            {body(true)}
-            <div className="mrp-foot">
-              <BrandFooter />
+              {body(true, 'table')}
+              <div className="mrp-foot">
+                <BrandFooter />
+              </div>
+              <div className="mrp-pageno">Page 2 of 2</div>
             </div>
           </div>
         </PrintNow>

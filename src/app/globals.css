@@ -2108,7 +2108,7 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-target-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 1.4fr); gap: 10px; align-items: end; }
 .mr-target-sum { font-size: 13px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding-bottom: 8px; }
 @media (max-width: 900px) { .mr-target-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mr-target-sum { grid-column: 1 / -1; } }
-@media screen { .print-now .mr-print { width: 1090px; } }
+@media screen { .print-now .mr-print { width: 297mm; } }
 .mr-print { font-size: 9pt; color: #111; background: #fff; }
 .mr-print-head svg { width: 100%; height: auto; max-height: 70px; }
 .mr-print-title { display: flex; justify-content: space-between; align-items: baseline; border-top: 3px solid #1F2456; border-bottom: 1px solid #ccc; padding: 5px 0; margin: 4px 0 8px; font-size: 9pt; color: #444; }
@@ -2119,7 +2119,6 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-print .kpi .k, .mr-print .kpi .f { font-size: 7.5pt; }
 .mr-print .mr-charts.print { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .mr-print .mr-charts .panel-b { padding: 4px 8px; }
-.mr-print .mr-charts svg { max-height: 150px; }
 .mr-print .panel-h { padding: 5px 8px; }
 .mr-print .panel-h h3 { font-size: 9.5pt; }
 .mr-print .mr-tbl { font-size: 7.6pt; }
@@ -2253,6 +2252,18 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mr-print .mr-tbl thead th { background: #1F2456 !important; color: #fff !important; }
 .mr-print .mr-tbl th.mr-sel { background: #2B4C9B !important; color: #fff !important; }
 .mr-print .mr-tbl tr.strong td { background: #F3F5FA; }
-.mr-print .mrp-table { break-before: page; page-break-before: always; margin-top: 4px; }
 .mrp-foot { margin-top: 8px; break-inside: avoid; }
 .mrp-foot svg { width: 100%; height: auto; display: block; }
+
+/* Each printed page is one A4 landscape sheet with its own margins: the page itself has none,
+   so the browser prints no date, title or address of its own. */
+.mrp-page { position: relative; width: 297mm; height: 210mm; padding: 9mm 11mm 10mm; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; background: #fff; break-after: page; page-break-after: always; }
+.mrp-page:last-child { break-after: auto; page-break-after: auto; }
+.mrp-band.slim { padding: 6px 12px; }
+.mrp-band.slim b { font-size: 12pt; }
+.mrp-pageno { position: absolute; right: 11mm; bottom: 4mm; font-size: 7pt; color: #888; }
+.mr-print .mr-charts.print .panel-b { padding: 6px 10px 2px; }
+.mr-print .mr-charts.print svg { width: 100%; height: auto; display: block; }
+.mrp-page .mrp-foot { margin-top: auto; padding-top: 8px; }
+.mrp-page .mr-tbl { font-size: 8pt; }
+.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 3px 6px; }
