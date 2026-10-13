@@ -21,7 +21,8 @@ export function CategoriesPage({ kind }: { kind: 'expense' | 'income' }) {
 
   const rows: any[] = income ? M.incomeCategoryStats(r, f) : M.expenseCategoryStats(r, f);
   const total = rows.filter((x) => income || x.business).reduce((a, x) => a + x.amount, 0);
-  const used = rows.filter((x) => x.amount > 0).sort((a, b) => b.amount - a.amount);
+  // Personal spending is not a business cost, so it is listed but not in the chart or the shares.
+  const used = rows.filter((x) => x.amount > 0 && (income || x.business)).sort((a, b) => b.amount - a.amount);
   const chart = used.slice(0, 5).map((x, i) => ({ k: x.name, v: x.amount, c: SC[i], go: income ? 'income/register' : 'costs/expenses' }));
   const rest = used.slice(5).reduce((a, x) => a + x.amount, 0);
   if (rest > 0) chart.push({ k: 'Other categories', v: rest, c: SC[5], go: income ? 'income/register' : 'costs/expenses' });

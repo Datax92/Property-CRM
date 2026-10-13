@@ -143,6 +143,9 @@ export function FinancePage() {
           <div className="panel-b">
             <ChartBarGroups
               width={1180}
+              // Grid lines every 5 Lakh, and each bar's amount on it, so the small months can be read.
+              step={500000}
+              values
               label="Revenue, expenses and net profit by period"
               rows={rows}
               series={[

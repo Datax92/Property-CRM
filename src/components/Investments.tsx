@@ -54,9 +54,22 @@ export function InvestmentKpis({ rows }: { rows: any[] }) {
   );
 }
 
+/** The investment graphs, each of which can be left out (e.g. of a print). */
+export const INVESTMENT_CHARTS = [
+  ['portfolio', 'My portfolio'],
+  ['gains', 'Where the gains are'],
+  ['vsworth', 'Invested vs worth today'],
+  ['pnl', 'Profit & loss by kind'],
+] as const;
+export type InvestmentChart = (typeof INVESTMENT_CHARTS)[number][0];
+
+/** A gain as a percentage of what went in, with its sign. */
+const signedPct = (n: number) => (isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(2)}%` : '');
+
 /** The investment graphs: each holding, invested against worth by kind, gain or loss by kind,
-    and where the gains are. */
-export function InvestmentCharts({ rows }: { rows: any[] }) {
+    and where the gains are. Panels side by side are the same height, their charts on one line. */
+export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: InvestmentChart[]; width?: number }) {
+  const on = (key: InvestmentChart) => !show || show.indexOf(key) >= 0;
   const { numbers } = useApp();
   const byType = M.investmentsByType(rows);
   const kinds = byType.map((t: any) => ({ k: t.type, c: kindColour(t.type) }));
@@ -78,9 +91,7 @@ export function InvestmentCharts({ rows }: { rows: any[] }) {
     );
   }
 
-  return (
-    <>
-      <div className="grid c2u">
+  const portfolio = on('portfolio') && (
         <div className="panel">
           <div className="panel-h">
             <h3>My portfolio</h3>
@@ -89,17 +100,21 @@ export function InvestmentCharts({ rows }: { rows: any[] }) {
           <div className="panel-b">
             <ChartBars
               label="Amount invested in each holding"
+              width={width}
+              low={!!width}
               legend={kinds}
               rows={rows.map((x) => ({
                 label: x.name,
                 v: x.invested,
                 c: kindColour(x.type),
                 full: `${x.name} · ${x.type}`,
-                sub: `Worth today ${M.fmt(x.worth, numbers)} · ${x.gain >= 0 ? '+' : ''}${x.gainPct.toFixed(2)}%`,
+                sub: `Worth today ${M.fmt(x.worth, numbers)} · ${signedPct(x.gainPct)}`,
               }))}
             />
           </div>
         </div>
+  );
+  const gains = on('gains') && (
         <div className="panel">
           <div className="panel-h">
             <h3>Where the gains are</h3>
@@ -107,7 +122,7 @@ export function InvestmentCharts({ rows }: { rows: any[] }) {
           </div>
           <div className="panel-b">
             {donut.length ? (
-              <div className="grid c2">
+              <div className="grid c2 inv-donut">
                 <ChartDonut items={donut} />
                 <RankedList items={donut} />
               </div>
@@ -118,8 +133,8 @@ export function InvestmentCharts({ rows }: { rows: any[] }) {
             )}
           </div>
         </div>
-      </div>
-      <div className="grid c2" style={{ marginTop: '16px' }}>
+  );
+  const vsworth = on('vsworth') && (
         <div className="panel">
           <div className="panel-h">
             <h3>Invested vs worth today</h3>
@@ -128,32 +143,60 @@ export function InvestmentCharts({ rows }: { rows: any[] }) {
           <div className="panel-b">
             <ChartBarGroups
               label="Amount invested and worth today, by kind of investment"
+              width={width}
+              low={!!width}
+              values
               rows={byType.map((t: any) => ({ label: t.type, invested: t.invested, worth: t.worth }))}
               series={[
-                { key: 'invested', label: 'Invested', c: 'var(--o4)' },
-                { key: 'worth', label: 'Worth today', c: 'var(--o1)' },
+                // Two colours that cannot be mistaken for each other, on screen or on paper.
+                { key: 'invested', label: 'Invested', c: 'var(--brand)' },
+                { key: 'worth', label: 'Worth today', c: 'var(--s4)' },
               ]}
             />
           </div>
         </div>
+  );
+  const pnl = on('pnl') && (
         <div className="panel">
           <div className="panel-h">
             <h3>Profit &amp; loss</h3>
-            <span className="sub">by kind of investment, not yet booked</span>
+            <span className="sub">by kind of investment, not yet booked · % on what went in</span>
           </div>
           <div className="panel-b">
             <ChartBars
               label="Unrealised profit or loss by kind of investment"
               signed
+              width={width}
+              low={!!width}
+              legend={[
+                { k: 'Profit', c: 'var(--good)' },
+                { k: 'Loss', c: 'var(--bad)' },
+              ]}
               rows={byType.map((t: any) => ({
                 label: t.type,
                 v: t.gain,
-                sub: `${t.gain >= 0 ? '+' : ''}${t.gainPct.toFixed(2)}% · ${M.fmtNum(t.count)} ${t.count === 1 ? 'holding' : 'holdings'}`,
+                tag: signedPct(t.gainPct),
+                sub: `${signedPct(t.gainPct)} · ${M.fmtNum(t.count)} ${t.count === 1 ? 'holding' : 'holdings'}`,
               }))}
             />
           </div>
         </div>
+  );
+
+  // A panel left out lets the one beside it take the whole row.
+  const pair = (a: React.ReactNode, b: React.ReactNode, cls: string) =>
+    a && b ? (
+      <div className={`grid ${cls} eq`}>
+        {a}
+        {b}
       </div>
-    </>
+    ) : (
+      a || b || null
+    );
+  return (
+    <div className="inv-charts">
+      {pair(portfolio, gains, 'c2u')}
+      {pair(vsworth, pnl, 'c2')}
+    </div>
   );
 }

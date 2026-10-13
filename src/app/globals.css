@@ -324,7 +324,7 @@ table.tbl td.r { font-variant-numeric: tabular-nums; }
 table.tbl th button { font: inherit; color: inherit; display: inline-flex; gap: 4px; transition: color .12s; }
 table.tbl th button:hover { color: var(--brand-2); }
 table.tbl td {
-  padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; color: #374151;
+  padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; color: var(--ink);
   white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis;
 }
 table.tbl td.wrap { white-space: normal; }
@@ -2109,22 +2109,17 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-target-sum { font-size: 13px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding-bottom: 8px; }
 @media (max-width: 900px) { .mr-target-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mr-target-sum { grid-column: 1 / -1; } }
 @media screen { .print-now .mr-print { width: 297mm; } }
-.mr-print { font-size: 9pt; color: #111; background: #fff; }
+
 .mr-print-head svg { width: 100%; height: auto; max-height: 70px; }
 .mr-print-title { display: flex; justify-content: space-between; align-items: baseline; border-top: 3px solid #1F2456; border-bottom: 1px solid #ccc; padding: 5px 0; margin: 4px 0 8px; font-size: 9pt; color: #444; }
 .mr-print-title b { font-size: 13pt; color: #1F2456; letter-spacing: .06em; margin-right: 10px; }
 .mr-print .kpis { grid-template-columns: none !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 8px; }
-.mr-print .kpi { padding: 6px 8px; }
-.mr-print .kpi .v { font-size: 13pt; }
-.mr-print .kpi .k, .mr-print .kpi .f { font-size: 7.5pt; }
+
 .mr-print .mr-charts.print { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
 .mr-print .mr-charts .panel-b { padding: 4px 8px; }
-.mr-print .panel-h { padding: 5px 8px; }
-.mr-print .panel-h h3 { font-size: 9.5pt; }
-.mr-print .mr-tbl { font-size: 7.6pt; }
-.mr-print .mr-tbl td, .mr-print .mr-tbl th { padding: 2.5px 5px; }
+
 .mr-print .tblwrap { overflow: visible; }
-.mr-print .mr-note { font-size: 7.5pt; }
+
 .exp-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; font-size: 12.5px; }
 
 /* ---- dashboard: cash in hand and cash in bank, and the sections shown ---- */
@@ -2265,12 +2260,9 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mr-print .mr-charts.print .panel-b { padding: 6px 10px 2px; }
 .mr-print .mr-charts.print svg { width: 100%; height: auto; display: block; }
 .mrp-page .mrp-foot { margin-top: auto; padding-top: 8px; }
-.mrp-page .mr-tbl { font-size: 8pt; }
-.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 3px 6px; }
+
 .mrp-page .tblwrap { overflow: visible; }
-.mrp-page .mr-tbl { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 7.4pt; }
-.mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 150px; white-space: normal; }
-.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 2.5px 4px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
 .mrp-page .mr-tbl td[colspan] { white-space: normal; }
 
 /* ------------------------------ expense and income categories ------------------------------ */
@@ -2285,3 +2277,153 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .catl-addsub { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; border: 1px dashed #B6BAC3; font-size: 12.5px; color: var(--brand-2); background: transparent; }
 .catl-addsub:hover { background: var(--brand-wash); }
 .catl td.wrap { max-width: none; }
+
+/* ------------------------------ charts: panels side by side line up ------------------------------ */
+.grid.eq { align-items: stretch; }
+.grid.eq > .panel { display: flex; flex-direction: column; }
+.grid.eq > .panel > .panel-b { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; }
+.grid.eq > .panel > .panel-b > .inv-donut, .grid.eq > .panel > .panel-b > .empty { margin: auto 0; }
+.inv-charts > * + * { margin-top: 16px; }
+.dmore-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.dlab.sm { font-size: 9.5px; }
+.dlab.in { fill: #fff; }
+.dlab.tag { font-size: 10px; font-weight: 700; }
+.dlab.tag.up { fill: var(--good); } .dlab.tag.down { fill: var(--bad); }
+
+/* ---- choosing the rows of the month table, and what goes on the printed dashboard ---- */
+.mr-rows-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 10px; }
+.mr-rows-h .muted { font-size: 12.5px; }
+.mr-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 18px; }
+.mr-rows-sec { grid-column: 1 / -1; margin: 8px 0 2px; }
+.mr-row-pick { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; color: var(--ink); cursor: pointer; }
+.mr-row-pick input { width: 16px; height: 16px; accent-color: var(--brand); flex: 0 0 16px; }
+.mr-row-pick .strong { font-weight: 600; }
+.dprint-pick { margin: 0 0 14px; }
+.dprint-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 28px; }
+.dprint-cols > div { display: grid; align-content: start; gap: 1px; }
+.dprint-cols .kicker { margin-bottom: 4px; }
+.dhero-acts .dhero-pick { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.4); color: #fff; }
+.dhero-acts .dhero-pick:hover, .dhero-acts .dhero-pick.on { background: rgba(255,255,255,.26); }
+
+/* ------------------------------ printed dashboard, report and more details ------------------------------ */
+/* Full black text, sizes that read on paper, and content that fills one sheet per page. */
+.mr-print { font-size: 10pt; color: #000; background: #fff; }
+.mr-print .muted, .mr-print .sub, .mr-print .kicker, .mr-print .k, .mr-print .f, .mr-print .legend .it,
+.mr-print .ranked .pc, .mr-print .alert .d, .mr-print .acctlist .r, .mr-print .panel-h .sub { color: #000 !important; }
+.mrp-fit { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.mrp-meta { color: #000; font-size: 9pt; }
+.mrp-band b { font-size: 17pt; }
+.mrp-band > span { font-size: 9.5pt; color: #fff; }
+.mrp-kicker { font-size: 8.5pt; }
+.mrp-pageno { color: #000; font-size: 8pt; }
+.mr-print .kpi { padding: 7px 10px; }
+.mr-print .kpi .k { font-size: 9pt; font-weight: 600; }
+.mr-print .kpi .v { font-size: 15pt; color: #000; }
+.mr-print .kpi .v.neg, .mr-print .kpi .neg { color: var(--bad); }
+.mr-print .kpi .f { font-size: 8.5pt; }
+.mr-print .mr-chip { font-size: 8.5pt; padding: 0 6px; }
+.mr-print .panel { border: 1px solid #9CA3AF !important; }
+.mr-print .panel-h { padding: 6px 10px; }
+.mr-print .panel-h h3 { font-size: 11.5pt; color: #000; }
+.mr-print .panel-h .sub { font-size: 9pt; }
+.mr-print .legend { margin-bottom: 4px; }
+.mr-print .legend .it { font-size: 9.5pt; }
+.mr-print .ax { font-size: 12.5px; fill: #000; }
+.mr-print .dlab { font-size: 12px; fill: #000; }
+.mr-print .dlab.sm { font-size: 11px; }
+.mr-print .dlab.in { fill: #fff; }
+.mr-print .dlab.tag.up { fill: var(--good); } .mr-print .dlab.tag.down { fill: var(--bad); }
+.mr-print .gridline { stroke: #D1D5DB; }
+.mr-print .axline { stroke: #000; }
+.mr-print .chart svg { width: 100%; height: auto; display: block; }
+.mr-print .mr-charts.print { gap: 10px; margin-bottom: 10px; }
+.mr-print .mr-charts.print .panel { display: flex; flex-direction: column; }
+.mr-print .mr-charts.print .panel-b { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; padding: 6px 10px 4px; }
+.dp-fig span { font-size: 8.5pt; color: #000; font-weight: 600; }
+.dp-fig b { font-size: 15pt; color: #000; }
+.dp-fig i { font-size: 8pt; color: #000; }
+.dp-period { font-size: 8.5pt; color: #000; }
+/* The month table across the page, every figure in full black */
+.mrp-page .tblwrap { overflow: visible; }
+.mrp-page .mr-tbl { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 9.5pt; }
+.mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 190px; white-space: normal; position: static; }
+.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 3px 5px; color: #000; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.mrp-page .mr-tbl td[colspan] { white-space: normal; }
+.mrp-page .mr-tbl .kicker { font-size: 8.5pt; color: #000; }
+.mrp-page .mr-tbl .pos { color: var(--good); } .mrp-page .mr-tbl .neg { color: var(--bad); }
+/* More details on one sheet */
+.dmore.print .grid { gap: 10px; }
+.dmore.print .grid.c2u { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+.dmore.print .grid.c2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.dmore.print .inv-donut { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: center; }
+.dmore.print .inv-donut svg { max-width: 170px !important; }
+.dmore.print .dmore-side { gap: 10px; }
+.dmore.print .sech { margin: 4px 0 6px; }
+.dmore.print .sech h2 { font-size: 12.5pt; color: #000; }
+.dmore.print .sech .sub { font-size: 9pt; color: #000; }
+.dmore.print .kpis { margin-bottom: 10px; }
+.dmore.print .inv-charts > * + * { margin-top: 10px; }
+.dmore.print .ranked .r { font-size: 9.5pt; padding: 3px 0; }
+.dmore.print .alert { padding: 6px 8px; }
+.dmore.print .alert .t { font-size: 9.5pt; }
+.dmore.print .alert .d { font-size: 8.5pt; }
+.dmore.print .acctlist .r { font-size: 9.5pt; }
+.dmore.print .panel-b { padding: 8px 10px; }
+
+/* Pages printed straight from the screen (profit and loss, registers): full black, larger text */
+@media print {
+  body:not(.printing-now) { color: #000; }
+  body:not(.printing-now) table.tbl { font-size: 11pt; }
+  body:not(.printing-now) table.tbl td, body:not(.printing-now) table.tbl th { color: #000 !important; }
+  body:not(.printing-now) .kicker, body:not(.printing-now) .muted, body:not(.printing-now) .panel-h .sub,
+  body:not(.printing-now) .phead p, body:not(.printing-now) .kpi .k, body:not(.printing-now) .kpi .f,
+  body:not(.printing-now) .legend .it, body:not(.printing-now) .note { color: #000 !important; }
+  body:not(.printing-now) .kicker { font-size: 9.5pt; }
+  body:not(.printing-now) .panel-h h3 { font-size: 13pt; }
+  body:not(.printing-now) .ax { fill: #000; font-size: 12px; }
+  body:not(.printing-now) .dlab { fill: #000; font-size: 12px; }
+}
+
+.mrp-slim { margin-top: 6px; padding-top: 4px; border-top: 2.5px solid #D7262E; text-align: center; font-size: 8.5pt; font-weight: 600; color: #000; }
+.mr-print .ax { font-size: 13.5px; }
+
+/* The printed dashboard page: every part on one row of its own, the table close-set */
+.mr-print .dp-figs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.mr-print .dp-fig { padding: 4px 7px; }
+.mr-print .dp-fig b { font-size: 13pt; white-space: nowrap; }
+.mr-print .dp-period { margin-top: -2px; }
+.mr-print .mr-kpis { margin-bottom: 8px; gap: 6px; }
+.mr-print .mr-kpis .kpi { padding: 5px 8px; }
+.mr-print .mr-kpis .kpi .v { font-size: 13pt; }
+.mr-print .mr-kpis .kpi .f { margin-top: 2px; gap: 2px 4px; line-height: 1.25; }
+.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 2px 5px; line-height: 1.25; }
+.mrp-page .mr-tbl td[colspan] { padding-top: 4px !important; }
+.mrp-brand svg { max-height: 54px; }
+.mrp-band { padding: 6px 12px; }
+.mrp-page { padding: 8mm 10mm 8mm; }
+
+.mr-print .dp-fig span, .mr-print .dp-fig i { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dmore.print .dmore-top { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 10px; }
+.dmore.print .inv-donut { grid-template-columns: 128px minmax(0, 1fr); gap: 10px; }
+.dmore.print .inv-donut svg { max-width: 128px !important; }
+.dmore.print .kpis .kpi { padding: 5px 9px; }
+.dmore.print .kpis .kpi .v { font-size: 13pt; }
+
+/* One row of cards on the printed dashboard: the month's comparisons, then cash and what is owed */
+.mr-print .mr-kpis .kpi .k { font-size: 8.5pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mr-print .mr-kpis .kpi .v { font-size: 12pt; white-space: nowrap; }
+.mr-print .mr-kpis .kpi .f { font-size: 7.5pt; }
+.mr-print .mr-kpis .mr-chip { font-size: 7.5pt; }
+.mr-print .dp-card { border-top-color: #1F2456; background: #F7F8FC; }
+.mrp-page .mr-tbl { font-size: 9pt; }
+.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 1.5px 5px; line-height: 1.2; }
+.mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 205px; }
+
+.grid.eq > .panel > .panel-b.tight { justify-content: flex-start; }
+.mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 215px; white-space: nowrap; text-overflow: ellipsis; }
+.dmore.print .ranked .nm { white-space: normal; overflow: visible; }
+.dmore.print .ranked .vv { white-space: nowrap; }
+/* The month table printed on its own page: larger, as there is room for it */
+.mrp-page.solo .mr-tbl { font-size: 11pt; }
+.mrp-page.solo .mr-tbl td, .mrp-page.solo .mr-tbl th { padding: 3.5px 6px; }
+.mrp-page.solo .mr-tbl th:first-child, .mrp-page.solo .mr-tbl td:first-child { width: 250px; }

@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChartBarGroups, ChartBars } from './Charts';
 import { Icon } from './Icons';
-import { BrandBanner, BrandFooter } from './Brand';
 import { PrintNow } from './PrintNow';
+import { PrintSheet } from './PrintSheet';
 import * as M from '../lib/re-data';
 
 /* Monthly comparison report: the month picked against the month before it and every earlier
@@ -28,16 +28,40 @@ function loadTarget(): Target {
 
 const pct = (n: number) => (isFinite(n) ? `${n.toFixed(2)}%` : '—');
 
+/* Rows of the month table someone has chosen not to see (or print), remembered in this browser. */
+const HIDDEN_KEY = 'monthly-report-hidden-rows-v1';
+function loadHidden(): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The parts of the dashboard's printed first page. */
+export type ReportParts = { cards: boolean; charts: boolean; table: boolean };
+const ALL_PARTS: ReportParts = { cards: true, charts: true, table: true };
+
 export function MonthlyReport({
   printSignal = 0,
   printTitle = 'MONTHLY COMPARISON REPORT',
   printTop,
+  printParts = ALL_PARTS,
+  printAfter,
+  printFigures,
 }: {
   /** Bumped from outside (the dashboard's "Print dashboard") to print this report. */
   printSignal?: number;
   printTitle?: string;
   /** Printed above the report, e.g. the dashboard's key figures. */
   printTop?: React.ReactNode;
+  /** Which parts of the report go on the dashboard's printed page. */
+  printParts?: ReportParts;
+  /** Further printed pages after the dashboard's, e.g. More details. */
+  printAfter?: React.ReactNode;
+  /** Printed in the same row as the month's cards, e.g. cash and what is owed. */
+  printFigures?: React.ReactNode;
 } = {}) {
   const { effectiveFilters: f, numbers } = useApp();
   const thisYear = M.TODAY.getFullYear();
@@ -45,7 +69,20 @@ export function MonthlyReport({
   const [target, setTarget] = useState<Target>({ ...M.DEFAULT_MONTHLY_TARGET });
   const [editTarget, setEditTarget] = useState(false);
   const [printing, setPrinting] = useState(false);
-  useEffect(() => setTarget(loadTarget()), []);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [pickRows, setPickRows] = useState(false);
+  useEffect(() => {
+    setTarget(loadTarget());
+    setHidden(loadHidden());
+  }, []);
+  const saveHidden = (h: string[]) => {
+    setHidden(h);
+    try {
+      window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(h));
+    } catch {
+      /* not remembered */
+    }
+  };
   const [extra, setExtra] = useState(false);
   useEffect(() => {
     if (printSignal > 0) {
@@ -78,37 +115,44 @@ export function MonthlyReport({
   const money = (n: number) => M.fmt(n, numbers);
   const sum = (key: string) => months.reduce((a, m) => a + (m[key] || 0), 0);
 
-  type Row = { label: string; kind?: 'h' | 't' | 'g'; get?: (m: any) => number; total?: number | null; fmt?: (n: number) => string; tone?: boolean };
-  const rows: Row[] = [
-    { label: 'PROFIT — AS IN THE P&L', kind: 'h' },
-    { label: 'Revenue', get: (m) => m.revenue, total: sum('revenue') },
-    ...(sum('otherIncome') > 0 ? [{ label: '  of which other income', get: (m: any) => m.otherIncome, total: sum('otherIncome') }] : []),
-    { label: 'Plots sold', get: (m) => m.sold, total: sum('sold'), fmt: (n) => M.fmtNum(n) },
-    { label: 'Landed cost of plots sold', get: (m) => -m.landed, total: -sum('landed') },
-    { label: 'Selling costs (§236C, agent, other)', get: (m) => -m.selling, total: -sum('selling') },
-    { label: 'Gross profit', kind: 't', get: (m) => m.gross, total: sum('gross'), tone: true },
-    { label: 'Company expenses', get: (m) => -m.expenses, total: -sum('expenses') },
-    { label: 'Tax, Zakat & charity', get: (m) => -m.deductions, total: -sum('deductions') },
-    { label: 'Net profit', kind: 'g', get: (m) => m.net, total: sum('net'), tone: true },
-    { label: 'Net margin', get: (m) => m.margin, total: M.pctOf(sum('net'), sum('revenue')), fmt: pct },
+  type Row = { id: string; label: string; kind?: 'h' | 't' | 'g'; get?: (m: any) => number; total?: number | null; fmt?: (n: number) => string; tone?: boolean };
+  const allRows: Row[] = [
+    { id: 'h-profit', label: 'PROFIT — AS IN THE P&L', kind: 'h' },
+    { id: 'revenue', label: 'Revenue', get: (m) => m.revenue, total: sum('revenue') },
+    ...(sum('otherIncome') > 0 ? [{ id: 'otherIncome', label: '  of which other income', get: (m: any) => m.otherIncome, total: sum('otherIncome') }] : []),
+    { id: 'sold', label: 'Plots sold', get: (m) => m.sold, total: sum('sold'), fmt: (n) => M.fmtNum(n) },
+    { id: 'landed', label: 'Landed cost of plots sold', get: (m) => -m.landed, total: -sum('landed') },
+    { id: 'selling', label: 'Selling costs (§236C, agent, other)', get: (m) => -m.selling, total: -sum('selling') },
+    { id: 'gross', label: 'Gross profit', kind: 't', get: (m) => m.gross, total: sum('gross'), tone: true },
+    { id: 'expenses', label: 'Company expenses', get: (m) => -m.expenses, total: -sum('expenses') },
+    { id: 'deductions', label: 'Tax, Zakat & charity', get: (m) => -m.deductions, total: -sum('deductions') },
+    { id: 'net', label: 'Net profit', kind: 'g', get: (m) => m.net, total: sum('net'), tone: true },
+    { id: 'margin', label: 'Net margin', get: (m) => m.margin, total: M.pctOf(sum('net'), sum('revenue')), fmt: pct },
     // The owner's personal spending is drawn out of profit, not a cost of earning it.
     ...(sum('personal') > 0
       ? [
-          { label: 'Personal spending (owner)', get: (m: any) => -m.personal, total: -sum('personal') },
-          { label: 'Left after personal spending', kind: 't' as const, get: (m: any) => m.afterPersonal, total: sum('afterPersonal'), tone: true },
+          { id: 'personal', label: 'Personal spending (owner)', get: (m: any) => -m.personal, total: -sum('personal') },
+          { id: 'afterPersonal', label: 'Left after personal spending', kind: 't' as const, get: (m: any) => m.afterPersonal, total: sum('afterPersonal'), tone: true },
         ]
       : []),
-    { label: `Target profit (${pct(rep.targetPct)} of ${money(+target.capital || 0)})`, get: (m) => m.target, total: sum('target') },
-    { label: 'Ahead / behind target', kind: 't', get: (m) => m.vsTarget, total: sum('vsTarget'), tone: true },
-    { label: 'WHAT THE BUSINESS HOLDS — AT MONTH END', kind: 'h' },
-    { label: 'Property stock (landed cost)', get: (m) => m.holdings.property, total: null },
-    ...rep.types.map((t: string) => ({ label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
-    { label: 'Cash & bank', get: (m) => m.holdings.cash, total: null },
-    { label: 'Receivables', get: (m) => m.holdings.receivable, total: null },
-    { label: 'Total', kind: 't', get: (m) => m.holdings.total, total: null },
-    { label: 'Growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
-    { label: 'Growth %', get: (m) => m.growthPct, total: M.pctOf(sum('growth'), rep.opening.total), fmt: pct },
+    { id: 'target', label: `Target profit (${pct(rep.targetPct)} of ${money(+target.capital || 0)})`, get: (m) => m.target, total: sum('target') },
+    { id: 'vsTarget', label: 'Ahead / behind target', kind: 't', get: (m) => m.vsTarget, total: sum('vsTarget'), tone: true },
+    { id: 'h-holds', label: 'WHAT THE BUSINESS HOLDS — AT MONTH END', kind: 'h' },
+    { id: 'property', label: 'Property stock (landed cost)', get: (m) => m.holdings.property, total: null },
+    ...rep.types.map((t: string) => ({ id: 'type:' + t, label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
+    { id: 'cash', label: 'Cash & bank', get: (m) => m.holdings.cash, total: null },
+    { id: 'receivable', label: 'Receivables', get: (m) => m.holdings.receivable, total: null },
+    { id: 'holdTotal', label: 'Total', kind: 't', get: (m) => m.holdings.total, total: null },
+    { id: 'growth', label: 'Growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
+    { id: 'growthPct', label: 'Growth %', get: (m) => m.growthPct, total: M.pctOf(sum('growth'), rep.opening.total), fmt: pct },
   ];
+  // Rows chosen not to show are left out on screen and in print; a heading goes with its last row.
+  const rows = allRows.filter((row, i) => {
+    if (row.kind !== 'h') return hidden.indexOf(row.id) < 0;
+    const next = allRows.slice(i + 1);
+    const end = next.findIndex((x) => x.kind === 'h');
+    return (end < 0 ? next : next.slice(0, end)).some((x) => hidden.indexOf(x.id) < 0);
+  });
 
   const compare = (label: string, a: number, b: number | null, opts: { fmt?: (n: number) => string; good?: 'up' | 'down' } = {}) => {
     const show = opts.fmt || money;
@@ -134,25 +178,11 @@ export function MonthlyReport({
     );
   };
 
-  const letterhead = (
-    <div className="mrp-head">
-      <div className="mrp-brand">
-        <BrandBanner />
-      </div>
-      <div className="mrp-meta">
-        <span>Printed {M.fmtDate(M.TODAY)}</span>
-        <span>{M.COMPANY_PHONE}</span>
-        <span>{M.COMPANY_EMAIL}</span>
-      </div>
-    </div>
-  );
-
-  const body = (forPrint: boolean, part: 'all' | 'top' | 'table' = 'all') => (
+  const body = (forPrint: boolean, parts: ReportParts = ALL_PARTS) => (
     <>
       {cur ? (
         <>
-          {part !== 'table' && (
-          <>
+          {parts.cards && (
           <div className="kpis mr-kpis">
             {compare('Revenue', cur.revenue, prev && prev.revenue)}
             {compare('Gross profit', cur.gross, prev && prev.gross)}
@@ -163,9 +193,12 @@ export function MonthlyReport({
             {compare('Against target', cur.vsTarget, prev && prev.vsTarget)}
             {compare('Business holds', cur.holdings.total, prev && prev.holdings.total)}
             {compare('Growth in the month', cur.growth, prev && prev.growth)}
+            {forPrint && printFigures}
           </div>
+          )}
 
-          <div className={forPrint ? 'mr-charts print' : 'grid c2 mr-charts'}>
+          {parts.charts && (
+          <div className={forPrint ? 'mr-charts print' : 'grid c2 eq mr-charts'}>
             <div className="panel">
               <div className="panel-h">
                 <h3>Net profit against target</h3>
@@ -179,7 +212,8 @@ export function MonthlyReport({
                     { key: 'target', label: 'Target', c: 'var(--s2)' },
                   ]}
                   label="Net profit against target by month"
-                  width={forPrint ? 620 : undefined}
+                  width={forPrint ? 680 : undefined}
+                  low={forPrint}
                 />
               </div>
             </div>
@@ -189,22 +223,30 @@ export function MonthlyReport({
                 <span className="sub">change on the month before</span>
               </div>
               <div className="panel-b">
-                <ChartBars signed rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))} label="Growth by month" width={forPrint ? 620 : undefined} />
+                <ChartBars
+                  signed
+                  rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))}
+                  legend={[
+                    { k: 'Grew', c: 'var(--good)' },
+                    { k: 'Fell', c: 'var(--bad)' },
+                  ]}
+                  label="Growth by month"
+                  width={forPrint ? 680 : undefined}
+                  low={forPrint}
+                />
               </div>
             </div>
           </div>
-
-          </>
           )}
 
-          {part !== 'top' && (
+          {parts.table && (
           <>
           <div className="panel">
             <div className="tblwrap">
               <table className="tbl mr-tbl">
                 <thead>
                   <tr>
-                    <th>{year}</th>
+                    <th>{forPrint ? `${year} · amounts in PKR` : year}</th>
                     {months.map((m, i) => (
                       <th key={m.month} className={`r ${i === sel ? 'mr-sel' : ''}`}>
                         {m.label}
@@ -224,7 +266,8 @@ export function MonthlyReport({
                         </tr>
                       );
                     }
-                    const show = row.fmt || money;
+                    // On paper the currency is named once, in the corner, so every figure fits its column.
+                    const show = row.fmt || (forPrint ? (n: number) => money(n).replace('PKR ', '') : money);
                     const cell = (v: number) => (
                       <span className={row.tone ? (v > 0 ? 'pos' : v < 0 ? 'neg' : '') : ''}>{show(v)}</span>
                     );
@@ -244,11 +287,13 @@ export function MonthlyReport({
               </table>
             </div>
           </div>
+          {!forPrint && (
           <p className="muted mr-note">
             Profit follows the P&amp;L: each plot counts whole in the month it is sold, as on its cost sheet. Holdings are
             what the business has at each month end — unsold plots at landed cost, assets at what was paid for them, bank
             and cash, and what buyers still owe. Growth is the change in that total from the month before.
           </p>
+          )}
           </>
           )}
         </>
@@ -288,6 +333,14 @@ export function MonthlyReport({
           </select>
           <button type="button" className={`btn sm ${editTarget ? 'pri' : ''}`} onClick={() => setEditTarget(!editTarget)}>
             <Icon name="edit" size={12} /> Target
+          </button>
+          <button
+            type="button"
+            className={`btn sm ${pickRows ? 'pri' : ''}`}
+            onClick={() => setPickRows(!pickRows)}
+            title="Choose which rows of the month table are shown and printed"
+          >
+            <Icon name="filter" size={12} /> Rows{hidden.length ? ` (${M.fmtNum(allRows.filter((x) => x.kind !== 'h' && hidden.indexOf(x.id) >= 0).length)} hidden)` : ''}
           </button>
           <button type="button" className="btn sm" onClick={() => setPrinting(true)} disabled={!cur}>
             <Icon name="print" size={12} /> Print report
@@ -330,6 +383,42 @@ export function MonthlyReport({
         </div>
       )}
 
+      {pickRows && (
+        <div className="panel mr-target" data-noprint="1">
+          <div className="panel-b">
+            <div className="mr-rows-h">
+              <b>Rows of the month table</b>
+              <span className="muted">Untick what is not needed: it is left out here and when printing.</span>
+              <span className="spacer" />
+              <button type="button" className="link" onClick={() => saveHidden([])}>
+                Show all
+              </button>
+              <button type="button" className="btn sm" onClick={() => setPickRows(false)}>
+                Done
+              </button>
+            </div>
+            <div className="mr-rows">
+              {allRows.map((row) =>
+                row.kind === 'h' ? (
+                  <span key={row.id} className="kicker mr-rows-sec">
+                    {row.label}
+                  </span>
+                ) : (
+                  <label key={row.id} className="mr-row-pick">
+                    <input
+                      type="checkbox"
+                      checked={hidden.indexOf(row.id) < 0}
+                      onChange={(e) => saveHidden(e.target.checked ? hidden.filter((x) => x !== row.id) : [...hidden, row.id])}
+                    />
+                    <span className={row.kind ? 'strong' : ''}>{row.label.trim()}</span>
+                  </label>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mr-body">{body(false)}</div>
 
       {printing && cur && (
@@ -342,49 +431,24 @@ export function MonthlyReport({
           margin="0"
         >
           <div className="mr-print">
-            {/* Print dashboard: the key figures and charts, then the month table. Print report: the month table only. */}
-            {extra && (
-              <div className="mrp-page">
-                {letterhead}
-                <div className="mrp-band">
-                  <div>
-                    <span className="mrp-kicker">{printTitle}</span>
-                    <b>{cur.full}</b>
-                  </div>
-                  <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
-                </div>
+            {/* Print dashboard: the whole dashboard on one page, then any further pages (More details).
+                Print report: the month table alone. */}
+            {extra ? (
+              <PrintSheet
+                kicker={printTitle}
+                title={cur.full}
+                sub={prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}
+                pageNo={printAfter ? 'Page 1 of 2' : undefined}
+              >
                 {printTop}
-                {body(true, 'top')}
-                <div className="mrp-pageno">Page 1 of 2</div>
-              </div>
+                {body(true, printParts)}
+              </PrintSheet>
+            ) : (
+              <PrintSheet className="solo" kicker="MONTHLY COMPARISON REPORT" title={`${year}, month by month`} sub={`${cur.full} highlighted`}>
+                {body(true, { cards: false, charts: false, table: true })}
+              </PrintSheet>
             )}
-            <div className="mrp-page">
-              {extra ? (
-                <div className="mrp-band slim">
-                  <div>
-                    <span className="mrp-kicker">MONTHLY COMPARISON REPORT · MONTH BY MONTH</span>
-                    <b>{year}</b>
-                  </div>
-                  <span>{M.COMPANY}</span>
-                </div>
-              ) : (
-                <>
-                  {letterhead}
-                  <div className="mrp-band">
-                    <div>
-                      <span className="mrp-kicker">MONTHLY COMPARISON REPORT</span>
-                      <b>{year}, month by month</b>
-                    </div>
-                    <span>{cur.full} highlighted · printed {M.fmtDate(M.TODAY)}</span>
-                  </div>
-                </>
-              )}
-              {body(true, 'table')}
-              <div className="mrp-foot">
-                <BrandFooter />
-              </div>
-              {extra && <div className="mrp-pageno">Page 2 of 2</div>}
-            </div>
+            {extra && printAfter}
           </div>
         </PrintNow>
       )}

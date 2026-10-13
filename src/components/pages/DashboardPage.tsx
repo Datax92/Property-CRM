@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { KpiCard, PageShell, PeriodControl, Tag } from '../Shared';
 import { ChartDonut, RankedList } from '../Charts';
@@ -9,8 +9,10 @@ import { AppIcon } from '../AppIcons';
 import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
 import { HomePage } from './HomePage';
-import { InvestmentKpis, InvestmentCharts } from '../Investments';
-import { MonthlyReport } from '../MonthlyReport';
+import { InvestmentKpis, InvestmentCharts, INVESTMENT_CHARTS, InvestmentChart } from '../Investments';
+import { MonthlyReport, ReportParts } from '../MonthlyReport';
+import { PrintNow } from '../PrintNow';
+import { PrintSheet } from '../PrintSheet';
 
 /* A figure on the dashboard: an icon, what it is, the amount, and a line under it. */
 function Figure({ icon, k, v, f, tone, go, numbers }: { icon: string; k: string; v: number; f?: string; tone?: string; go?: string; numbers: any }) {
@@ -36,6 +38,268 @@ function Figure({ icon, k, v, f, tone, go, numbers }: { icon: string; k: string;
   );
 }
 
+/* What goes on the printed dashboard: the parts of its first page and the sections of More
+   details on the second (none of them: one page). Remembered in this browser. */
+const MORE_SECTIONS = [
+  ['money', 'Where the money went'],
+  ['attention', 'Needs attention'],
+  ['cash', 'Cash & bank'],
+  ['invKpis', 'Investment figures'],
+  ...INVESTMENT_CHARTS,
+] as const;
+type MoreSection = (typeof MORE_SECTIONS)[number][0];
+type PrintPick = ReportParts & { figures: boolean; more: MoreSection[] };
+const PRINT_KEY = 'dashboard-print-v1';
+const ALL_MORE = MORE_SECTIONS.map((x) => x[0]) as MoreSection[];
+const PRINT_ALL: PrintPick = { figures: true, cards: true, charts: true, table: true, more: ALL_MORE };
+const PRINT_PRESETS: [string, PrintPick][] = [
+  ['Everything', PRINT_ALL],
+  ['Dashboard only', { ...PRINT_ALL, more: [] }],
+  ['Investments only', { figures: false, cards: false, charts: false, table: false, more: ['invKpis', 'portfolio', 'gains', 'vsworth', 'pnl'] }],
+];
+function loadPrintPick(): PrintPick {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(PRINT_KEY) || 'null');
+    if (v && typeof v === 'object') return { ...PRINT_ALL, ...v, more: Array.isArray(v.more) ? v.more.filter((x: any) => ALL_MORE.indexOf(x) >= 0) : ALL_MORE };
+  } catch {
+    /* storage blocked or corrupt */
+  }
+  return PRINT_ALL;
+}
+
+const costGo = (label: string) => {
+  const map: Record<string, string> = {
+    'Employee Salaries': 'costs/salaries',
+    'Office Expenses': 'costs/expenses',
+    'Agent Commission': 'agents/commissions',
+    Marketing: 'costs/expenses',
+    Bills: 'costs/bills',
+    'Property Expenses': 'costs/expenses',
+    'CGT & other tax': 'costs/tax',
+    '§236K tax on purchase': 'costs/tax',
+    '§236C tax on sale': 'costs/tax',
+    'Transfer costs, stamp duty & CVT': 'trading/sheets',
+    'Handling expenses on plots': 'trading/sheets',
+    Zakat: 'costs/zakat',
+    Charity: 'costs/charity',
+    'Other selling costs': 'sales/register',
+  };
+  return map[label] || 'costs/expenses';
+};
+
+const alertGo = (v: string) => {
+  const map: Record<string, string> = {
+    receivables: 'sales/receivables',
+    commissions: 'agents/commissions',
+    tax: 'costs/tax',
+    bills: 'costs/bills',
+    salaries: 'costs/salaries',
+    purchases: 'properties/purchases',
+    inventory: 'properties/inventory',
+    tasks: 'tasks/list',
+  };
+  return map[v] || 'dashboard/alerts';
+};
+
+/** The More details tab, on screen or as a printed page: each section can be left out. */
+function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al: any[]; cb: any; inv: any[]; r: any; show: MoreSection[]; forPrint?: boolean }) {
+  const { goto, openModal, numbers } = useApp();
+  const on = (key: MoreSection) => show.indexOf(key) >= 0;
+  const rawExp = M.expenseBreakdown(k);
+  const exp = rawExp.slice(0, 5).map((x: any, i: number) => ({ k: x[0], v: x[1], c: SC[i] }));
+  const restTot = rawExp.slice(5).reduce((a: number, x: any) => a + x[1], 0);
+  if (restTot > 0) exp.push({ k: 'Other categories', v: restTot, c: SC[5] });
+
+  const money = on('money') && (
+    <div className="panel">
+      <div className="panel-h">
+        <h3>Where the money went</h3>
+        <span className="sub">{M.fmt(k.totalExpenses, numbers)} total</span>
+      </div>
+      <div className="panel-b">
+        {exp.length ? (
+          <div className="grid c2 inv-donut">
+            <ChartDonut items={exp} />
+            <div>
+              <RankedList items={exp.map((x) => ({ ...x, go: costGo(x.k) }))} total={k.totalExpenses} />
+            </div>
+          </div>
+        ) : (
+          <div className="empty" style={{ padding: '20px' }}>Nothing spent in this period.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const attention = on('attention') && (
+    <div className="panel">
+      <div className="panel-h">
+        <h3>Needs attention</h3>
+        <span className="sub">{M.fmtNum(al.length)} items</span>
+      </div>
+      <div className="panel-b tight">
+        {al.length ? (
+          <div className="alerts">
+            {al.slice(0, 4).map((a: any, idx: number) => (
+              <button key={idx} type="button" className={`alert ${a.sev}`} onClick={() => goto(alertGo(a.view))}>
+                <span className="ic">
+                  <Icon name={a.sev === 'good' ? 'ok' : a.sev === 'high' ? 'warn' : 'info'} />
+                </span>
+                <span>
+                  <span className="t">{a.title}</span>
+                  <span className="d">{a.detail}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="empty" style={{ padding: '14px' }}>All clear — nothing needs attention.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const cash = on('cash') && (
+    <div className="panel">
+      <div className="panel-h">
+        <h3>Cash &amp; bank</h3>
+        <span className="sub">{M.fmtDate(r.end)}</span>
+        <span className="spacer" />
+        <button type="button" className="link" data-noprint="1" onClick={() => goto('bank/accounts')}>
+          Bank &amp; Cash
+        </button>
+      </div>
+      <div className="panel-b tight">
+        {cb.accounts.length ? (
+          <div className="acctlist">
+            {(['Cash', 'Bank'] as const).map((kind) => {
+              const of = cb.accounts.filter((b: any) => b.kind === kind);
+              const tot = kind === 'Cash' ? cb.cash : cb.bank;
+              return (
+                <React.Fragment key={kind}>
+                  <div className="r acct-kind">
+                    <span>{kind === 'Cash' ? 'Cash in hand' : 'Cash in bank'}</span>
+                    <b className={tot < 0 ? 'neg' : 'pos'}>{M.fmt(tot, numbers)}</b>
+                  </div>
+                  {of.map((b: any) => (
+                    <div key={b.account} className="r acct-sub">
+                      <span>{b.account}</span>
+                      <b className={b.balance < 0 ? 'neg' : ''}>{M.fmt(b.balance, numbers)}</b>
+                    </div>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+            <div className="r acct-total">
+              <span>Total</span>
+              <b className={cb.total < 0 ? 'neg' : 'pos'}>{M.fmt(cb.total, numbers)}</b>
+            </div>
+          </div>
+        ) : (
+          <div className="empty" style={{ padding: '16px' }}>No money recorded in or out yet.</div>
+        )}
+        <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }} data-noprint="1">
+          <button type="button" className="btn sm" onClick={() => openModal('transfer')}>
+            <Icon name="swap" size={12} /> Transfer
+          </button>
+          <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
+            <Icon name="plus" size={12} /> Opening balance
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const charts = INVESTMENT_CHARTS.map((x) => x[0]).filter((x) => on(x)) as InvestmentChart[];
+  const side = attention || cash ? (
+    <div className="dmore-side">
+      {attention}
+      {cash}
+    </div>
+  ) : null;
+  return (
+    <div className={`dmore ${forPrint ? 'print' : ''}`}>
+      {/* On paper the three sit in one row, to leave room for the investments. */}
+      {forPrint && (money || attention || cash) && (
+        <div className="grid eq dmore-top">
+          {money}
+          {attention}
+          {cash}
+        </div>
+      )}
+      {!forPrint && (money || side) && (
+        <div className={money && side ? 'grid c2u eq' : ''} style={{ marginBottom: '14px' }}>
+          {money}
+          {side}
+        </div>
+      )}
+      {(on('invKpis') || charts.length > 0) && (
+        <>
+          <div className="sech">
+            <h2>Investments</h2>
+            <span className="sub">unsold plots and assets, at what went in against what each is worth today</span>
+            <span className="spacer" />
+            <button type="button" className="link" data-noprint="1" onClick={() => goto('finance/investments')}>
+              Investment tracking
+            </button>
+          </div>
+          {on('invKpis') && <InvestmentKpis rows={inv} />}
+          {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? 700 : undefined} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Ticks for what goes on the printed dashboard, with quick choices. */
+function PrintPicker({ pick, setPick, onClose, moreOnly }: { pick: PrintPick; setPick: (p: PrintPick) => void; onClose: () => void; moreOnly: boolean }) {
+  const tick = (label: string, checked: boolean, change: (on: boolean) => void) => (
+    <label key={label} className="mr-row-pick">
+      <input type="checkbox" checked={checked} onChange={(e) => change(e.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+  const parts: [keyof ReportParts | 'figures', string][] = [
+    ['figures', 'Key figures'],
+    ['cards', 'This month against last month'],
+    ['charts', 'Charts'],
+    ['table', 'Month-by-month table'],
+  ];
+  return (
+    <div className="panel dprint-pick" data-noprint="1">
+      <div className="panel-b">
+        <div className="mr-rows-h">
+          <b>What to print</b>
+          <span className="muted">Untick anything not needed on paper. It stays on screen.</span>
+          <span className="spacer" />
+          {PRINT_PRESETS.filter(([name]) => !moreOnly || name !== 'Dashboard only').map(([name, p]) => (
+            <button key={name} type="button" className="btn sm" onClick={() => setPick(p)}>
+              {name}
+            </button>
+          ))}
+          <button type="button" className="btn sm pri" onClick={onClose}>
+            Done
+          </button>
+        </div>
+        <div className="dprint-cols">
+          {!moreOnly && (
+            <div>
+              <span className="kicker">Page 1 — Dashboard</span>
+              {parts.map(([key, label]) => tick(label, !!pick[key], (v) => setPick({ ...pick, [key]: v })))}
+            </div>
+          )}
+          <div>
+            <span className="kicker">{moreOnly ? 'More details' : 'Page 2 — More details'}</span>
+            {MORE_SECTIONS.map(([key, label]) =>
+              tick(label, pick.more.indexOf(key) >= 0, (v) => setPick({ ...pick, more: v ? ALL_MORE.filter((x) => x === key || pick.more.indexOf(x) >= 0) : pick.more.filter((x) => x !== key) }))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const greeting = () => {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -44,6 +308,19 @@ const greeting = () => {
 export function DashboardPage() {
   // Bumped by "Print dashboard": the monthly report prints with the key figures on top.
   const [printSignal, setPrintSignal] = useState(0);
+  // Printing More details on its own, and what goes on the printed pages.
+  const [printMore, setPrintMore] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [pick, setPickState] = useState<PrintPick>(PRINT_ALL);
+  useEffect(() => setPickState(loadPrintPick()), []);
+  const setPick = (p: PrintPick) => {
+    setPickState(p);
+    try {
+      window.localStorage.setItem(PRINT_KEY, JSON.stringify(p));
+    } catch {
+      /* not remembered */
+    }
+  };
   const {
     tab,
     user,
@@ -63,19 +340,6 @@ export function DashboardPage() {
 
   if (tab === 'alerts') {
     const al = M.alerts().filter((a: any) => !denied(a.view));
-    const alertGo = (v: string) => {
-      const map: Record<string, string> = {
-        receivables: 'sales/receivables',
-        commissions: 'agents/commissions',
-        tax: 'costs/tax',
-        bills: 'costs/bills',
-        salaries: 'costs/salaries',
-        purchases: 'properties/purchases',
-        inventory: 'properties/inventory',
-        tasks: 'tasks/list',
-      };
-      return map[v] || 'dashboard/alerts';
-    };
 
     return (
       <PageShell title={meta.t} u={meta.u} p={meta.p} tools={false}>
@@ -132,39 +396,6 @@ export function DashboardPage() {
       default:
         return '';
     }
-  };
-
-  const costGo = (label: string) => {
-    const map: Record<string, string> = {
-      'Employee Salaries': 'costs/salaries',
-      'Office Expenses': 'costs/expenses',
-      'Agent Commission': 'agents/commissions',
-      Marketing: 'costs/expenses',
-      Bills: 'costs/bills',
-      'Property Expenses': 'costs/expenses',
-      'CGT & other tax': 'costs/tax',
-      '§236K tax on purchase': 'costs/tax',
-      '§236C tax on sale': 'costs/tax',
-      'Transfer costs, stamp duty & CVT': 'trading/sheets',
-      'Handling expenses on plots': 'trading/sheets',
-      Zakat: 'costs/zakat',
-      Charity: 'costs/charity',
-      'Other selling costs': 'sales/register',
-    };
-    return map[label] || 'costs/expenses';
-  };
-
-  const alertGo = (v: string) => {
-    const map: Record<string, string> = {
-      receivables: 'sales/receivables',
-      commissions: 'agents/commissions',
-      tax: 'costs/tax',
-      bills: 'costs/bills',
-      salaries: 'costs/salaries',
-      purchases: 'properties/purchases',
-      inventory: 'properties/inventory',
-    };
-    return map[v] || 'dashboard/alerts';
   };
 
   return (
@@ -464,13 +695,32 @@ export function DashboardPage() {
       {role === 'CEO' && (() => {
         const netDelta = M.deltaPct(bv.net, bvPrev.net);
         const al = M.alerts().filter((a: any) => !denied(a.view));
-        const rawExp = M.expenseBreakdown(k);
-        const exp = rawExp.slice(0, 5).map((x: any, i: number) => ({ k: x[0], v: x[1], c: SC[i] }));
-        const restTot = rawExp.slice(5).reduce((a: number, x: any) => a + x[1], 0);
-        if (restTot > 0) exp.push({ k: 'Other categories', v: restTot, c: SC[5] });
 
         // What the business has money in and still holds, and what each bank and cash account holds.
         const inv = M.investments(f);
+        const page1 = pick.figures || pick.cards || pick.charts || pick.table;
+        // The key figures on the printed dashboard; the last four are not among the month's cards.
+        const figures: [string, number, string][] = [
+          ['Net profit', bv.net, isFinite(bv.netMargin) ? `${bv.netMargin.toFixed(1)}% of revenue` : ''],
+          ['Revenue', k.totalRevenue, `${M.fmtNum(k.counts.soldInRange)} plots sold`],
+          ['Gross profit', bv.gross, ''],
+          ...(k.personal > 0 ? [['After personal spending', bv.net - k.personal, `${M.fmt(k.personal, 'full')} personal`] as [string, number, string]] : []),
+          ['Cash in hand', cb.cash, 'in cash'],
+          ['Cash in bank', cb.bank, 'in the bank'],
+          ['Receivables', k.receivable + k.incomeDue, 'owed to us'],
+          ['Payables', k.payable, 'we owe'],
+        ];
+        const onlyInvestments = pick.more.every((x) => ['invKpis', 'portfolio', 'gains', 'vsworth', 'pnl'].indexOf(x) >= 0);
+        const morePage = (pageNo?: string) => (
+          <PrintSheet
+            kicker={onlyInvestments ? 'INVESTMENT PORTFOLIO' : 'BUSINESS DASHBOARD · MORE DETAILS'}
+            title={onlyInvestments ? 'Investments' : 'More details'}
+            sub={`${r.label} · ${M.fmtDate(r.start)} – ${M.fmtDate(r.end)}`}
+            pageNo={pageNo}
+          >
+            <MoreDetails k={k} al={al} cb={cb} inv={inv} r={r} show={pick.more} forPrint />
+          </PrintSheet>
+        );
 
         return (
           <>
@@ -485,13 +735,27 @@ export function DashboardPage() {
               <span className="spacer" />
               <div className="dhero-acts" data-noprint="1">
                 <PeriodControl />
-                {tab !== 'more' && (
-                  <button type="button" className="btn dhero-print" onClick={() => setPrintSignal((n) => n + 1)}>
+                <button type="button" className={`btn dhero-pick ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)} title="Choose what goes on paper">
+                  <Icon name="edit" size={14} /> What to print
+                </button>
+                {tab !== 'more' ? (
+                  <button
+                    type="button"
+                    className="btn dhero-print"
+                    // With nothing ticked for the dashboard's own page, only More details is printed.
+                    onClick={() => (page1 ? setPrintSignal((n) => n + 1) : setPrintMore(true))}
+                    disabled={!page1 && !pick.more.length}
+                  >
                     <Icon name="print" size={14} /> Print dashboard
+                  </button>
+                ) : (
+                  <button type="button" className="btn dhero-print" onClick={() => setPrintMore(true)} disabled={!pick.more.length}>
+                    <Icon name="print" size={14} /> Print more details
                   </button>
                 )}
               </div>
             </div>
+            {picking && <PrintPicker pick={pick} setPick={setPick} onClose={() => setPicking(false)} moreOnly={tab === 'more'} />}
 
             {tab !== 'more' ? (
               <>
@@ -541,142 +805,45 @@ export function DashboardPage() {
                 <MonthlyReport
                   printSignal={printSignal}
                   printTitle="BUSINESS DASHBOARD"
+                  printParts={pick}
+                  printAfter={pick.more.length ? morePage('Page 2 of 2') : undefined}
                   printTop={
-                    <div className="dp-figs">
-                      {[
-                        ['Net profit', bv.net, isFinite(bv.netMargin) ? `${bv.netMargin.toFixed(1)}% of revenue` : ''],
-                        ['Revenue', k.totalRevenue, `${M.fmtNum(k.counts.soldInRange)} plots sold`],
-                        ['Gross profit', bv.gross, ''],
-                        ...(k.personal > 0 ? [['After personal spending', bv.net - k.personal, `${M.fmt(k.personal, 'full')} personal`]] : []),
-                        ['Cash in hand', cb.cash, ''],
-                        ['Cash in bank', cb.bank, ''],
-                        ['Receivables', k.receivable + k.incomeDue, 'owed to us'],
-                        ['Payables', k.payable, 'we owe'],
-                      ].map(([label, v, sub]: any, idx: number) => (
-                        <div key={label} className={`dp-fig ${idx === 0 ? 'lead' : ''}`}>
-                          <span>{label}</span>
-                          <b className={v < 0 ? 'neg' : ''}>{M.fmt(v, 'full')}</b>
-                          {sub && <i>{sub}</i>}
+                    pick.figures && !pick.cards && (
+                      <div className="dp-figs">
+                        {figures.map(([label, v, sub]: any, idx: number) => (
+                          <div key={label} className={`dp-fig ${idx === 0 ? 'lead' : ''}`}>
+                            <span>{label}</span>
+                            <b className={v < 0 ? 'neg' : ''}>{M.fmt(v, 'full')}</b>
+                            {sub && <i>{sub}</i>}
+                          </div>
+                        ))}
+                        <div className="dp-period">
+                          {r.label} · {M.fmtDate(r.start)} – {M.fmtDate(r.end)}
                         </div>
-                      ))}
-                      <div className="dp-period">
-                        {r.label} · {M.fmtDate(r.start)} – {M.fmtDate(r.end)}
                       </div>
-                    </div>
+                    )
+                  }
+                  // Beside the month's cards, only the figures they do not already show.
+                  printFigures={
+                    pick.figures &&
+                    pick.cards &&
+                    figures.slice(-4).map(([label, v, sub]: any) => (
+                      <div key={label} className="kpi mr-card dp-card">
+                        <span className="k">{label}</span>
+                        <span className={`v ${v < 0 ? 'neg' : ''}`}>{M.fmt(v, numbers)}</span>
+                        <span className="f">{sub}</span>
+                      </div>
+                    ))
                   }
                 />
               </>
             ) : (
-              <>
-                <div className="grid c2u" style={{ marginBottom: '14px' }}>
-                  <div className="panel">
-                    <div className="panel-h">
-                      <h3>Where the money went</h3>
-                      <span className="sub">{M.fmt(k.totalExpenses, numbers)} total</span>
-                    </div>
-                    <div className="panel-b">
-                      {exp.length ? (
-                        <div className="grid c2">
-                          <ChartDonut items={exp} />
-                          <div>
-                            <RankedList items={exp.map((x) => ({ ...x, go: costGo(x.k) }))} total={k.totalExpenses} />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="empty" style={{ padding: '20px' }}>Nothing spent in this period.</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gap: '14px', minWidth: 0, alignContent: 'start' }}>
-                    <div className="panel">
-                      <div className="panel-h">
-                        <h3>Needs attention</h3>
-                        <span className="sub">{M.fmtNum(al.length)} items</span>
-                      </div>
-                      <div className="panel-b tight">
-                        {al.length ? (
-                          <div className="alerts">
-                            {al.slice(0, 4).map((a: any, idx: number) => (
-                              <button key={idx} type="button" className={`alert ${a.sev}`} onClick={() => goto(alertGo(a.view))}>
-                                <span className="ic">
-                                  <Icon name={a.sev === 'good' ? 'ok' : a.sev === 'high' ? 'warn' : 'info'} />
-                                </span>
-                                <span>
-                                  <span className="t">{a.title}</span>
-                                  <span className="d">{a.detail}</span>
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="empty" style={{ padding: '14px' }}>All clear — nothing needs attention.</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="panel">
-                      <div className="panel-h">
-                        <h3>Cash &amp; bank</h3>
-                        <span className="sub">{M.fmtDate(r.end)}</span>
-                        <span className="spacer" />
-                        <button type="button" className="link" onClick={() => goto('bank/accounts')}>
-                          Bank &amp; Cash
-                        </button>
-                      </div>
-                      <div className="panel-b tight">
-                        {cb.accounts.length ? (
-                          <div className="acctlist">
-                            {(['Cash', 'Bank'] as const).map((kind) => {
-                              const of = cb.accounts.filter((b: any) => b.kind === kind);
-                              const tot = kind === 'Cash' ? cb.cash : cb.bank;
-                              return (
-                                <React.Fragment key={kind}>
-                                  <div className="r acct-kind">
-                                    <span>{kind === 'Cash' ? 'Cash in hand' : 'Cash in bank'}</span>
-                                    <b className={tot < 0 ? 'neg' : 'pos'}>{M.fmt(tot, numbers)}</b>
-                                  </div>
-                                  {of.map((b: any) => (
-                                    <div key={b.account} className="r acct-sub">
-                                      <span>{b.account}</span>
-                                      <b className={b.balance < 0 ? 'neg' : ''}>{M.fmt(b.balance, numbers)}</b>
-                                    </div>
-                                  ))}
-                                </React.Fragment>
-                              );
-                            })}
-                            <div className="r acct-total">
-                              <span>Total</span>
-                              <b className={cb.total < 0 ? 'neg' : 'pos'}>{M.fmt(cb.total, numbers)}</b>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="empty" style={{ padding: '16px' }}>No money recorded in or out yet.</div>
-                        )}
-                        <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          <button type="button" className="btn sm" onClick={() => openModal('transfer')}>
-                            <Icon name="swap" size={12} /> Transfer
-                          </button>
-                          <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
-                            <Icon name="plus" size={12} /> Opening balance
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="sech">
-                  <h2>Investments</h2>
-                  <span className="sub">unsold plots and assets, at what went in against what each is worth today</span>
-                  <span className="spacer" />
-                  <button type="button" className="link" onClick={() => goto('finance/investments')}>
-                    Investment tracking
-                  </button>
-                </div>
-                <InvestmentKpis rows={inv} />
-                <InvestmentCharts rows={inv} />
-              </>
+              <MoreDetails k={k} al={al} cb={cb} inv={inv} r={r} show={ALL_MORE} />
+            )}
+            {printMore && (
+              <PrintNow onDone={() => setPrintMore(false)} page="A4 landscape" margin="0">
+                <div className="mr-print">{morePage()}</div>
+              </PrintNow>
             )}
           </>
         );

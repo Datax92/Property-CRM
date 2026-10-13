@@ -327,15 +327,22 @@ export function RankedList({
   );
 }
 
-/** An axis with round steps that always has zero on it, with room under the lowest bar for its label. */
-function niceScale(lo: number, hi: number) {
+/** An axis with round steps that always has zero on it, with room under the lowest bar for its label.
+    A fixed `step` (e.g. 5 Lakh) gives finer lines so small bars can be read against them. */
+function niceScale(lo: number, hi: number, fixedStep?: number) {
   lo = Math.min(0, lo);
   hi = Math.max(0, hi);
   if (hi === lo) hi = 1;
-  const raw = (hi - lo) / 4;
-  const e = Math.pow(10, Math.floor(Math.log10(raw)));
-  const f = raw / e;
-  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+  let step: number;
+  if (fixedStep && fixedStep > 0) {
+    // No more than 20 steps: a larger range takes a multiple of the step asked for.
+    step = fixedStep * Math.max(1, Math.ceil((hi - lo) / fixedStep / 20));
+  } else {
+    const raw = (hi - lo) / 4;
+    const e = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / e;
+    step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+  }
   let min = Math.floor(lo / step) * step;
   const max = Math.ceil(hi / step) * step;
   if (lo < 0 && lo - min < step * 0.3) min -= step;
@@ -344,13 +351,43 @@ function niceScale(lo: number, hi: number) {
   return { min, max, ticks };
 }
 
-/** Long axis labels are tilted so each stays readable; short ones sit level. */
-const tilt = (rows: { label: string }[]) => rows.length > 6 || rows.some((r) => String(r.label).length > 11);
+/** Labels are tilted only when they would run into each other level. */
+const LABEL_PX = 6.4;
+const tilt = (rows: { label: string }[], slot: number) => rows.some((r) => String(r.label).length * LABEL_PX > slot - 6);
 const clip = (s: string, n = 16) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+/** One plot size for every bar chart, so two charts side by side line up: the same top, the same
+    zero line and the same room for the labels under it. A chart with more grid lines is taller. */
+function frame(width: number, rows: { label: string }[], ticks: number, low = false, PL = 54) {
+  const PR = 12,
+    PT = 26;
+  const slot = (width - PL - PR) / (rows.length || 1);
+  const tilted = tilt(rows, slot);
+  const PB = tilted ? 70 : 30;
+  // A low chart (on a printed page) keeps the same top and bottom, with less between.
+  const ih = Math.max(low ? 96 : 196, (ticks - 1) * (low ? 15 : 26));
+  return { W: width, H: PT + ih + PB, PL, PR, PT, PB, iw: width - PL - PR, ih, slot, tilted };
+}
+
+/** The label under a bar or group of bars. */
+function XLabel({ x, y, text, tilted }: { x: number; y: number; text: string; tilted: boolean }) {
+  const lx = x.toFixed(1),
+    ly = y.toFixed(1);
+  return tilted ? (
+    <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
+      {clip(text)}
+    </text>
+  ) : (
+    <text className="ax" x={lx} y={ly} textAnchor="middle">
+      {text}
+    </text>
+  );
+}
 
 /**
  * One bar per item, each in its own colour (the colour of its kind, named in the legend) or, when
- * `signed`, green for a gain and red for a loss. Bars stand on the zero line; values sit on them.
+ * `signed`, green for a gain and red for a loss. Bars stand on the zero line; values sit on them,
+ * with a second line (`tag`, e.g. the gain as a percentage) when given.
  */
 export function ChartBars({
   rows,
@@ -358,30 +395,28 @@ export function ChartBars({
   signed = false,
   label = 'Bar chart',
   width = 760,
+  step,
+  low = false,
 }: {
-  rows: { label: string; v: number; c?: string; full?: string; sub?: string }[];
+  rows: { label: string; v: number; c?: string; full?: string; sub?: string; tag?: string }[];
   legend?: { k: string; c: string }[];
   signed?: boolean;
   label?: string;
   /** Drawing width: wider for a chart that spans the page, so its text keeps its size. */
   width?: number;
+  /** A fixed distance between the grid lines, in rupees. */
+  step?: number;
+  /** Less height, e.g. for a printed page. */
+  low?: boolean;
 }) {
   const { numbers, showTip, hideTip } = useApp();
-  const tilted = tilt(rows);
-  const W = width,
-    H = tilted ? 280 : 240,
-    PL = 50,
-    PR = 12,
-    PT = 20,
-    PB = tilted ? 70 : 28;
-  const iw = W - PL - PR,
-    ih = H - PT - PB;
   const vals = rows.map((r) => r.v || 0);
-  const { min, max, ticks } = niceScale(Math.min(...vals), Math.max(...vals));
+  const { min, max, ticks } = niceScale(Math.min(...vals), Math.max(...vals), step);
+  const { W, H, PL, PR, PT, ih, slot: bw, tilted } = frame(width, rows, ticks.length, low);
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
-  const bw = iw / (rows.length || 1),
-    barW = Math.max(6, Math.min(46, bw * 0.62));
+  const barW = Math.max(6, Math.min(46, bw * 0.62));
   const colour = (r: { v: number; c?: string }) => (signed ? (r.v >= 0 ? 'var(--good)' : 'var(--bad)') : r.c || 'var(--s1)');
+  const labels = rows.length <= 14;
 
   return (
     <div className="chart">
@@ -407,20 +442,26 @@ export function ChartBars({
         {rows.map((r, i) => {
           const cx = PL + bw * i + bw / 2;
           const v = r.v || 0;
-          const top = y(Math.max(v, 0)),
-            h = Math.max(1.5, Math.abs(y(v) - y(0)));
+          // A bar too small for the scale still shows as a sliver.
+          const h = v ? Math.max(3, Math.abs(y(v) - y(0))) : 0;
+          const top = v >= 0 ? y(0) - h : y(0);
           const tipHtml = `<div class="tt">${r.full || r.label}</div><div class="rw"><i class="sw" style="background:${colour(r)}"></i><b class="vv">${M.fmt(
             v,
             numbers
           )}</b></div>${r.sub ? `<div class="rw">${r.sub}</div>` : ''}`;
-          const lx = cx.toFixed(1),
-            ly = (PT + ih + (tilted ? 12 : 17)).toFixed(1);
+          // Labels of a loss sit just above the zero line, clear of the names under the chart.
+          const ly = v >= 0 ? top : y(0);
           return (
             <React.Fragment key={i}>
-              <rect x={(cx - barW / 2).toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={colour(r)} />
-              {rows.length <= 14 && v !== 0 && (
-                <text className="dlab" x={lx} y={(v >= 0 ? top - 5 : top + h + 12).toFixed(1)} textAnchor="middle">
+              {v !== 0 && <rect x={(cx - barW / 2).toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={colour(r)} />}
+              {labels && v !== 0 && (
+                <text className="dlab" x={cx.toFixed(1)} y={(ly - (r.tag ? 17 : 5)).toFixed(1)} textAnchor="middle">
                   {axMoney(v, numbers)}
+                </text>
+              )}
+              {labels && v !== 0 && r.tag && (
+                <text className={`dlab tag ${signed ? (v >= 0 ? 'up' : 'down') : ''}`} x={cx.toFixed(1)} y={(ly - 5).toFixed(1)} textAnchor="middle">
+                  {r.tag}
                 </text>
               )}
               <rect
@@ -433,15 +474,7 @@ export function ChartBars({
                 onMouseMove={(e) => showTip(tipHtml, e.clientX, e.clientY)}
                 onMouseLeave={hideTip}
               />
-              {tilted ? (
-                <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
-                  {clip(String(r.label))}
-                </text>
-              ) : (
-                <text className="ax" x={lx} y={ly} textAnchor="middle">
-                  {r.label}
-                </text>
-              )}
+              <XLabel x={cx} y={PT + ih + (tilted ? 12 : 18)} text={String(r.label)} tilted={tilted} />
             </React.Fragment>
           );
         })}
@@ -457,28 +490,39 @@ export function ChartBarGroups({
   series,
   label = 'Grouped bar chart',
   width = 760,
+  step,
+  values = false,
+  low = false,
 }: {
   rows: any[];
   series: { key: string; label: string; c: string }[];
   label?: string;
   width?: number;
+  /** A fixed distance between the grid lines, in rupees. */
+  step?: number;
+  /** Write each bar's amount on it (only bars that are not zero). */
+  values?: boolean;
+  /** Less height, e.g. for a printed page. */
+  low?: boolean;
 }) {
   const { numbers, showTip, hideTip } = useApp();
-  const tilted = tilt(rows);
-  const W = width,
-    H = tilted ? 270 : 236,
-    PL = 50,
-    PR = 12,
-    PT = 14,
-    PB = tilted ? 64 : 28;
-  const iw = W - PL - PR,
-    ih = H - PT - PB;
   const all = rows.flatMap((r) => series.map((s) => r[s.key] || 0));
-  const { min, max, ticks } = niceScale(Math.min(...all), Math.max(...all));
+  const { min, max, ticks } = niceScale(Math.min(...all), Math.max(...all), step);
+  const { W, H, PL, PR, PT, ih, slot: bw, tilted } = frame(width, rows, ticks.length, low);
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
-  const bw = iw / (rows.length || 1);
   const barW = Math.max(4, Math.min(22, (bw - 12) / series.length - 2));
   const groupW = series.length * (barW + 2) - 2;
+  // An amount written up the bar: inside a bar tall enough to hold it, otherwise just above it.
+  const valueLabel = (x: number, top: number, h: number, text: string) => {
+    const inside = h > text.length * 6.2 + 10;
+    const px = (x + 3.5).toFixed(1),
+      py = (inside ? top + 6 : top - 4).toFixed(1);
+    return (
+      <text className={`dlab sm ${inside ? 'in' : ''}`} x={px} y={py} textAnchor={inside ? 'end' : 'start'} transform={`rotate(-90 ${px} ${py})`}>
+        {text}
+      </text>
+    );
+  };
 
   return (
     <div className="chart">
@@ -507,23 +551,20 @@ export function ChartBarGroups({
             series
               .map((s) => `<div class="rw"><i class="sw" style="background:${s.c}"></i>${s.label}<b class="vv">${M.fmt(r[s.key] || 0, numbers)}</b></div>`)
               .join('');
-          const lx = cx.toFixed(1),
-            ly = (PT + ih + (tilted ? 12 : 17)).toFixed(1);
           return (
             <React.Fragment key={i}>
               {series.map((s, si) => {
                 const v = r[s.key] || 0;
-                const top = y(Math.max(v, 0));
+                if (!v) return null;
+                // A bar too small for the scale still shows as a sliver.
+                const h = Math.max(3, Math.abs(y(v) - y(0)));
+                const top = v >= 0 ? y(0) - h : y(0);
+                const bx = x0 + si * (barW + 2);
                 return (
-                  <rect
-                    key={s.key}
-                    x={(x0 + si * (barW + 2)).toFixed(1)}
-                    y={top.toFixed(1)}
-                    width={barW.toFixed(1)}
-                    height={Math.max(v ? 1.5 : 0, Math.abs(y(v) - y(0))).toFixed(1)}
-                    rx="3"
-                    fill={s.c}
-                  />
+                  <React.Fragment key={s.key}>
+                    <rect x={bx.toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={s.c} />
+                    {values && v > 0 && valueLabel(bx + barW / 2, top, h, axMoney(v, numbers))}
+                  </React.Fragment>
                 );
               })}
               <rect
@@ -536,17 +577,7 @@ export function ChartBarGroups({
                 onMouseMove={(e) => showTip(tipHtml, e.clientX, e.clientY)}
                 onMouseLeave={hideTip}
               />
-              {tilted ? (
-                <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
-                  {clip(String(r.label))}
-                </text>
-              ) : (
-                (rows.length <= 14 || i % 2 === 0) && (
-                  <text className="ax" x={lx} y={ly} textAnchor="middle">
-                    {r.label}
-                  </text>
-                )
-              )}
+              <XLabel x={cx} y={PT + ih + (tilted ? 12 : 18)} text={String(r.label)} tilted={tilted} />
             </React.Fragment>
           );
         })}
