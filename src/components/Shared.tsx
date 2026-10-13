@@ -91,11 +91,11 @@ export function Delta({ d, invert }: { d: number | null | undefined; invert?: bo
 }
 
 export function Tag({ text }: { text: string }) {
-  const cls = /Paid|Completed|Posted|Available/.test(text)
+  const cls = /Paid|Completed|Posted|Available|^Received/.test(text)
     ? 'ok'
     : /Overdue|Unpaid|Voided/.test(text)
     ? 'bad'
-    : /Partial|Pending|Process|Reserved|Payment/.test(text)
+    : /Partial|Partly|To receive|Pending|Process|Reserved|Payment/.test(text)
     ? 'warn'
     : 'mute';
   return <span className={`tag ${cls}`}>{text}</span>;

@@ -268,6 +268,24 @@ const ART: Record<string, React.ReactNode> = {
       <rect x="32" y="25" width="6" height="15" fill={C.amber} />
     </>
   ),
+  income: (
+    <>
+      <circle cx="20" cy="27" r="13" fill={C.teal} />
+      <circle cx="20" cy="27" r="8" fill={C.deep} />
+      <rect x="18.4" y="21" width="3.2" height="12" rx="1.6" fill={C.amber} />
+      <path d="M30 18L38 8l4 10" fill="none" stroke={C.orange} strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  bank: (
+    <>
+      <path d="M5 17L24 6l19 11z" fill={C.navy} />
+      <rect x="9" y="19" width="5" height="16" rx="1" fill={C.blue} />
+      <rect x="17.5" y="19" width="5" height="16" rx="1" fill={C.blue} />
+      <rect x="26" y="19" width="5" height="16" rx="1" fill={C.blue} />
+      <rect x="34.5" y="19" width="5" height="16" rx="1" fill={C.blue} />
+      <rect x="5" y="36" width="38" height="5" rx="1.5" fill={C.amber} />
+    </>
+  ),
   account: (
     <>
       <path d="M24 5l16.5 9.5v19L24 43 7.5 33.500v-19z" fill={C.purple} />

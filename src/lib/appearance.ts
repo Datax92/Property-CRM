@@ -126,6 +126,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   { id: 'expense', label: 'Expense', sub: 'Office or personal spending', icon: 'expenses', modal: 'expense', need: 'expenses' },
   { id: 'asset', label: 'Asset', sub: 'Something bought to keep', icon: 'assets', modal: 'expense', preset: { group: 'Assets' }, need: 'expenses' },
   { id: 'payment', label: 'Payment', sub: 'Money in or out', icon: 'cash', modal: 'payment', need: 'transactions' },
+  { id: 'income', label: 'Income', sub: 'Rent, profit, other income', icon: 'income', modal: 'income', need: 'pnl' },
+  { id: 'transfer', label: 'Transfer', sub: 'Cash to bank and back', icon: 'bank', modal: 'transfer', need: 'cashflow' },
   { id: 'task', label: 'Task', sub: 'Something to do', icon: 'tasks', modal: 'task' },
   { id: 'tax', label: 'Tax entry', sub: 'Advance tax, CGT', icon: 'tax', modal: 'tax', need: 'tax' },
   { id: 'zakat', label: 'Zakat', sub: 'Record Zakat paid', icon: 'zakat', modal: 'zakat', need: 'zakat' },

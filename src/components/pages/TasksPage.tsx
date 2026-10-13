@@ -40,6 +40,39 @@ function PriorityPill({ p }: { p: string }) {
 
 const PAGE_SIZES = [20, 100, 500, 2500];
 
+/* Searching tasks by date: a month, a year, or any two dates. A task is in the period when its
+   span — from its start date to its deadline — touches it. */
+const PERIODS: [string, string][] = [
+  ['', 'Any time'],
+  ['thisMonth', 'This month'],
+  ['lastMonth', 'Last month'],
+  ['month', 'Pick a month'],
+  ['thisYear', 'This year'],
+  ['lastYear', 'Last year'],
+  ['year', 'Pick a year'],
+  ['custom', 'From – to dates'],
+];
+function periodRange(kind: string, month: string, year: string, from: string, to: string) {
+  const t = M.TODAY;
+  const span = (a: Date, b: Date, label: string) => ({ start: a, end: new Date(b.getFullYear(), b.getMonth(), b.getDate(), 23, 59, 59), label });
+  if (kind === 'thisMonth') return span(new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 0), M.MONTHS[t.getMonth()] + ' ' + t.getFullYear());
+  if (kind === 'lastMonth') {
+    const a = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+    return span(a, new Date(a.getFullYear(), a.getMonth() + 1, 0), M.MONTHS[a.getMonth()] + ' ' + a.getFullYear());
+  }
+  if (kind === 'month' && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split('-').map(Number);
+    return span(new Date(y, m - 1, 1), new Date(y, m, 0), M.MONTHS[m - 1] + ' ' + y);
+  }
+  if (kind === 'thisYear' || kind === 'lastYear' || (kind === 'year' && +year)) {
+    const y = kind === 'thisYear' ? t.getFullYear() : kind === 'lastYear' ? t.getFullYear() - 1 : +year;
+    return span(new Date(y, 0, 1), new Date(y, 11, 31), String(y));
+  }
+  if (kind === 'custom' && from && to) return span(M.parseDate(from), M.parseDate(to), M.fmtDate(M.parseDate(from)) + ' – ' + M.fmtDate(M.parseDate(to)));
+  return null;
+}
+const hrs = (n: number) => (n ? `${+n.toFixed(2)} h` : '—');
+
 /** A project's status as its list shows it: how far along while open, else its status. */
 function ProjectStatusPill({ p }: { p: any }) {
   if (p.status === 'Completed') return <span className="tpill st-done">Completed</span>;
@@ -381,6 +414,12 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
               <span>Overdue Tasks</span>
               <b className={overdue ? 'c-over' : 'c-done'}>{overdue}</b>
             </div>
+            <div>
+              <span>Success Ratio</span>
+              <b className={total && completed / total >= 0.8 ? 'c-done' : total && completed / total >= 0.5 ? 'c-mid' : 'c-avg'}>
+                {total ? `${Math.round((completed / total) * 100)}%` : '—'}
+              </b>
+            </div>
           </div>
 
           {bars.length === 0 ? (
@@ -455,6 +494,11 @@ export function TasksPage() {
   const [picked, setPicked] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [quick, setQuick] = useState('');
+  const [fPeriod, setFPeriod] = useState('');
+  const [fMonth, setFMonth] = useState(() => M.dateInput(M.TODAY).slice(0, 7));
+  const [fYear, setFYear] = useState(String(M.TODAY.getFullYear()));
+  const [fFrom, setFFrom] = useState(() => M.TODAY.getFullYear() + '-01-01');
+  const [fTo, setFTo] = useState(() => M.dateInput(M.TODAY));
 
   // Every change is refused while the database is unreachable, so nothing vanishes on reload.
   const run = (fn: () => void, done?: string) => {
@@ -483,6 +527,7 @@ export function TasksPage() {
   // TASK LIST
   // ========================================================================
   const q = fText.trim().toLowerCase();
+  const pr = periodRange(fPeriod, fMonth, fYear, fFrom, fTo);
   const rows = M.DATA.tasks
     .filter((t: any) => {
       const st = M.taskStatus(t);
@@ -492,6 +537,7 @@ export function TasksPage() {
       if (fStatus && st !== fStatus) return false;
       if (fPriority && (t.priority || 'Low') !== fPriority) return false;
       if (fWho && (t.assignee || '') !== fWho) return false;
+      if (pr && !M.taskInRange(t, pr)) return false;
       return true;
     })
     .sort((a: any, b: any) => {
@@ -499,7 +545,10 @@ export function TasksPage() {
       return newest ? -d : d;
     });
   const visible = rows.slice(0, shown);
-  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho);
+  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho || fPeriod);
+  const totals = M.taskTotals(rows);
+  const years: number[] = [];
+  for (let y = M.TODAY.getFullYear() + 1; y >= M.TODAY.getFullYear() - 5; y--) years.push(y);
 
   // The next thing to do: overdue work first, then the nearest deadline.
   const pending = M.DATA.tasks
@@ -517,6 +566,7 @@ export function TasksPage() {
     setFStatus('');
     setFPriority('');
     setFWho('');
+    setFPeriod('');
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -618,6 +668,26 @@ export function TasksPage() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <select value={fPeriod} onChange={(e) => setFPeriod(e.target.value)} aria-label="Search by date" title="Tasks whose start date to deadline falls in this period">
+          {PERIODS.map(([k, l]) => (
+            <option key={k} value={k}>{k ? l : 'Date: any time'}</option>
+          ))}
+        </select>
+        {fPeriod === 'month' && <input type="month" value={fMonth} onChange={(e) => setFMonth(e.target.value)} aria-label="Month" />}
+        {fPeriod === 'year' && (
+          <select value={fYear} onChange={(e) => setFYear(e.target.value)} aria-label="Year">
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        )}
+        {fPeriod === 'custom' && (
+          <>
+            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} aria-label="From date" />
+            <span className="muted">to</span>
+            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} aria-label="To date" />
+          </>
+        )}
         <span className="spacer" />
         <button type="button" className="btn sm" onClick={exportCsv} title="Download these tasks as a spreadsheet (CSV)">
           <Icon name="down" /> CSV
@@ -636,6 +706,28 @@ export function TasksPage() {
         <button type="button" className="btn sm" onClick={() => setNewest(!newest)} title="Change the order">
           Created On {newest ? '↓' : '↑'}
         </button>
+      </div>
+
+      <div className="ttotals">
+        <div className="tt-main">
+          <div>
+            <span>Total No. of Tasks</span>
+            <b className="c-total">{totals.total}</b>
+          </div>
+          <div>
+            <span>Achieved Tasks</span>
+            <b className="c-done">{totals.achieved}</b>
+          </div>
+          <div>
+            <span>Success Ratio</span>
+            <b className={totals.ratio >= 80 ? 'c-done' : totals.ratio >= 50 ? 'c-mid' : 'c-avg'}>{totals.total ? `${Math.round(totals.ratio)}%` : '—'}</b>
+          </div>
+        </div>
+        <div className="tt-side">
+          <span>{pr ? pr.label : 'All dates'}{totals.overdue ? ` · ${totals.overdue} overdue` : ''}</span>
+          <span>Planned {hrs(totals.plannedHours)} · spent {hrs(totals.timeSpent)}</span>
+          <span>Plan worth {M.fmt(totals.planWorth, 'full')} · plan cost {M.fmt(totals.planCost, 'full')}</span>
+        </div>
       </div>
 
       {picked.length > 0 && (
@@ -673,12 +765,20 @@ export function TasksPage() {
                   aria-label="Select all"
                 />
               </th>
+              <th>Task ref</th>
               <th>Subject</th>
-              <th>Status</th>
+              <th>Start date</th>
+              <th>Deadline</th>
               <th>Project</th>
+              <th>Project status</th>
+              <th>Status</th>
               <th>Priority</th>
               <th>Assigned to</th>
-              <th>Deadline</th>
+              <th className="r">Planned work</th>
+              <th className="r">Plan worth</th>
+              <th className="r">Plan cost</th>
+              <th className="r">Time spent</th>
+              <th className="wide">Task progress</th>
               <th className="r" data-noexport="1">
                 {rows.length ? `${Math.min(shown, rows.length)} of ${rows.length}` : ''}
               </th>
@@ -688,30 +788,45 @@ export function TasksPage() {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={9} className="tnone">
+                <td colSpan={17} className="tnone">
                   {filtered ? 'No task matches these filters.' : 'No tasks yet — write one above and press Enter.'}
                 </td>
               </tr>
             ) : (
               visible.map((t: any) => {
                 const st = M.taskStatus(t);
+                const proj = t.projectId ? M.DATA.taskProjects.find((p: any) => p.id === t.projectId) : null;
+                const prog = M.taskProgress(t);
                 return (
                   <tr key={t.id} className={picked.includes(t.id) ? 'on' : ''}>
                     <td className="chk" data-noexport="1">
                       <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={`Select ${t.text}`} />
                     </td>
+                    <td className="mono muted nowrap">{t.id}</td>
                     <td>
                       <button type="button" className={`tname ${st === 'Completed' ? 'done' : ''}`} onClick={() => openEdit('tasks', t.id)} title="Open to edit">
                         {t.text}
                       </button>
                     </td>
-                    <td><StatusPill status={st} /></td>
-                    <td className="tproj">{t.project || ''}</td>
-                    <td><PriorityPill p={t.priority} /></td>
-                    <td className="tproj">{t.assignee || ''}</td>
-                    <td className={`mono ${st === 'Overdue' ? 'neg' : 'muted'}`}>
+                    <td className="mono muted nowrap">{t.startDate ? M.fmtDate(t.startDate) : ''}</td>
+                    <td className={`mono nowrap ${st === 'Overdue' ? 'neg' : 'muted'}`}>
                       {t.date ? M.fmtDate(t.date) : ''}
                       {t.date && st !== 'Completed' && st !== 'Cancelled' && <span className={`tdue ${st === 'Overdue' ? 'late' : ''}`}>{M.dueIn(t.date)}</span>}
+                    </td>
+                    <td className="tproj">{t.project || ''}</td>
+                    <td>{proj ? <span className={`tpill ${proj.status === 'Completed' ? 'st-done' : proj.status === 'Cancelled' ? 'st-cancel' : 'st-open'}`}>{proj.status || 'Open'}</span> : ''}</td>
+                    <td><StatusPill status={st} /></td>
+                    <td><PriorityPill p={t.priority} /></td>
+                    <td className="tproj">{t.assignee || ''}</td>
+                    <td className="r mono">{hrs(t.plannedHours || 0)}</td>
+                    <td className="r mono">{t.planWorth ? M.fmt(t.planWorth, 'full') : '—'}</td>
+                    <td className="r mono">{t.planCost ? M.fmt(t.planCost, 'full') : '—'}</td>
+                    <td className="r mono">{hrs(t.timeSpent || 0)}</td>
+                    <td>
+                      <div className="pbar" title={`${prog}% done`}>
+                        <div className="tbar"><i style={{ width: `${prog}%` }} /></div>
+                        <span>{prog}%</span>
+                      </div>
                     </td>
                     <td className="r muted" data-noexport="1" title={t.createdAt ? 'Created ' + M.fmtDate(t.createdAt) : ''}>{ago(t.createdAt)}</td>
                     <td className="r nowrap" data-noexport="1">

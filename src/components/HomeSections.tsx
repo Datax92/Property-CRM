@@ -45,7 +45,7 @@ export const DEFAULT_SECTIONS: HomeSection[] = [
   {
     id: 'money',
     title: 'Money',
-    items: ['cash', 'sc:payment', 'expenses', 'sc:expense', 'finance', 'assets', 'tax', 'sc:tax', 'zakat', 'charity'],
+    items: ['income', 'sc:income', 'bank', 'sc:transfer', 'cash', 'sc:payment', 'expenses', 'sc:expense', 'finance', 'assets', 'tax', 'sc:tax', 'zakat', 'charity'],
   },
   { id: 'reports', title: 'Reports', items: ['dashboard', 'pnl', 'gross', 'net', 'fiscal'] },
   { id: 'office', title: 'Office', items: ['tasks', 'sc:task', 'admin', 'appearance', 'account'] },
@@ -95,7 +95,7 @@ const ACTION_LABELS: Record<string, string> = {
   sale: 'Record a sale', proforma: 'New proforma', saleInvoice: 'New sale invoice', purchaseInvoice: 'New purchase invoice',
   property: 'Add a purchase', costSheet: 'New cost sheet', expense: 'Add an expense', asset: 'Add an asset',
   payment: 'Record a payment', task: 'New task', tax: 'Add a tax entry', zakat: 'Record Zakat', salary: 'Pay a salary',
-  bill: 'Add a bill', agent: 'Add an agent',
+  bill: 'Add a bill', agent: 'Add an agent', income: 'Add income', transfer: 'Move money',
 };
 const actionLabel = (s: ShortcutDef) => ACTION_LABELS[s.id] || s.label;
 

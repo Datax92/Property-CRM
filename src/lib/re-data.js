@@ -51,6 +51,14 @@ export const ACCOUNTS = ['HBL Current — 0912','Meezan Business — 4471','Pett
 export const INCOME_CATEGORIES = ['Rental Income', 'Profit on Deposit', 'Commission Earned', 'Dividend', 'Other Income'];
 /** Money in that is not earned: the owner putting money in, or what an account held to begin with. */
 export const CAPITAL_CATEGORIES = ['Owner Capital', 'Opening Balance'];
+/** Money moved from one of the company's own accounts to another: neither money in nor money out. */
+export const TRANSFER_CATEGORY = 'Transfer between accounts';
+export const isTransfer = (p) => p.category === TRANSFER_CATEGORY;
+/** A receipt against an entry in the income ledger: the income itself is counted from that entry. */
+const isIncomeReceipt = (p) => String(p.settleKey || '').startsWith('inc:');
+/** Cash in hand or a bank account. An account named for cash ("Cash in hand", "Petty Cash") is cash. */
+export const ACCOUNT_KINDS = ['Cash', 'Bank'];
+export const accountKind = (name) => (/cash|petty|in hand|\bhand\b|tijori|locker/i.test(String(name || '')) ? 'Cash' : 'Bank');
 
 const AGENT_NAMES = ['Ahmed Khan','Sana Malik','Bilal Raza','Hina Qureshi','Usman Sheikh','Farah Iqbal','Zain Abbas','Nida Aslam'];
 const BUYERS = ['Kamran Aziz','Ayesha Tariq','Rehan Dar','Mahnoor Sethi','Junaid Butt','Saira Hameed','Adnan Yousaf','Tania Rafiq','Waleed Chaudhry','Noor Fatima','Imran Sial','Beenish Anwar','Shahid Mahmood','Rabia Zafar','Danish Alvi','Komal Nadeem','Tariq Jameel','Sundas Ali','Haris Baig','Mehreen Shah'];
@@ -125,7 +133,8 @@ function buildData() {
 
   const tasks = [];
   const taskProjects = [];
-  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects };
+  const income = [];
+  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects, income };
 }
 
 
@@ -289,10 +298,11 @@ export function computeKPIs(r, f) {
 
   const soldInRange = D.sales.filter((s) => saleMatch(s, f, propIds) && inR(s.date, r));
   const salesRevenue = soldInRange.reduce((a, s) => a + s.sellingPrice, 0);
-  // Income earned outside property trading (rent, profit on deposits ...), received on the cash ledger.
+  // Income earned outside property trading (rent, profit on deposits ...): the income ledger, on
+  // the date each entry was earned, plus income received straight on the cash ledger.
   // In a narrowed scope only income picked for a property in it counts.
-  const otherIncome = livePayments().filter((p) => p.dir === 'in' && INCOME_CATEGORIES.indexOf(p.category) >= 0 && inR(p.date, r) && overheadMatch(p, f)
-    && (!scopedToProperty(f) || (p.propertyId && propIds.has(p.propertyId)))).reduce((a, p) => a + p.amount, 0);
+  const otherIncome = incomeEntries(r, f, propIds).reduce((a, x) => a + x.amount, 0);
+  const incomeDue = (D.income || []).filter((x) => overheadMatch(x, f)).reduce((a, x) => a + (x.outstanding || 0), 0);
   const totalRevenue = salesRevenue + otherIncome;
   const cashReceived = soldInRange.reduce((a, s) => a + s.received, 0);
   // Company scope: gross profit follows the document definition (revenue − period purchase cost).
@@ -395,7 +405,8 @@ export function computeKPIs(r, f) {
   const totalExpenses = (costOfSales - deal.buyPrice) + directCosts + operatingCosts + tax + zakat + charity;
   const netProfit = grossProfit - operatingCosts - tax - zakat - charity;
 
-  const pay = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
+  // Money moved between the company's own accounts is neither in nor out.
+  const pay = livePayments().filter((p) => !isTransfer(p) && inR(p.date, r) && overheadMatch(p, f) && (!scopedToProperty(f) || !p.propertyId || propIds.has(p.propertyId)));
   const cashIn = pay.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
   const cashOut = pay.filter((p) => p.dir === 'out').reduce((a, p) => a + p.amount, 0);
 
@@ -421,7 +432,7 @@ export function computeKPIs(r, f) {
       underProcess: props.filter((p) => p.status === 'Under Process').length,
       unsold: unsold.length, purchasedInRange: purchased.length, soldInRange: soldInRange.length,
     },
-    purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, otherIncome, totalRevenue, cashReceived, grossProfit,
+    purchaseCost, purchasePrice, acquisitionCosts, salesRevenue, otherIncome, incomeDue, totalRevenue, cashReceived, grossProfit,
     costOfSales, directCosts, saleTaxes, sellingCosts, deal, charity, overheadTax,
     // Two bases for gross profit. grossProfitDoc follows the requirement document literally
     // (period sales − period purchase spend); grossProfitCOGS matches the cost of the properties
@@ -543,10 +554,10 @@ export function holdingsAt(asOf, f) {
     byType[t] = (byType[t] || 0) + e.amount;
   });
   const cash = accountBalances(asOf, f).reduce((a, b) => a + b.balance, 0);
-  const receivable = DATA.sales.filter((s) => s.date <= asOf).reduce((a, s) => {
-    const got = livePayments().filter((p) => p.settleKey === 'sale:' + s.id && p.date <= asOf).reduce((x, p) => x + p.amount, 0);
-    return a + Math.max(0, s.sellingPrice - got);
-  }, 0);
+  const owed = (total, key) => Math.max(0, total - livePayments().filter((p) => p.settleKey === key && p.date <= asOf).reduce((x, p) => x + p.amount, 0));
+  // What buyers still owe, and income earned but not yet received.
+  const receivable = DATA.sales.filter((s) => s.date <= asOf).reduce((a, s) => a + owed(s.sellingPrice, 'sale:' + s.id), 0)
+    + (DATA.income || []).filter((x) => x.date <= asOf && (!f || overheadMatch(x, f))).reduce((a, x) => a + owed(x.amount, 'inc:' + x.id), 0);
   const assets = Object.keys(byType).reduce((a, k) => a + byType[k], 0);
   return { property, byType, assets, cash, receivable, total: property + assets + cash + receivable };
 }
@@ -570,6 +581,7 @@ export function monthlyComparison(year, f, target = DEFAULT_MONTHLY_TARGET) {
       month: m, label: MONTHS[m], full: r.label,
       revenue: k.totalRevenue, sold: k.counts.soldInRange, landed: bv.cost, selling: k.directCosts, gross: bv.gross,
       expenses: k.operatingCosts, deductions: k.tax + k.zakat + k.charity, net: bv.net, margin: pctOf(bv.net, k.totalRevenue),
+      otherIncome: k.otherIncome, personal: k.personal, afterPersonal: bv.net - k.personal,
       target: targetProfit, vsTarget: bv.net - targetProfit,
       holdings: h, growth: h.total - prev.total, growthPct: pctOf(h.total - prev.total, prev.total),
     });
@@ -591,9 +603,38 @@ export function expenseBreakdown(k) {
   ].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
 }
 
+/* An agent's name as typed on a commission ("Husnain", "husnain ali ") matched to the directory:
+   the same name, or a name that is the start of only one agent's full name. */
+const normName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ ]/g, ' ').replace(/\s+/g, ' ').trim();
+export function agentForName(name) {
+  const n = normName(name);
+  if (!n) return null;
+  const same = DATA.agents.filter((a) => normName(a.name) === n);
+  if (same.length === 1) return same[0];
+  if (same.length > 1) return null;
+  const close = DATA.agents.filter((a) => {
+    const an = normName(a.name);
+    return an.startsWith(n + ' ') || n.startsWith(an + ' ');
+  });
+  return close.length === 1 ? close[0] : null;
+}
+/** The directory agent a commission belongs to: the one picked on it, else the one its name matches. */
+export const commissionAgentId = (c) => c.agentId || (agentForName(c.agent) || {}).id || null;
+
+/** Commissions that look entered twice: the same plot, side, amount and date, for the same agent. */
+export function duplicateCommissions() {
+  const by = {};
+  DATA.commissions.forEach((c) => {
+    const who = commissionAgentId(c) || normName(c.agent);
+    const k = [c.propertyId, c.txnType, Math.round(c.amount || 0), c.date instanceof Date ? dstr(c.date) : '', who].join('|');
+    (by[k] = by[k] || []).push(c);
+  });
+  return Object.keys(by).map((k) => by[k]).filter((g) => g.length > 1);
+}
+
 export function agentSummary(r, f) {
   return DATA.agents.map((a) => {
-    const comms = DATA.commissions.filter((c) => c.agentId === a.id && inR(c.date, r));
+    const comms = DATA.commissions.filter((c) => commissionAgentId(c) === a.id && inR(c.date, r));
     const sales = DATA.sales.filter((s) => s.agentId === a.id && inR(s.date, r));
     return {
       ...a, transactions: sales.length,
@@ -707,10 +748,15 @@ export function aging(f) {
    have?". OPENING_BALANCE is the cash position before the dataset starts. */
 // Cash balance: starts at 0 for a clean database
 export const OPENING_BALANCE = 0;
+export const isOpeningEntry = (p) => p.category === 'Opening Balance';
 export function cashLedger(r, f) {
+  const signed = (p) => (p.dir === 'in' ? p.amount : -p.amount);
   const before = livePayments().filter((p) => p.date < r.start && overheadMatch(p, f));
-  const opening = before.reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), OPENING_BALANCE);
-  const within = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f));
+  // What the accounts held to begin with is the opening balance whatever date it was entered on,
+  // and money moved between the company's own accounts is neither in nor out.
+  const inPeriod = livePayments().filter((p) => inR(p.date, r) && overheadMatch(p, f));
+  const opening = before.reduce((a, p) => a + signed(p), OPENING_BALANCE) + inPeriod.filter(isOpeningEntry).reduce((a, p) => a + signed(p), 0);
+  const within = inPeriod.filter((p) => !isOpeningEntry(p) && !isTransfer(p));
   const cashIn = within.filter((p) => p.dir === 'in').reduce((a, p) => a + p.amount, 0);
   const cashOut = within.filter((p) => p.dir === 'out').reduce((a, p) => a + p.amount, 0);
   const byCategory = {};
@@ -734,17 +780,62 @@ export function accountNames() {
   return names.concat(ACCOUNTS.filter((a) => names.indexOf(a) < 0));
 }
 
-/** What each account holds on a date: everything received into it less everything paid from it. */
+/** What each account holds on a date: what it held to begin with, plus everything received into it
+    less everything paid from it. Transfers between accounts are shown apart. */
 export function accountBalances(asOf, f) {
   const by = {};
   livePayments().filter((p) => p.date <= asOf && (!f || overheadMatch(p, f))).forEach((p) => {
     const a = p.account || ACCOUNTS[0];
-    const x = by[a] || (by[a] = { id: a, account: a, cashIn: 0, cashOut: 0, count: 0, last: null });
-    if (p.dir === 'in') x.cashIn += p.amount; else x.cashOut += p.amount;
+    const x = by[a] || (by[a] = { id: a, account: a, kind: accountKind(a), opening: 0, cashIn: 0, cashOut: 0, transferIn: 0, transferOut: 0, count: 0, last: null });
+    const amt = p.dir === 'in' ? p.amount : -p.amount;
+    if (isOpeningEntry(p)) x.opening += amt;
+    else if (isTransfer(p)) { if (p.dir === 'in') x.transferIn += p.amount; else x.transferOut += p.amount; }
+    else if (p.dir === 'in') x.cashIn += p.amount; else x.cashOut += p.amount;
     x.count++;
     if (!x.last || p.date > x.last) x.last = p.date;
   });
-  return Object.keys(by).map((k) => ({ ...by[k], balance: by[k].cashIn - by[k].cashOut })).sort((a, b) => b.balance - a.balance);
+  return Object.keys(by)
+    .map((k) => ({ ...by[k], balance: by[k].opening + by[k].cashIn - by[k].cashOut + by[k].transferIn - by[k].transferOut }))
+    .sort((a, b) => (a.kind === b.kind ? b.balance - a.balance : a.kind === 'Cash' ? -1 : 1));
+}
+
+/** Cash in hand and cash in bank on a date, each added up from its own accounts. */
+export function cashAndBank(asOf, f) {
+  const accounts = accountBalances(asOf, f);
+  const sum = (kind) => accounts.filter((a) => a.kind === kind).reduce((x, a) => x + a.balance, 0);
+  const cash = sum('Cash'), bank = sum('Bank');
+  return { accounts, cash, bank, total: cash + bank };
+}
+
+/** One account's entries in a period, oldest first, each with the balance after it. */
+export function accountStatement(account, r, f) {
+  const mine = livePayments().filter((p) => (p.account || ACCOUNTS[0]) === account && (!f || overheadMatch(p, f)));
+  const signed = (p) => (p.dir === 'in' ? p.amount : -p.amount);
+  const opening = mine.filter((p) => p.date < r.start).reduce((a, p) => a + signed(p), 0);
+  let run = opening;
+  const rows = mine.filter((p) => inR(p.date, r)).slice().sort((a, b) => a.date - b.date || String(a.id).localeCompare(String(b.id))).map((p) => {
+    run += signed(p);
+    return { ...p, inAmt: p.dir === 'in' ? p.amount : 0, outAmt: p.dir === 'out' ? p.amount : 0, balance: run };
+  });
+  return { opening, rows, closing: run };
+}
+
+/** Money moved between two of the company's own accounts: paid out of one and into the other,
+    the two entries tied by the same transfer number. */
+export function addTransfer(v) {
+  const from = String(v.from || '').trim(), to = String(v.to || '').trim();
+  const amount = Math.round(+v.amount || 0);
+  if (!from || !to) throw new Error('Pick the account the money leaves and the one it goes into.');
+  if (from === to) throw new Error('The two accounts must be different.');
+  if (amount <= 0) throw new Error('Enter the amount moved.');
+  const base = { date: v.date, category: TRANSFER_CATEGORY, amount, method: v.method || 'Bank Transfer', office: v.office, ref: v.ref, attachments: v.attachments || [] };
+  const note = v.note || from + ' → ' + to;
+  const out = addPayment({ ...base, dir: 'out', account: from, party: to, note });
+  const inn = addPayment({ ...base, dir: 'in', account: to, party: from, note, attachments: [] });
+  out.transferId = inn.transferId = out.id;
+  saveRecordToFirestore('payments', out.id, out);
+  saveRecordToFirestore('payments', inn.id, inn);
+  return out;
 }
 
 /* ====================================================================
@@ -1115,6 +1206,8 @@ export function voidPayment(id, user) {
   saveRecordToFirestore('payments', t.id, t);
   // Put the balance back on whatever this payment had settled.
   if (t.settleKey) applySettlement(t.settleKey, -t.amount, t.date);
+  // A transfer is two entries: voiding either takes back both.
+  if (t.transferId) DATA.payments.filter((p) => p.transferId === t.transferId && p.status !== 'Voided').forEach((p) => voidPayment(p.id, user));
   const au = {
     id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: t.id, action: 'Voided',
     user: user || ACTOR, entity: t.category, prevAmount: t.amount, newAmount: 0,
@@ -1312,7 +1405,8 @@ function commissionBody(v) {
   const p = DATA.properties.find((x) => x.id === v.propertyId);
   if (!p) throw new Error('Pick the property the commission is for.');
   const side = v.side === 'Purchase' ? 'Purchase' : 'Sale';
-  const agent = v.agentId ? DATA.agents.find((a) => a.id === v.agentId) : null;
+  // A typed name that is an agent in the directory ("Husnain" for Husnain Ali) is that agent.
+  const agent = v.agentId ? DATA.agents.find((a) => a.id === v.agentId) : agentForName(v.agentName);
   const name = agent ? agent.name : String(v.agentName || '').trim();
   if (!name) throw new Error('Pick the agent, or type the agent or dealer name.');
   const sale = DATA.sales.find((x) => x.propertyId === p.id);
@@ -1567,6 +1661,8 @@ export function openItems() {
     { dir: 'out', category: e.group, party: e.vendor, outstanding: e.outstanding, office: e.office }));
   DATA.salaries.filter((s) => s.status === 'Pending').forEach((s) => add('sal:' + s.id, 'Pay salary · ' + s.employee + ' · ' + s.monthLabel,
     { dir: 'out', category: 'Employee Salaries', party: s.employee, outstanding: s.net, office: s.office }));
+  (DATA.income || []).filter((x) => x.outstanding > 0).forEach((x) => add('inc:' + x.id, 'Receive income · ' + x.category + ' · ' + x.party,
+    { dir: 'in', category: x.category, party: x.party, outstanding: x.outstanding, propertyId: x.propertyId, office: x.office }));
   return out;
 }
 
@@ -1591,6 +1687,13 @@ export function applySettlement(key, amount, date) {
     const s = find(DATA.salaries); if (!s) return null;
     s.status = amount > 0 ? 'Paid' : 'Pending';
     saveRecordToFirestore('salaries', s.id, s); return s;
+  }
+  if (kind === 'inc') {
+    const x = find(DATA.income || []); if (!x) return null;
+    x.received = Math.max(0, Math.min(x.amount, (x.received || 0) + amount));
+    x.outstanding = x.amount - x.received;
+    x.status = incomeStatus(x);
+    saveRecordToFirestore('income', x.id, x); return x;
   }
   if (kind === 'zakat') {
     // Only reached when a Zakat payment is voided: the amount comes back off the entry.
@@ -1620,6 +1723,85 @@ export function recordPayment(v) {
     : v);
   if (item) applySettlement(item.key, t.amount, t.date);
   return t;
+}
+
+/* ====================================================================
+   INCOME — money earned outside property trading: rent, profit on
+   deposits, commission earned, dividends. An entry counts as revenue on
+   the date it was earned; what has been received of it is on the cash
+   ledger, and the rest is still to receive.
+   ==================================================================== */
+/** Kinds of income: the standard ones, then any other kind already used. */
+export function incomeKinds() {
+  return Array.from(new Set(INCOME_CATEGORIES.concat((DATA.income || []).map((x) => x.category)).filter(Boolean)));
+}
+
+export function incomeStatus(x) {
+  if ((x.received || 0) >= x.amount) return 'Received';
+  if (x.dueDate instanceof Date && x.dueDate < startOfDay(TODAY)) return 'Overdue';
+  return (x.received || 0) > 0 ? 'Partly received' : 'To receive';
+}
+
+function incomeBody(v) {
+  const category = String(v.category || '').trim();
+  if (!category) throw new Error('Pick or type the kind of income.');
+  const party = String(v.party || '').trim();
+  if (!party) throw new Error('Enter who the income is from.');
+  const amount = Math.round(+v.amount || 0);
+  if (amount <= 0) throw new Error('Enter the amount earned.');
+  const date = parseDate(v.date);
+  return {
+    category, party, amount, date, dueDate: v.dueDate ? parseDate(v.dueDate) : date,
+    propertyId: v.propertyId || null, office: v.office || OFFICES[0],
+    ref: v.ref || '', note: v.note || '',
+  };
+}
+
+export function addIncome(v) {
+  const body = incomeBody(v);
+  const x = {
+    id: nextId(DATA.income, 'INC-', 4), ...body, received: 0, outstanding: body.amount,
+    method: v.method || 'Bank Transfer', account: v.account || '', attachments: v.attachments || [],
+    createdBy: ACTOR, createdAt: new Date(), manual: true,
+  };
+  x.status = incomeStatus(x);
+  DATA.income.push(x);
+  saveRecordToFirestore('income', x.id, x);
+  const got = Math.min(Math.round(+v.received || 0), body.amount);
+  if (got > 0) {
+    // Received two ways (part cash, part bank): one receipt for each, into its own account.
+    Object.assign(x, splitOf(v, got));
+    postSplit({
+      date: v.date, dir: 'in', category: x.category, amount: got, method: x.method, account: v.account, party: x.party,
+      propertyId: x.propertyId, office: x.office, ref: v.ref, note: 'Income ' + x.id + ' — ' + x.category, settleKey: 'inc:' + x.id,
+    }, v);
+    applySettlement('inc:' + x.id, got, v.date);
+  }
+  return x;
+}
+
+export function updateIncome(id, v) {
+  const x = mustFind(DATA.income, id, 'Income');
+  const body = incomeBody(v);
+  if ((x.received || 0) > body.amount) throw new Error(fmt(x.received, 'full') + ' has already been received — the income cannot be less. Void the receipt first.');
+  const prev = x.amount;
+  Object.assign(x, body);
+  x.outstanding = x.amount - (x.received || 0);
+  x.status = incomeStatus(x);
+  saveRecordToFirestore('income', x.id, x);
+  logEdit(x.id, 'Income', prev, x.amount);
+  return x;
+}
+
+/** Income in a period: the income ledger by the date earned, and income received straight on the
+    cash ledger (an older way of entering it). Voided receipts are left out. */
+export function incomeEntries(r, f, propIds) {
+  const scoped = f && scopedToProperty(f);
+  const inScope = (x) => (!f || overheadMatch(x, f)) && (!scoped || (x.propertyId && (!propIds || propIds.has(x.propertyId))));
+  const ledger = (DATA.income || []).filter((x) => inR(x.date, r) && inScope(x)).map((x) => ({ ...x, source: 'income' }));
+  const direct = livePayments().filter((p) => p.dir === 'in' && INCOME_CATEGORIES.indexOf(p.category) >= 0 && !isIncomeReceipt(p) && inR(p.date, r) && inScope(p))
+    .map((p) => ({ ...p, source: 'payment', received: p.amount, outstanding: 0, status: 'Received', dueDate: p.date }));
+  return ledger.concat(direct).sort((a, b) => b.date - a.date);
 }
 
 /* ====================================================================
@@ -1889,6 +2071,7 @@ export function normalizeLedger(name, rows) {
   if (name === 'properties') rows.forEach((p) => { if (isDate(p.purchaseDate)) p.heldDays = Math.max(0, Math.round((TODAY - p.purchaseDate) / day)); });
   if (name === 'sales') rows.forEach((s) => { if (s.outstanding > 0 && isDate(s.dueDate)) s.payStatus = s.dueDate < TODAY ? 'Overdue' : s.received > 0 ? 'Partially Paid' : 'Unpaid'; });
   if (name === 'bills' || name === 'taxes') rows.forEach((x) => { x.status = dueState(x.amount, x.paid, x.dueDate); });
+  if (name === 'income') rows.forEach((x) => { x.outstanding = Math.max(0, (x.amount || 0) - (x.received || 0)); x.status = incomeStatus(x); });
   if (name === 'commissions') rows.forEach((c) => { if (c.outstanding > 0 && isDate(c.date) && c.date < addDays(TODAY, -30)) c.status = 'Overdue'; });
   if (name === 'projects') syncProjects(rows);
   if (name === 'payments') rows.sort((a, b) => b.date - a.date);
@@ -2637,8 +2820,42 @@ function taskBody(v) {
     priority: TASK_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Low',
     projectId: proj ? proj.id : null, project: proj ? proj.name : '',
     assignee: String(v.assignee || '').trim(),
+    startDate: v.startDate ? parseDate(v.startDate) : null,
     date: v.date ? parseDate(v.date) : null,
+    // The plan: hours of work and what it is worth or will cost; then the hours spent so far and
+    // how far along it is, as the person doing it declares it.
+    plannedHours: num(v.plannedHours), planWorth: num(v.planWorth), planCost: num(v.planCost),
+    timeSpent: num(v.timeSpent), progress: status === 'Completed' ? 100 : Math.max(0, Math.min(100, num(v.progress))),
     description: v.description || '',
+  };
+}
+const num = (x) => (x === '' || x == null || isNaN(+x) ? 0 : +x);
+
+/** How far along a task is: completed is 100%, else what was declared, else hours spent of hours planned. */
+export function taskProgress(t) {
+  if (taskStatus(t) === 'Completed') return 100;
+  if (t.progress > 0) return Math.min(100, t.progress);
+  return t.plannedHours > 0 ? Math.min(100, Math.round(((t.timeSpent || 0) / t.plannedHours) * 100)) : 0;
+}
+
+/** Whether a task falls in a period: its span, from its start (or when it was made) to its deadline, touches it. */
+export function taskInRange(t, r) {
+  const from = t.startDate || t.createdAt || t.date;
+  const to = t.date || t.startDate || t.createdAt;
+  if (!(from instanceof Date) && !(to instanceof Date)) return false;
+  const a = from instanceof Date ? from : to, b = to instanceof Date ? to : from;
+  return Math.min(a, b) <= r.end && Math.max(a, b) >= r.start;
+}
+
+/** Total tasks, how many were achieved (completed), and the success ratio; cancelled ones count neither way. */
+export function taskTotals(list) {
+  const live = list.filter((t) => taskStatus(t) !== 'Cancelled');
+  const achieved = live.filter((t) => taskStatus(t) === 'Completed').length;
+  const sum = (k) => live.reduce((a, t) => a + (t[k] || 0), 0);
+  return {
+    total: live.length, achieved, ratio: live.length ? (achieved / live.length) * 100 : 0,
+    overdue: live.filter((t) => taskStatus(t) === 'Overdue').length,
+    plannedHours: sum('plannedHours'), planWorth: sum('planWorth'), planCost: sum('planCost'), timeSpent: sum('timeSpent'),
   };
 }
 
@@ -2694,7 +2911,7 @@ function logDelete(id, entity, amount, note) {
 }
 
 /** The ledgers whose records can be deleted from their register. */
-export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', 'bills', 'salaries', 'commissions', 'invoices', 'agents', 'costSheets'];
+export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', 'bills', 'salaries', 'commissions', 'invoices', 'agents', 'costSheets', 'income'];
 
 export function deleteRecord(coll, id) {
   const rec = (DATA[coll] || []).find((x) => x.id === id);
@@ -2740,13 +2957,13 @@ export function deleteRecord(coll, id) {
     const used = DATA.sales.filter((s) => s.agentId === id).length + DATA.commissions.filter((c) => c.agentId === id).length;
     if (used) throw new Error(rec.name + ' has sales or commission on record — those keep the agent, so the agent cannot be deleted.');
   }
-  const settle = { expenses: 'exp:', taxes: 'tax:', zakat: 'zakat:', bills: 'bill:', salaries: 'sal:', commissions: 'comm:' }[coll];
+  const settle = { expenses: 'exp:', taxes: 'tax:', zakat: 'zakat:', bills: 'bill:', salaries: 'sal:', commissions: 'comm:', income: 'inc:' }[coll];
   if (settle) voidLinked(settle + id);
   // An invoice or a saved cost sheet takes its mirrors with it.
   if (coll === 'invoices' || coll === 'costSheets') DATA[coll].filter((x) => x.mirrorOf === id).map((x) => x.id).forEach((mid) => removeFrom(coll, mid));
   removeFrom(coll, id);
   if (coll === 'zakat') refreshZakatSummary();
-  const entity = { expenses: rec.group === 'Assets' ? 'Asset' : 'Expense', taxes: 'Tax', zakat: 'Zakat', bills: 'Bill', salaries: 'Salary', commissions: 'Agent Commission', invoices: 'Invoice', agents: 'Agent', costSheets: 'Trading Cost Sheet' }[coll] || coll;
+  const entity = { income: 'Income', expenses: rec.group === 'Assets' ? 'Asset' : 'Expense', taxes: 'Tax', zakat: 'Zakat', bills: 'Bill', salaries: 'Salary', commissions: 'Agent Commission', invoices: 'Invoice', agents: 'Agent', costSheets: 'Trading Cost Sheet' }[coll] || coll;
   const amount = rec.amount != null ? rec.amount : rec.net != null ? rec.net : rec.totalAmount != null ? rec.totalAmount : rec.netMargin != null ? rec.netMargin : null;
   logDelete(id, entity, amount, entity + ' ' + id + ' deleted' + (settle ? '; its payments voided' : ''));
   return rec;

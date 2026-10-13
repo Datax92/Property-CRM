@@ -24,13 +24,14 @@ interface Tile {
 /* The home layout is a list of grid cells, each holding a tile ID or nothing. Dragging a tile
    drops it into the cell under the pointer (swapping with whatever was there), so tiles always
    sit on the grid. The layout is kept in this browser. */
-const LAYOUT_KEY = 'home-layout-v5';
+const LAYOUT_KEY = 'home-layout-v6';
 const MIRROR_TILES = ['mirrorSaleInvoices', 'mirrorPurchaseInvoices', 'mirrorSheets'];
 /** Icons added since a layout was saved, placed in the first free spot of an older layout. */
 const NEW_TILES: Record<string, string[]> = {
-  'home-layout-v4': MIRROR_TILES,
-  'home-layout-v3': MIRROR_TILES,
-  'home-layout-v2': ['appearance', ...MIRROR_TILES],
+  'home-layout-v5': ['income', 'bank'],
+  'home-layout-v4': [...MIRROR_TILES, 'income', 'bank'],
+  'home-layout-v3': [...MIRROR_TILES, 'income', 'bank'],
+  'home-layout-v2': ['appearance', ...MIRROR_TILES, 'income', 'bank'],
 };
 /** Tiles that were renamed: an older layout keeps the tile where it was put. */
 const RENAMED: Record<string, string> = { mirrorInvoices: 'mirrorSaleInvoices' };
@@ -39,7 +40,7 @@ const DEFAULT_LAYOUT = [
   'tasks', 'proforma', 'saleInvoice', 'purchaseInvoice', 'costSheets', 'projects',
   'tax', 'zakat', 'charity', 'commission', 'inventory', 'assets',
   'gross', 'net', 'receivables', 'agents', 'finance', 'admin',
-  'fiscal', 'appearance', 'account', ...MIRROR_TILES,
+  'fiscal', 'appearance', 'account', ...MIRROR_TILES, 'income', 'bank',
 ];
 /** Cells kept free at the end, so there is always room to drop or add a tile. */
 const SPARE = 6;
@@ -96,7 +97,7 @@ export function HomePage() {
   const k = M.computeKPIs(r, f);
   // Same profit basis as the dashboard and the P&L, so the three never disagree.
   const bv = M.basisView(k, grossBasis);
-  const cash = M.cashLedger(r, f);
+  const cb = M.cashAndBank(r.end, f);
   const sheets: any[] = M.dealSheets();
   const sheetSales = sheets.reduce((a, s) => a + (s.grossSalePrice || 0), 0);
   const sheetGross = sheets.reduce((a, s) => a + (s.grossProfit || 0), 0);
@@ -118,7 +119,9 @@ export function HomePage() {
     pnl: { icon: 'pnl', label: 'Profit / Loss', value: money(bv.net), go: 'finance/pnl', need: 'pnl' },
     sales: { icon: 'sales', label: 'Total Sales', value: money(k.salesRevenue), go: 'sales/register' },
     purchase: { icon: 'purchase', label: 'Total Purchase', value: money(k.purchaseCost), go: 'properties/purchases', need: 'purchases' },
-    cash: { icon: 'cash', label: 'Cash in Hand', value: money(cash.closing), go: 'finance/cashflow', need: 'cashflow' },
+    cash: { icon: 'cash', label: 'Cash in Hand', value: money(cb.cash) + ' cash · ' + money(cb.bank) + ' bank', go: 'bank/accounts', need: 'cashflow' },
+    bank: { icon: 'bank', label: 'Bank & Cash', value: money(cb.total) + ' in all accounts', go: 'bank/accounts', need: 'cashflow' },
+    income: { icon: 'income', label: 'Income', value: money(k.otherIncome) + (k.incomeDue > 0 ? ' · ' + money(k.incomeDue) + ' due' : ''), go: 'income/register', need: 'pnl' },
     expenses: { icon: 'expenses', label: 'Expenses', value: money(k.totalExpenses), go: 'costs/expenses', need: 'expenses' },
     tasks: { icon: 'tasks', label: 'Tasks', value: count(openTasks, 'task to do', 'tasks to do'), go: 'tasks/list' },
     proforma: { icon: 'proforma', label: 'Proforma Invoices', value: count(invoices('proforma'), 'invoice', 'invoices'), go: 'sales/proformaInvoices' },

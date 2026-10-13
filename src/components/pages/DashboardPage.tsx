@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { KpiCard, PageShell, PeriodControl, Tag } from '../Shared';
 import { ChartDonut, RankedList } from '../Charts';
@@ -11,7 +11,42 @@ import { HomePage } from './HomePage';
 import { InvestmentKpis, InvestmentCharts } from '../Investments';
 import { MonthlyReport } from '../MonthlyReport';
 
+/* Sections of the dashboard the owner can show or hide; kept in this browser. Investments are
+   under Finance → Investment tracking, so they start hidden here. */
+const DASH_KEY = 'dashboard-sections-v1';
+const DASH_SECTIONS: [string, string][] = [
+  ['figures', 'Key figures'],
+  ['money', 'Where the money went'],
+  ['attention', 'Needs attention'],
+  ['cash', 'Cash & bank'],
+  ['report', 'Monthly comparison report'],
+  ['investments', 'Investments'],
+];
+const DASH_DEFAULT: Record<string, boolean> = { figures: true, money: true, attention: true, cash: true, report: true, investments: false };
+function loadDash(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(DASH_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    if (v && typeof v === 'object') return { ...DASH_DEFAULT, ...v };
+  } catch {
+    /* storage blocked or corrupt */
+  }
+  return { ...DASH_DEFAULT };
+}
+
 export function DashboardPage() {
+  const [show, setShow] = useState<Record<string, boolean>>({ ...DASH_DEFAULT });
+  const [picking, setPicking] = useState(false);
+  useEffect(() => setShow(loadDash()), []);
+  const toggleSection = (key: string) => {
+    const next = { ...show, [key]: !show[key] };
+    setShow(next);
+    try {
+      window.localStorage.setItem(DASH_KEY, JSON.stringify(next));
+    } catch {
+      /* not remembered */
+    }
+  };
   const {
     tab,
     user,
@@ -84,7 +119,8 @@ export function DashboardPage() {
 
   const bv = M.basisView(k, grossBasis);
   const bvPrev = M.basisView(cmp.prev, grossBasis);
-  const cash = M.cashLedger(r, f);
+  // Cash in hand and cash in bank, each from its own accounts.
+  const cb = M.cashAndBank(r.end, f);
 
   const roleBlurb = () => {
     switch (role) {
@@ -147,8 +183,27 @@ export function DashboardPage() {
         <span className="spacer" />
         <div className="acts" data-noprint="1">
           <PeriodControl />
+          {role === 'CEO' && (
+            <button type="button" className={`btn sm ${picking ? 'pri' : ''}`} onClick={() => setPicking(!picking)} aria-expanded={picking}>
+              <Icon name="grid" size={12} /> {picking ? 'Done' : 'Customize'}
+            </button>
+          )}
         </div>
       </div>
+      {role === 'CEO' && picking && (
+        <div className="panel dash-pick" data-noprint="1">
+          <div className="panel-b">
+            <span className="kicker">Show on the dashboard</span>
+            <div className="dash-pick-row">
+              {DASH_SECTIONS.map(([key, label]) => (
+                <label key={key} className={`dash-chip ${show[key] ? 'on' : ''}`}>
+                  <input type="checkbox" checked={!!show[key]} onChange={() => toggleSection(key)} /> {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {role === 'Agent' && (() => {
         const mySales = M.DATA.sales.filter((s: any) => s.agentId === user.agentId && M.inRange(s.date, r));
@@ -250,7 +305,8 @@ export function DashboardPage() {
         return (
           <>
             <div className="kpis">
-              <KpiCard k="Cash in hand" v={cash.closing} cls="lead" go="finance/cashflow" />
+              <KpiCard k="Cash in hand" v={cb.cash} cls="lead" go="bank/accounts" />
+              <KpiCard k="Cash in bank" v={cb.bank} go="bank/accounts" />
               <KpiCard k="Receivables" v={k.receivable} f="to collect" go="sales/receivables" />
               <KpiCard k="Payables" v={k.payable} f="to pay" cls="warnbox" go="finance/payables" />
               <KpiCard
@@ -435,15 +491,16 @@ export function DashboardPage() {
 
         // What the business has money in and still holds, and what each bank and cash account holds.
         const inv = M.investments(f);
-        const balances = M.accountBalances(r.end, f);
 
         return (
           <>
+            {show.figures && (
             <div className="kpis">
               <KpiCard
                 k="Selling revenue"
                 v={k.salesRevenue}
                 d={d('salesRevenue')}
+                f={k.otherIncome > 0 ? `+ ${M.fmt(k.otherIncome, numbers)} other income` : undefined}
                 go="sales/register"
               />
               <KpiCard
@@ -460,18 +517,37 @@ export function DashboardPage() {
                 d={netDelta}
                 go="finance/pnl"
               />
+              {k.personal > 0 && (
+                <KpiCard
+                  k="Profit after personal spending"
+                  v={bv.net - k.personal}
+                  tone={bv.net - k.personal >= 0 ? 'pos' : 'neg'}
+                  f={`net profit less ${M.fmt(k.personal, numbers)} personal`}
+                  go="costs/expenses"
+                />
+              )}
               <KpiCard
                 k="Cash in hand"
-                v={cash.closing}
-                f={`in ${M.fmtNum(balances.length)} bank & cash ${balances.length === 1 ? 'account' : 'accounts'} · ${M.fmtDate(r.end)}`}
-                go="finance/cashflow"
+                v={cb.cash}
+                tone={cb.cash < 0 ? 'neg' : ''}
+                f={`${M.fmtNum(cb.accounts.filter((a: any) => a.kind === 'Cash').length)} cash ${cb.accounts.filter((a: any) => a.kind === 'Cash').length === 1 ? 'account' : 'accounts'} · ${M.fmtDate(r.end)}`}
+                go="bank/accounts"
               />
-              <KpiCard k="Receivables" v={k.receivable} f="owed to us" go="sales/receivables" />
+              <KpiCard
+                k="Cash in bank"
+                v={cb.bank}
+                tone={cb.bank < 0 ? 'neg' : ''}
+                f={`${M.fmtNum(cb.accounts.filter((a: any) => a.kind === 'Bank').length)} bank ${cb.accounts.filter((a: any) => a.kind === 'Bank').length === 1 ? 'account' : 'accounts'} · ${M.fmtDate(r.end)}`}
+                go="bank/accounts"
+              />
+              <KpiCard k="Receivables" v={k.receivable + k.incomeDue} f={k.incomeDue > 0 ? `incl. ${M.fmt(k.incomeDue, numbers)} income due` : 'owed to us'} go="sales/receivables" />
               <KpiCard k="Payables" v={k.payable} f="we owe" cls="warnbox" go="finance/payables" />
             </div>
+            )}
 
-            <div className="grid c2u">
-              <div style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
+            {(show.money || show.attention || show.cash) && (
+            <div className={show.money && (show.attention || show.cash) ? 'grid c2u' : 'grid'} style={{ marginBottom: '14px' }}>
+              {show.money && (
                 <div className="panel">
                   <div className="panel-h">
                     <h3>Where the money went</h3>
@@ -489,33 +565,39 @@ export function DashboardPage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div style={{ display: 'grid', gap: '14px', minWidth: 0 }}>
+              {(show.attention || show.cash) && (
+              <div style={{ display: 'grid', gap: '14px', minWidth: 0, alignContent: 'start' }}>
+                {show.attention && (
                 <div className="panel">
                   <div className="panel-h">
                     <h3>Needs attention</h3>
                     <span className="sub">{M.fmtNum(al.length)} items</span>
                   </div>
                   <div className="panel-b tight">
-                    <div className="alerts">
-                      {al.slice(0, 4).map((a: any, idx: number) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          className={`alert ${a.sev}`}
-                          onClick={() => goto(alertGo(a.view))}
-                        >
-                          <span className="ic">
-                            <Icon name={a.sev === 'good' ? 'ok' : a.sev === 'high' ? 'warn' : 'info'} />
-                          </span>
-                          <span>
-                            <span className="t">{a.title}</span>
-                            <span className="d">{a.detail}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    {al.length ? (
+                      <div className="alerts">
+                        {al.slice(0, 4).map((a: any, idx: number) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            className={`alert ${a.sev}`}
+                            onClick={() => goto(alertGo(a.view))}
+                          >
+                            <span className="ic">
+                              <Icon name={a.sev === 'good' ? 'ok' : a.sev === 'high' ? 'warn' : 'info'} />
+                            </span>
+                            <span>
+                              <span className="t">{a.title}</span>
+                              <span className="d">{a.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty" style={{ padding: '14px' }}>All clear — nothing needs attention.</div>
+                    )}
                     {al.length > 4 && (
                       <div style={{ marginTop: '10px' }}>
                         <button
@@ -529,58 +611,90 @@ export function DashboardPage() {
                     )}
                   </div>
                 </div>
+                )}
 
+                {show.cash && (
                 <div className="panel">
                   <div className="panel-h">
-                    <h3>Cash &amp; bank balances</h3>
+                    <h3>Cash &amp; bank</h3>
                     <span className="sub">{M.fmtDate(r.end)}</span>
                     <span className="spacer" />
-                    <button type="button" className="link" onClick={() => goto('finance/cashflow')}>
-                      Cash flow
+                    <button type="button" className="link" onClick={() => goto('bank/accounts')}>
+                      Bank &amp; Cash
                     </button>
                   </div>
                   <div className="panel-b tight">
-                    {balances.length ? (
+                    {cb.accounts.length ? (
                       <div className="acctlist">
-                        {balances.map((b: any) => (
-                          <div key={b.account} className="r">
-                            <span>{b.account}</span>
-                            <b className={b.balance < 0 ? 'neg' : 'pos'}>{M.fmt(b.balance, numbers)}</b>
-                          </div>
-                        ))}
+                        {(['Cash', 'Bank'] as const).map((kind) => {
+                          const of = cb.accounts.filter((b: any) => b.kind === kind);
+                          const tot = kind === 'Cash' ? cb.cash : cb.bank;
+                          return (
+                            <React.Fragment key={kind}>
+                              <div className="r acct-kind">
+                                <span>{kind === 'Cash' ? 'Cash in hand' : 'Cash in bank'}</span>
+                                <b className={tot < 0 ? 'neg' : 'pos'}>{M.fmt(tot, numbers)}</b>
+                              </div>
+                              {of.map((b: any) => (
+                                <div key={b.account} className="r acct-sub">
+                                  <span>{b.account}</span>
+                                  <b className={b.balance < 0 ? 'neg' : ''}>{M.fmt(b.balance, numbers)}</b>
+                                </div>
+                              ))}
+                              {!of.length && (
+                                <div className="r acct-sub muted">
+                                  <span>{kind === 'Cash' ? 'No cash account yet' : 'No bank account yet'}</span>
+                                  <span />
+                                </div>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                        <div className="r acct-total">
+                          <span>Total</span>
+                          <b className={cb.total < 0 ? 'neg' : 'pos'}>{M.fmt(cb.total, numbers)}</b>
+                        </div>
                       </div>
                     ) : (
                       <div className="empty" style={{ padding: '16px' }}>
                         No money recorded in or out yet.
                       </div>
                     )}
-                    {balances.some((b: any) => b.balance < 0) && (
-                      <div style={{ marginTop: '8px' }}>
-                        <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
-                          <Icon name="plus" size={12} /> Opening balance
-                        </button>{' '}
-                        <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Owner Capital' })}>
-                          <Icon name="plus" size={12} /> Owner capital
-                        </button>
-                      </div>
-                    )}
+                    <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      <button type="button" className="btn sm" onClick={() => openModal('transfer')}>
+                        <Icon name="swap" size={12} /> Transfer
+                      </button>
+                      <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
+                        <Icon name="plus" size={12} /> Opening balance
+                      </button>
+                      <button type="button" className="btn sm" onClick={() => openModal('payment', { dir: 'in', category: 'Owner Capital' })}>
+                        <Icon name="plus" size={12} /> Owner capital
+                      </button>
+                    </div>
                   </div>
                 </div>
+                )}
               </div>
+              )}
             </div>
+            )}
 
-            <MonthlyReport />
+            {show.report && <MonthlyReport />}
 
-            <div className="sech">
-              <h2>Investments</h2>
-              <span className="sub">unsold plots and assets, at what went in against what each is worth today</span>
-              <span className="spacer" />
-              <button type="button" className="link" onClick={() => goto('finance/investments')}>
-                Investment tracking
-              </button>
-            </div>
-            <InvestmentKpis rows={inv} />
-            <InvestmentCharts rows={inv} />
+            {show.investments && (
+              <>
+                <div className="sech">
+                  <h2>Investments</h2>
+                  <span className="sub">unsold plots and assets, at what went in against what each is worth today</span>
+                  <span className="spacer" />
+                  <button type="button" className="link" onClick={() => goto('finance/investments')}>
+                    Investment tracking
+                  </button>
+                </div>
+                <InvestmentKpis rows={inv} />
+                <InvestmentCharts rows={inv} />
+              </>
+            )}
           </>
         );
       })()}

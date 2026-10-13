@@ -425,6 +425,7 @@ export const FORMS_DEF: Record<string, any> = {
             g,
             g === 'Assets' ? 'Assets (kept as an asset, not an expense)' : g === 'Personal Expenses' ? 'Personal Expenses (owner, not business)' : g,
           ]),
+        hint: 'Personal spending is the owner’s, not a business cost: it is taken off in “Profit after personal spending” on the dashboard. Pick a business category for costs of the business.',
       },
       {
         k: 'category',
@@ -608,12 +609,16 @@ export const FORMS_DEF: Record<string, any> = {
   },
   income: {
     title: 'Add income',
-    sub: 'Money earned outside property trading: rent, profit on deposits, commission earned and the like. It counts as revenue in profit and loss.',
+    editTitle: 'Edit income',
+    coll: 'income',
+    update: (id: string, v: any) => M.updateIncome(id, v),
+    sub: 'Money earned outside property trading: rent, profit on deposits, commission earned and the like. It counts as revenue in profit and loss on the date it was earned; what is received goes into the account you pick.',
     fields: [
       { g: 'Income' },
-      { k: 'category', l: 'Kind of income', type: 'select', opts: () => M.INCOME_CATEGORIES, req: true },
+      { k: 'category', l: 'Kind of income', req: true, ph: 'Pick or type a kind', list: () => M.incomeKinds(), def: () => M.INCOME_CATEGORIES[0] },
       { k: 'party', l: 'Received from', req: true, ph: 'Tenant, bank or payer' },
-      { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'date', l: 'Date earned', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'dueDate', l: 'Due to be received by', type: 'date', hint: 'For income not received yet, e.g. rent due at month end.' },
       {
         k: 'propertyId',
         l: 'Property (optional)',
@@ -621,19 +626,90 @@ export const FORMS_DEF: Record<string, any> = {
         opts: () => [['', '— Not for one property —'], ...M.DATA.properties.map((p: any) => [p.id, p.name + ' · ' + p.project])],
         hint: 'For rent from a plot or house, pick it here.',
       },
-      { g: 'Amount' },
-      { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'method', l: 'Method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true },
-      { ...accountField(false), req: true },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Amount earned (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'received', l: 'Received now (PKR)', type: 'money', addOnly: true, auto: (v: any) => `Auto: ${M.fmt(n(v.amount), 'full')} (all of it)`, hint: 'Leave blank if all of it was received; 0 if none yet.' },
+      { k: 'method', l: 'Method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
+      accountField(),
+      ...splitFields('received'),
       { k: 'ref', l: 'Reference number', ph: 'Receipt or transfer reference' },
       { k: 'note', l: 'Description', ph: 'What this income is for', full: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
-    validate: () => ({}),
+    calc: (v: any) => {
+      const got = v.received === '' || v.received == null ? n(v.amount) : n(v.received);
+      return [
+        ['Earned', n(v.amount)],
+        ['Received now', got],
+        ['Still to receive', Math.max(0, n(v.amount) - got), true],
+      ];
+    },
+    validate: (v: any, editId?: string) => {
+      const e: Record<string, string> = {};
+      if (editId) return e;
+      const got = v.received === '' || v.received == null ? n(v.amount) : n(v.received);
+      if (got > n(v.amount)) e.received = 'Cannot be more than the amount earned.';
+      if (v.dueDate && v.date && M.parseDate(v.dueDate) < M.parseDate(v.date)) e.dueDate = 'Cannot be before the date earned.';
+      splitErrors(v, got, e);
+      return e;
+    },
     submit: (v: any) => {
-      const t = M.recordPayment({ ...v, dir: 'in', settle: '' });
-      return { id: t.id, msg: 'Income ' + t.id + ' recorded', go: 'finance/income' };
+      const x = M.addIncome({ ...v, received: v.received === '' || v.received == null ? v.amount : v.received });
+      return { id: x.id, msg: 'Income ' + x.id + ' recorded', go: 'income/register' };
+    },
+  },
+  transfer: {
+    title: 'Move money between accounts',
+    sub: 'Cash deposited in the bank, money drawn out as cash, or moved from one bank to another. It is neither income nor an expense: one account goes down and the other goes up by the same amount.',
+    fields: [
+      { g: 'Transfer' },
+      { k: 'from', l: 'From account', req: true, list: () => M.accountNames(), def: () => M.accountNames()[0], ph: 'e.g. Cash in hand' },
+      { k: 'to', l: 'To account', req: true, list: () => M.accountNames(), def: () => M.accountNames()[1] || '', ph: 'e.g. HBL Current — 0912' },
+      { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'method', l: 'How', type: 'select', opts: () => M.METHODS, def: 'Cash', req: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+      { k: 'ref', l: 'Reference number', ph: 'Deposit slip or cheque number' },
+      { k: 'note', l: 'Description', ph: 'e.g. Cash deposited in HBL', full: true },
+      { k: 'attachments', l: 'Attachments', type: 'files', full: true },
+    ],
+    calc: (v: any) => [
+      [(v.from || 'From') + ' goes down by', n(v.amount)],
+      [(v.to || 'To') + ' goes up by', n(v.amount), true],
+    ],
+    validate: (v: any) =>
+      String(v.from || '').trim() && String(v.from).trim() === String(v.to || '').trim() ? { to: 'Pick a different account from the one the money leaves.' } : {},
+    submit: (v: any) => {
+      const t = M.addTransfer(v);
+      return { id: t.id, msg: 'Transfer ' + t.id + ' recorded', go: 'bank/accounts' };
+    },
+  },
+  account: {
+    title: 'Add a bank or cash account',
+    sub: 'A bank account or a place cash is kept, with what it held to begin with. That amount is its opening balance: it is not income.',
+    fields: [
+      { g: 'Account' },
+      { k: 'kind', l: 'Kind', type: 'select', opts: () => [['Bank', 'Bank account'], ['Cash', 'Cash in hand']], def: 'Bank', req: true },
+      { k: 'account', l: 'Account name', req: true, ph: 'e.g. Meezan Business — 4471, or Cash in hand — Head Office' },
+      { k: 'amount', l: 'Opening balance (PKR)', type: 'money', min: 0, hint: 'What it held on the date below. 0 for a new, empty account.' },
+      { k: 'date', l: 'As on', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
+    ],
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      const name = String(v.account || '').trim();
+      if (name && M.accountNames().some((a: string) => a.toLowerCase() === name.toLowerCase() && M.DATA.payments.some((p: any) => p.account === a)))
+        e.account = 'This account is already in use — record its opening balance under Bank & Cash instead.';
+      return e;
+    },
+    submit: (v: any) => {
+      let name = String(v.account || '').trim();
+      // The kind is read from the name, so a cash account says so in its name.
+      if (v.kind === 'Cash' && M.accountKind(name) !== 'Cash') name += ' (Cash)';
+      if (v.kind === 'Bank' && M.accountKind(name) === 'Cash') name += ' (Bank)';
+      const t = M.recordPayment({ dir: 'in', category: 'Opening Balance', amount: n(v.amount), account: name, party: 'Opening balance', date: v.date, office: v.office, method: v.kind === 'Cash' ? 'Cash' : 'Bank Transfer', note: 'Opening balance of ' + name });
+      return { id: t.id, msg: name + ' added', go: 'bank/accounts' };
     },
   },
   saleInvoice: {
@@ -697,10 +773,30 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'status', l: 'Status', type: 'select', opts: () => M.TASK_STATUSES, def: 'Open', req: true },
       { k: 'priority', l: 'Priority', type: 'select', opts: () => M.TASK_PRIORITIES, def: 'Low', req: true },
       { k: 'assignee', l: 'Assigned to', ph: 'Who is doing it', list: () => M.taskAssignees() },
+      { g: 'Dates' },
+      { k: 'startDate', l: 'Start date', type: 'date', def: () => dstr(M.TODAY) },
       { k: 'date', l: 'Deadline', type: 'date', hint: 'It turns Overdue after this date and shows in alerts as it comes near.' },
+      { g: 'Plan and progress' },
+      { k: 'plannedHours', l: 'Planned workload (hours)', type: 'number', min: 0 },
+      { k: 'planWorth', l: 'Plan worth (PKR)', type: 'money', min: 0, hint: 'What finishing it is worth to the business.' },
+      { k: 'planCost', l: 'Plan cost (PKR)', type: 'money', min: 0, hint: 'What it is expected to cost.' },
+      { k: 'timeSpent', l: 'Time spent (hours)', type: 'number', min: 0 },
+      {
+        k: 'progress',
+        l: 'Progress (%)',
+        type: 'number',
+        min: 0,
+        auto: (v: any) => (n(v.plannedHours) > 0 ? `Auto: ${Math.min(100, Math.round((n(v.timeSpent) / n(v.plannedHours)) * 100))}% (time spent of planned)` : '0'),
+        hint: 'How far along it is. A completed task is 100%.',
+      },
       { k: 'description', l: 'Details', ph: 'Optional notes', full: true },
     ],
-    validate: () => ({}),
+    validate: (v: any) => {
+      const e: Record<string, string> = {};
+      if (n(v.progress) > 100) e.progress = 'Cannot be more than 100%.';
+      if (v.startDate && v.date && M.parseDate(v.date) < M.parseDate(v.startDate)) e.date = 'The deadline is before the start date.';
+      return e;
+    },
     submit: (v: any) => {
       const t = M.addTask(v);
       return { id: t.id, msg: 'Task ' + t.id + ' added', go: 'tasks/list' };
@@ -779,7 +875,10 @@ export const FORMS_DEF: Record<string, any> = {
     title: 'Add a commission',
     editTitle: 'Edit commission',
     coll: 'commissions',
-    load: (c: any) => ({ side: c.txnType, agentName: c.agentId ? '' : c.agent }),
+    load: (c: any) => {
+      const id = M.commissionAgentId(c) || '';
+      return { side: c.txnType, agentId: id, agentName: id ? '' : c.agent };
+    },
     update: (id: string, v: any) => M.updateCommission(id, v),
     sub: 'Commission on buying or selling a plot. It shows on that deal’s cost sheet and counts in profit when the plot is sold.',
     fields: [
@@ -796,9 +895,11 @@ export const FORMS_DEF: Record<string, any> = {
         k: 'agentId',
         l: 'Agent',
         type: 'select',
-        opts: () => [['', '— Not in the directory, type the name —'], ...M.DATA.agents.map((a: any) => [a.id, a.name])],
+        // Agents in the directory come first, so a commission is linked to its agent by default.
+        opts: () => [...M.DATA.agents.map((a: any) => [a.id, a.name]), ['', '— Not in the directory, type the name —']],
+        hint: 'Only commission linked to an agent counts in the agent directory.',
       },
-      { k: 'agentName', l: 'Agent / dealer name', ph: 'Name, if not in the directory' },
+      { k: 'agentName', l: 'Agent / dealer name', ph: 'Name, if not in the directory', list: () => M.DATA.agents.map((a: any) => a.name) },
       { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { g: 'Amount' },
       { k: 'amount', l: 'Commission (PKR)', type: 'money', req: true, min: 1 },
@@ -812,10 +913,17 @@ export const FORMS_DEF: Record<string, any> = {
       ['Paid', n(v.paid)],
       ['Still to pay', Math.max(0, n(v.amount) - n(v.paid)), true],
     ],
-    validate: (v: any) => {
+    validate: (v: any, editId?: string) => {
       const e: Record<string, string> = {};
       if (!v.agentId && !String(v.agentName || '').trim()) e.agentName = 'Pick an agent above, or type the name here.';
       if (n(v.paid) > n(v.amount)) e.paid = 'Paid cannot exceed the commission.';
+      // The same commission entered twice would count twice on the cost sheet and in profit.
+      const who = v.agentId || (M.agentForName(v.agentName) || {}).id || String(v.agentName || '').trim().toLowerCase();
+      const same = v.propertyId && v.date && M.DATA.commissions.find((c: any) =>
+        c.id !== editId && c.propertyId === v.propertyId && c.txnType === (v.side === 'Purchase' ? 'Purchase' : 'Sale') &&
+        Math.round(c.amount) === Math.round(n(v.amount)) && c.date instanceof Date && M.dateInput(c.date) === v.date &&
+        (M.commissionAgentId(c) || String(c.agent || '').toLowerCase()) === who);
+      if (same) e.amount = `Already recorded as ${same.id} (${same.agent}, ${M.fmt(same.amount, 'full')} on ${M.fmtDate(same.date)}). Open that entry to change it instead.`;
       return e;
     },
     submit: (v: any) => {
@@ -1311,7 +1419,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects'];
+    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects', 'income'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;

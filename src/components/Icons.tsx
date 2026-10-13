@@ -100,6 +100,19 @@ export function Icon({ name, className = 'ic', size = 16 }: IconProps) {
           <path d="M2 6.6h12M11 9.8h1.2" />
         </svg>
       );
+    case 'bank':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 6L8 2.5 14 6z" />
+          <path d="M3.5 6.5v5.5M6.5 6.5v5.5M9.5 6.5v5.5M12.5 6.5v5.5M2 13.5h12" />
+        </svg>
+      );
+    case 'swap':
+      return (
+        <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.5 5.5h10l-2.5-2.5M13.5 10.5h-10l2.5 2.5" />
+        </svg>
+      );
     case 'receipt':
       return (
         <svg className={className} viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

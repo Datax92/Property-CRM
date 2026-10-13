@@ -15,8 +15,10 @@ export function AgentsPage() {
   if (tab === 'commissions') {
     const ids = new Set(M.DATA.properties.filter((p: any) => M.propMatch(p, f)).map((p: any) => p.id));
     const rows = M.DATA.commissions.filter(
-      (c: any) => ids.has(c.propertyId) && M.inRange(c.date, r) && (f.agent === 'all' || c.agentId === f.agent)
+      (c: any) => ids.has(c.propertyId) && M.inRange(c.date, r) && (f.agent === 'all' || M.commissionAgentId(c) === f.agent)
     );
+    // The same commission entered twice counts twice on the cost sheet and in profit.
+    const dupes = M.duplicateCommissions().filter((g: any[]) => g.some((c: any) => rows.indexOf(c) >= 0));
 
     const summaryPairs: [string, string][] = [
       ['Entries', M.fmtNum(rows.length)],
@@ -27,7 +29,16 @@ export function AgentsPage() {
 
     const cols = [
       { key: 'id', label: 'ID' },
-      { key: 'agent', label: 'Agent' },
+      {
+        key: 'agent',
+        label: 'Agent',
+        render: (c: any) => {
+          const id = M.commissionAgentId(c);
+          const a = id ? M.DATA.agents.find((x: any) => x.id === id) : null;
+          if (!a) return <span title="Not linked to an agent in the directory, so it is not in the agent directory's totals">{c.agent} <span className="tag warn">not in directory</span></span>;
+          return a.name === c.agent ? c.agent : <span title={`Entered as “${c.agent}”`}>{a.name}</span>;
+        },
+      },
       { key: 'txnType', label: 'On', render: (c: any) => <span className="tag mute">{c.txnType === 'Purchase' ? 'Purchase' : 'Sale'}</span> },
       { key: 'property', label: 'Property' },
       { key: 'counterparty', label: 'Buyer / seller' },
@@ -97,6 +108,25 @@ export function AgentsPage() {
         }
       >
         <SummaryKpis pairs={summaryPairs} />
+        {dupes.length > 0 && (
+          <div className="note bad" style={{ marginBottom: '14px' }}>
+            <span className="ic">
+              <Icon name="warn" />
+            </span>
+            <div>
+              <b>Looks entered twice:</b>{' '}
+              {dupes.map((g: any[], i: number) => (
+                <span key={i}>
+                  {i > 0 ? '; ' : ''}
+                  {g.map((c: any) => c.id).join(' and ')} — {g[0].txnType.toLowerCase()} commission of {M.fmt(g[0].amount, 'full')} on {g[0].property},{' '}
+                  {M.fmtDate(g[0].date)}
+                </span>
+              ))}
+              . Each counts on the deal&apos;s cost sheet and in profit. If it was entered by mistake, delete the extra one (the bin on its row);
+              if two agents really were paid, edit one so it shows the right agent.
+            </div>
+          </div>
+        )}
         {missing.length > 0 && (
           <div className="panel" style={{ marginBottom: '14px' }}>
             <div className="panel-h">
@@ -122,6 +152,8 @@ export function AgentsPage() {
 
   // Directory tab (default)
   const rows = M.agentSummary(r, f).map((a: any, i: number) => ({ ...a, rank: i + 1 }));
+  // Commission entered under a name that is no agent in the directory is in the ledger, not here.
+  const unlinked = M.DATA.commissions.filter((c: any) => M.inRange(c.date, r) && !M.commissionAgentId(c));
 
   const summaryPairs: [string, string][] = [
     ['Agents', M.fmtNum(rows.length)],
@@ -165,6 +197,18 @@ export function AgentsPage() {
       }
     >
       <SummaryKpis pairs={summaryPairs} />
+      {unlinked.length > 0 && (
+        <div className="note" style={{ marginBottom: '14px' }}>
+          <span className="ic">
+            <Icon name="info" />
+          </span>
+          <div>
+            {M.fmt(unlinked.reduce((a: number, c: any) => a + c.amount, 0), 'full')} of commission in the ledger is under{' '}
+            {Array.from(new Set(unlinked.map((c: any) => c.agent))).join(', ')}, not an agent in this directory, so it is not in the totals
+            above. Add the agent here, or edit the entry in the commission ledger and pick the agent.
+          </div>
+        </div>
+      )}
       {rows.length === 0 ? (
         <div className="empty">
           <Icon name="empty" />

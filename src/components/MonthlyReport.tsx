@@ -65,6 +65,7 @@ export function MonthlyReport() {
   const rows: Row[] = [
     { label: 'PROFIT — AS IN THE P&L', kind: 'h' },
     { label: 'Revenue', get: (m) => m.revenue, total: sum('revenue') },
+    ...(sum('otherIncome') > 0 ? [{ label: '  of which other income', get: (m: any) => m.otherIncome, total: sum('otherIncome') }] : []),
     { label: 'Plots sold', get: (m) => m.sold, total: sum('sold'), fmt: (n) => M.fmtNum(n) },
     { label: 'Landed cost of plots sold', get: (m) => -m.landed, total: -sum('landed') },
     { label: 'Selling costs (§236C, agent, other)', get: (m) => -m.selling, total: -sum('selling') },
@@ -73,6 +74,13 @@ export function MonthlyReport() {
     { label: 'Tax, Zakat & charity', get: (m) => -m.deductions, total: -sum('deductions') },
     { label: 'Net profit', kind: 'g', get: (m) => m.net, total: sum('net'), tone: true },
     { label: 'Net margin', get: (m) => m.margin, total: M.pctOf(sum('net'), sum('revenue')), fmt: pct },
+    // The owner's personal spending is drawn out of profit, not a cost of earning it.
+    ...(sum('personal') > 0
+      ? [
+          { label: 'Personal spending (owner)', get: (m: any) => -m.personal, total: -sum('personal') },
+          { label: 'Left after personal spending', kind: 't' as const, get: (m: any) => m.afterPersonal, total: sum('afterPersonal'), tone: true },
+        ]
+      : []),
     { label: `Target profit (${pct(rep.targetPct)} of ${money(+target.capital || 0)})`, get: (m) => m.target, total: sum('target') },
     { label: 'Ahead / behind target', kind: 't', get: (m) => m.vsTarget, total: sum('vsTarget'), tone: true },
     { label: 'WHAT THE BUSINESS HOLDS — AT MONTH END', kind: 'h' },
@@ -90,15 +98,15 @@ export function MonthlyReport() {
     const diff = b == null ? null : a - b;
     const better = diff == null || diff === 0 ? '' : (diff > 0) === (opts.good !== 'down') ? 'pos' : 'neg';
     return (
-      <div className="kpi" key={label}>
+      <div className={`kpi mr-card ${better ? "mr-" + better : ""}`} key={label}>
         <span className="k">{label}</span>
-        <span className="v">{show(a)}</span>
+        <span className={`v ${a < 0 ? 'neg' : ''}`}>{show(a)}</span>
         <span className="f">
           {b == null ? (
-            'no month before it this year'
+            <span className="muted">no month before it this year</span>
           ) : (
             <>
-              <span className={better}>
+              <span className={`mr-chip ${better}`}>
                 {diff! > 0 ? '▲' : diff! < 0 ? '▼' : '='} {show(Math.abs(diff!))}
               </span>
               <span className="muted">vs {prev.label} ({show(b)})</span>
@@ -117,6 +125,9 @@ export function MonthlyReport() {
             {compare('Revenue', cur.revenue, prev && prev.revenue)}
             {compare('Gross profit', cur.gross, prev && prev.gross)}
             {compare('Net profit', cur.net, prev && prev.net)}
+            {cur.personal > 0 || (prev && prev.personal > 0)
+              ? compare('After personal spending', cur.afterPersonal, prev && prev.afterPersonal)
+              : null}
             {compare('Against target', cur.vsTarget, prev && prev.vsTarget)}
             {compare('Business holds', cur.holdings.total, prev && prev.holdings.total)}
             {compare('Growth in the month', cur.growth, prev && prev.growth)}
@@ -125,17 +136,18 @@ export function MonthlyReport() {
           <div className={forPrint ? 'mr-charts print' : 'grid c2 mr-charts'}>
             <div className="panel">
               <div className="panel-h">
-                <h3>Net profit against target</h3>
+                <h3>Revenue, net profit and target</h3>
                 <span className="sub">{year}, by month</span>
               </div>
               <div className="panel-b">
                 <ChartBarGroups
-                  rows={months.map((m) => ({ label: m.label, full: m.full, net: m.net, target: m.target }))}
+                  rows={months.map((m) => ({ label: m.label, full: m.full, revenue: m.revenue, net: m.net, target: m.target }))}
                   series={[
+                    { key: 'revenue', label: 'Revenue', c: 'var(--s3)' },
                     { key: 'net', label: 'Net profit', c: 'var(--s1)' },
                     { key: 'target', label: 'Target', c: 'var(--s2)' },
                   ]}
-                  label="Net profit against target by month"
+                  label="Revenue, net profit and target by month"
                 />
               </div>
             </div>
@@ -210,10 +222,15 @@ export function MonthlyReport() {
   );
 
   return (
-    <>
-      <div className="sech mr-head">
-        <h2>Monthly comparison report</h2>
-        <span className="sub">{cur ? `Month of ${cur.full}` : String(year)}</span>
+    <section className="mr">
+      <div className="mr-band">
+        <div className="mr-title">
+          <span className="kicker">Monthly comparison report</span>
+          <h2>{cur ? cur.full : String(year)}</h2>
+          <span className="sub">
+            {cur && prev ? `against ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}
+          </span>
+        </div>
         <span className="spacer" />
         <span className="mr-ctl" data-noprint="1">
           <select className="fldsel" value={year} onChange={(e) => { setYear(+e.target.value); setPick(null); }} aria-label="Year">
@@ -274,7 +291,7 @@ export function MonthlyReport() {
         </div>
       )}
 
-      {body(false)}
+      <div className="mr-body">{body(false)}</div>
 
       {printing && cur && (
         <PrintNow onDone={() => setPrinting(false)} page="A4 landscape" margin="8mm">
@@ -293,6 +310,6 @@ export function MonthlyReport() {
           </div>
         </PrintNow>
       )}
-    </>
+    </section>
   );
 }
