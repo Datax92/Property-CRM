@@ -2267,3 +2267,8 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mrp-page .mrp-foot { margin-top: auto; padding-top: 8px; }
 .mrp-page .mr-tbl { font-size: 8pt; }
 .mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 3px 6px; }
+.mrp-page .tblwrap { overflow: visible; }
+.mrp-page .mr-tbl { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 7.4pt; }
+.mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 150px; white-space: normal; }
+.mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 2.5px 4px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.mrp-page .mr-tbl td[colspan] { white-space: normal; }

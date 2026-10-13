@@ -166,7 +166,7 @@ export function MonthlyReport({
                     { key: 'target', label: 'Target', c: 'var(--s2)' },
                   ]}
                   label="Net profit against target by month"
-                  width={forPrint ? 560 : undefined}
+                  width={forPrint ? 620 : undefined}
                 />
               </div>
             </div>
@@ -176,7 +176,7 @@ export function MonthlyReport({
                 <span className="sub">change on the month before</span>
               </div>
               <div className="panel-b">
-                <ChartBars signed rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))} label="Growth by month" width={forPrint ? 560 : undefined} />
+                <ChartBars signed rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))} label="Growth by month" width={forPrint ? 620 : undefined} />
               </div>
             </div>
           </div>
