@@ -2145,7 +2145,8 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-band h2 { margin: 2px 0 0; font-size: 22px; color: #fff; }
 .mr-band .sub { color: rgba(255,255,255,.8); font-size: 12.5px; }
 .mr-title { display: flex; flex-direction: column; min-width: 0; }
-.mr-band .mr-ctl .fldsel { background: rgba(255,255,255,.95); }
+.mr-band .mr-ctl .fldsel { background: #fff; color: var(--ink); border-color: transparent; }
+.mr-band .mr-ctl .fldsel option { color: var(--ink); }
 .mr-band .mr-ctl .btn { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.35); color: #fff; }
 .mr-band .mr-ctl .btn.pri { background: #fff; color: var(--brand); }
 .mr-body { padding: 16px 18px 18px; }

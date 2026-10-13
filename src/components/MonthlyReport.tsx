@@ -136,18 +136,17 @@ export function MonthlyReport() {
           <div className={forPrint ? 'mr-charts print' : 'grid c2 mr-charts'}>
             <div className="panel">
               <div className="panel-h">
-                <h3>Revenue, net profit and target</h3>
+                <h3>Net profit against target</h3>
                 <span className="sub">{year}, by month</span>
               </div>
               <div className="panel-b">
                 <ChartBarGroups
-                  rows={months.map((m) => ({ label: m.label, full: m.full, revenue: m.revenue, net: m.net, target: m.target }))}
+                  rows={months.map((m) => ({ label: m.label, full: m.full, net: m.net, target: m.target }))}
                   series={[
-                    { key: 'revenue', label: 'Revenue', c: 'var(--s3)' },
                     { key: 'net', label: 'Net profit', c: 'var(--s1)' },
                     { key: 'target', label: 'Target', c: 'var(--s2)' },
                   ]}
-                  label="Revenue, net profit and target by month"
+                  label="Net profit against target by month"
                 />
               </div>
             </div>
