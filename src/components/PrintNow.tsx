@@ -21,7 +21,8 @@ export function PrintNow({
 }) {
   useEffect(() => {
     const style = document.createElement('style');
-    style.textContent = `@media print { @page { size: ${page}; margin: ${margin}; } }`;
+    // A page with no margin leaves the browser no room for its own date, title and link.
+    style.textContent = `@media print { @page { size: ${page}; margin: ${margin} !important; } @page :first { margin: ${margin} !important; } }`;
     document.head.appendChild(style);
     document.body.classList.add('printing-now');
 

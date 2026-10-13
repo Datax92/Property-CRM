@@ -134,6 +134,19 @@ export function MonthlyReport({
     );
   };
 
+  const letterhead = (
+    <div className="mrp-head">
+      <div className="mrp-brand">
+        <BrandBanner />
+      </div>
+      <div className="mrp-meta">
+        <span>Printed {M.fmtDate(M.TODAY)}</span>
+        <span>{M.COMPANY_PHONE}</span>
+        <span>{M.COMPANY_EMAIL}</span>
+      </div>
+    </div>
+  );
+
   const body = (forPrint: boolean, part: 'all' | 'top' | 'table' = 'all') => (
     <>
       {cur ? (
@@ -329,41 +342,48 @@ export function MonthlyReport({
           margin="0"
         >
           <div className="mr-print">
+            {/* Print dashboard: the key figures and charts, then the month table. Print report: the month table only. */}
+            {extra && (
+              <div className="mrp-page">
+                {letterhead}
+                <div className="mrp-band">
+                  <div>
+                    <span className="mrp-kicker">{printTitle}</span>
+                    <b>{cur.full}</b>
+                  </div>
+                  <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
+                </div>
+                {printTop}
+                {body(true, 'top')}
+                <div className="mrp-pageno">Page 1 of 2</div>
+              </div>
+            )}
             <div className="mrp-page">
-              <div className="mrp-head">
-                <div className="mrp-brand">
-                  <BrandBanner />
+              {extra ? (
+                <div className="mrp-band slim">
+                  <div>
+                    <span className="mrp-kicker">MONTHLY COMPARISON REPORT · MONTH BY MONTH</span>
+                    <b>{year}</b>
+                  </div>
+                  <span>{M.COMPANY}</span>
                 </div>
-                <div className="mrp-meta">
-                  <span>Printed {M.fmtDate(M.TODAY)}</span>
-                  <span>{M.COMPANY_PHONE}</span>
-                  <span>{M.COMPANY_EMAIL}</span>
-                </div>
-              </div>
-              <div className="mrp-band">
-                <div>
-                  <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'}</span>
-                  <b>{cur.full}</b>
-                </div>
-                <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
-              </div>
-              {extra && printTop}
-              {body(true, 'top')}
-              <div className="mrp-pageno">Page 1 of 2</div>
-            </div>
-            <div className="mrp-page">
-              <div className="mrp-band slim">
-                <div>
-                  <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'} · MONTH BY MONTH</span>
-                  <b>{year}</b>
-                </div>
-                <span>{M.COMPANY}</span>
-              </div>
+              ) : (
+                <>
+                  {letterhead}
+                  <div className="mrp-band">
+                    <div>
+                      <span className="mrp-kicker">MONTHLY COMPARISON REPORT</span>
+                      <b>{year}, month by month</b>
+                    </div>
+                    <span>{cur.full} highlighted · printed {M.fmtDate(M.TODAY)}</span>
+                  </div>
+                </>
+              )}
               {body(true, 'table')}
               <div className="mrp-foot">
                 <BrandFooter />
               </div>
-              <div className="mrp-pageno">Page 2 of 2</div>
+              {extra && <div className="mrp-pageno">Page 2 of 2</div>}
             </div>
           </div>
         </PrintNow>
