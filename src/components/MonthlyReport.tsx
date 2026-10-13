@@ -146,6 +146,8 @@ export function MonthlyReport({
     { id: 'growth', label: 'Growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
     { id: 'growthPct', label: 'Growth %', get: (m) => m.growthPct, total: M.pctOf(sum('growth'), rep.opening.total), fmt: pct },
   ];
+  // Rows with nothing in any month of the year, which the Rows list can hide in one go.
+  const emptyRows = allRows.filter((row) => row.kind !== 'h' && months.every((m) => !row.get!(m)) && !row.total).map((row) => row.id);
   // Rows chosen not to show are left out on screen and in print; a heading goes with its last row.
   const rows = allRows.filter((row, i) => {
     if (row.kind !== 'h') return hidden.indexOf(row.id) < 0;
@@ -390,6 +392,15 @@ export function MonthlyReport({
               <b>Rows of the month table</b>
               <span className="muted">Untick what is not needed: it is left out here and when printing.</span>
               <span className="spacer" />
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => saveHidden(Array.from(new Set([...hidden, ...emptyRows])))}
+                disabled={!emptyRows.some((id) => hidden.indexOf(id) < 0)}
+                title="Leave out every row with no figure in any month of the year"
+              >
+                Hide empty rows{emptyRows.length ? ` (${M.fmtNum(emptyRows.length)})` : ''}
+              </button>
               <button type="button" className="link" onClick={() => saveHidden([])}>
                 Show all
               </button>
