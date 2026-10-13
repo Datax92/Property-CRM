@@ -103,6 +103,7 @@ export const NAV: NavSection[] = [
     tabs: [
       { id: 'register', label: 'Income register', need: 'pnl' },
       { id: 'summary', label: 'By kind & month', need: 'pnl' },
+      { id: 'categories', label: 'Categories', need: 'pnl' },
     ],
   },
   {
@@ -130,6 +131,7 @@ export const NAV: NavSection[] = [
       { id: 'tax', label: 'Tax', need: 'tax' },
       { id: 'zakat', label: 'Zakat', need: 'zakat' },
       { id: 'charity', label: 'Charity' },
+      { id: 'categories', label: 'Categories', need: 'expenses' },
     ],
   },
   {
@@ -187,6 +189,8 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'costs/bills': { t: 'Bills', u: 'بل', p: 'Recurring and one-off bills, their due dates and anything overdue.' },
   'costs/tax': { t: 'Tax', u: 'ٹیکس', p: 'All tax obligations, split between transaction withholding tax and corporate income tax.' },
   'costs/zakat': { t: 'Zakat', u: 'زکوٰۃ', p: 'Zakat calculated, paid and remaining — reported separately from operating expenses.' },
+  'costs/categories': { t: 'Expense categories', u: 'اخراجات کی اقسام', p: 'Every category and sub-category an expense can be put under, and what was spent under each in the period. Add your own.' },
+  'income/categories': { t: 'Income categories', u: 'آمدنی کی اقسام', p: 'Every kind of income, and what was earned under each in the period. Add your own.' },
   'costs/charity': { t: 'Charity', u: 'خیرات', p: 'Charity and donations given — from deal cost sheets and from the expense ledger.' },
   'admin/transactions': { t: 'Transaction ledger', u: 'لین دین کھاتہ', p: 'Every financial transaction with reference, method, account and approver.' },
   'admin/audit': { t: 'Audit trail', u: 'آڈٹ', p: 'Who did what, and when. Records are voided or reversed, never deleted.' },

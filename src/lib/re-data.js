@@ -48,7 +48,9 @@ export const PAY_STATUS = ['Paid','Partially Paid','Unpaid','Overdue'];
 export const METHODS = ['Cash','Bank Transfer','Cheque','Online Payment','Other'];
 export const ACCOUNTS = ['HBL Current — 0912','Meezan Business — 4471','Petty Cash — Head Office','Alfalah Escrow — 8830'];
 /** Money in that is earned outside property trading. It counts as revenue in profit and loss. */
-export const INCOME_CATEGORIES = ['Rental Income', 'Profit on Deposit', 'Commission Earned', 'Dividend', 'Other Income'];
+const BUILTIN_INCOME = ['Rental Income', 'Profit on Deposit', 'Commission Earned', 'Dividend', 'Other Income'];
+/** The built-in kinds and the ones added under Income → Categories (rebuilt in place when those load). */
+export const INCOME_CATEGORIES = BUILTIN_INCOME.slice();
 /** Money in that is not earned: the owner putting money in, or what an account held to begin with. */
 export const CAPITAL_CATEGORIES = ['Owner Capital', 'Opening Balance'];
 /** Money moved from one of the company's own accounts to another: neither money in nor money out. */
@@ -82,8 +84,13 @@ const EXPENSE_TREE = {
   'Personal Expenses': ['Household','Family','Medical','Education','Personal Travel','Other Personal'],
   'Assets': ['Gold','Stocks & Shares (PSX)','Mutual Funds','Savings / Deposits','Land & Building','Vehicles','Furniture & Fixtures','Computers & IT','Office Equipment','Other Assets'],
 };
+/** The built-in categories and the ones added under Costs → Categories (rebuilt in place when those load). */
 export const EXPENSE_GROUPS = Object.keys(EXPENSE_TREE);
-export const expenseSubcats = (group) => EXPENSE_TREE[group] || [];
+/** Sub-categories added to a category under Costs → Categories, by category. */
+let CUSTOM_SUBS = {};
+export const expenseSubcats = (group) => Array.from(new Set([...(EXPENSE_TREE[group] || []), ...(CUSTOM_SUBS[group] || [])]));
+/** True for a category that came with the portal rather than being added. */
+export const isBuiltinCategory = (kind, name) => (kind === 'income' ? BUILTIN_INCOME : Object.keys(EXPENSE_TREE)).indexOf(name) >= 0;
 /** Groups on the expense ledger that are not expenses of the business. */
 export const NON_EXPENSE_GROUPS = ['Personal Expenses', 'Assets'];
 /** Words in an expense's sub-category or note that place it on a line of a deal cost sheet. */
@@ -134,7 +141,8 @@ function buildData() {
   const tasks = [];
   const taskProjects = [];
   const income = [];
-  return { projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects, income };
+  const categories = [];
+  return { categories, projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects, income };
 }
 
 
@@ -361,8 +369,11 @@ export function computeKPIs(r, f) {
 
   const exp = D.expenses.filter((e) => !ofDeal(e) && inR(e.date, r) && overheadMatch(e, f));
   const byGroup = {};
-  Object.keys(EXPENSE_TREE).forEach((g) => (byGroup[g] = 0));
-  exp.forEach((e) => (byGroup[e.group] += e.amount));
+  EXPENSE_GROUPS.forEach((g) => (byGroup[g] = 0));
+  exp.forEach((e) => (byGroup[e.group] = (byGroup[e.group] || 0) + e.amount));
+  // Categories added in the portal are company expenses, each on its own line.
+  const customGroups = Object.keys(byGroup).filter((g) => g && !EXPENSE_TREE[g]).map((g) => [g, byGroup[g]]);
+  const customExp = customGroups.reduce((a, x) => a + x[1], 0);
 
   const sal = D.salaries.filter((s) => inR(s.date, r) && overheadMatch(s, f));
   const salaries = sal.reduce((a, s) => a + s.net, 0);
@@ -400,7 +411,7 @@ export function computeKPIs(r, f) {
   // lets the waterfall show Gross → Operating → Net without double counting.
   // Company overheads: costs not picked for any plot. In a narrowed scope (one agent, project,
   // type or property) they are not allocated, so only the deals' own costs count there.
-  const operatingCosts = scoped ? 0 : salaries + officeExp + marketing + propertyExp + employeeExp + bills + other;
+  const operatingCosts = scoped ? 0 : salaries + officeExp + marketing + propertyExp + employeeExp + bills + other + customExp;
   // Everything spent besides the price paid for the plots sold.
   const totalExpenses = (costOfSales - deal.buyPrice) + directCosts + operatingCosts + tax + zakat + charity;
   const netProfit = grossProfit - operatingCosts - tax - zakat - charity;
@@ -443,7 +454,7 @@ export function computeKPIs(r, f) {
     operatingCosts, operatingProfit: grossProfit - operatingCosts,
     profitBeforeZakat: grossProfit - operatingCosts - tax,
     commission, commissionPaid, commissionOut,
-    officeExp, marketing, propertyExp, employeeExp, other, salaries, salariesPaid,
+    officeExp, marketing, propertyExp, employeeExp, other, customGroups, customExp, salaries, salariesPaid,
     personal, assetsBought, retainedAfterPersonal: netProfit - personal,
     bills, billsPaid, billsOut, billsOverdueCount: billsOverdue.length,
     tax, taxBooked, taxPaid, taxOut, taxDueSoon, zakat, zakatPaid,
@@ -600,6 +611,7 @@ export function expenseBreakdown(k) {
     ['Marketing', k.marketing, 45], ['Bills', k.bills, 100], ['Property Expenses', k.propertyExp, 190],
     ['Other', k.other + k.employeeExp, 340], ['CGT & other tax', k.tax, 30], ['Zakat', k.zakat, 130],
     ['Charity', k.charity, 150],
+    ...(k.customGroups || []).map((x) => [x[0], x[1], 260]),
   ].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
 }
 
@@ -1527,6 +1539,102 @@ export function addProject(v) {
   return p;
 }
 
+/* Expense and income categories added in the portal. An expense record names a category and,
+   optionally, a sub-category under it (a new category with a sub-category is one record). */
+function syncCategories(rows) {
+  const live = rows.filter((c) => c && (c.group || c.name));
+  CUSTOM_SUBS = {};
+  const groups = [];
+  live.filter((c) => c.kind === 'expense' && c.group).forEach((c) => {
+    if (!EXPENSE_TREE[c.group] && groups.indexOf(c.group) < 0) groups.push(c.group);
+    if (c.name) (CUSTOM_SUBS[c.group] = CUSTOM_SUBS[c.group] || []).push(c.name);
+  });
+  // Added categories sit with the business ones, before personal spending and assets.
+  const business = Object.keys(EXPENSE_TREE).filter((g) => NON_EXPENSE_GROUPS.indexOf(g) < 0);
+  EXPENSE_GROUPS.length = 0;
+  EXPENSE_GROUPS.push(...business, ...groups, ...NON_EXPENSE_GROUPS);
+  const kinds = live.filter((c) => c.kind === 'income' && c.name).map((c) => c.name).filter((n) => BUILTIN_INCOME.indexOf(n) < 0);
+  INCOME_CATEGORIES.length = 0;
+  INCOME_CATEGORIES.push(...BUILTIN_INCOME.slice(0, -1), ...Array.from(new Set(kinds)), BUILTIN_INCOME[BUILTIN_INCOME.length - 1]);
+}
+
+const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+/** Adds an expense category (with or without a sub-category under it) or an income category. */
+export function addCategory(v) {
+  const kind = v.kind === 'income' ? 'income' : 'expense';
+  const name = String(v.name || '').trim();
+  let rec;
+  if (kind === 'income') {
+    if (!name) throw new Error('Enter the name of the income category.');
+    const have = INCOME_CATEGORIES.concat(CAPITAL_CATEGORIES).find((x) => sameName(x, name));
+    if (have) throw new Error('“' + have + '” is already a category.');
+    rec = { kind, group: '', name };
+  } else {
+    const typed = String(v.group || '').trim();
+    if (!typed) throw new Error('Enter or pick a category.');
+    // A category picked from the list keeps its spelling.
+    const group = EXPENSE_GROUPS.find((g) => sameName(g, typed)) || typed;
+    const known = EXPENSE_GROUPS.indexOf(group) >= 0;
+    if (group === 'Assets') throw new Error('Kinds of asset are added under Finance → Assets.');
+    if (known && !name) throw new Error('“' + group + '” is already a category. Type a sub-category to add under it, or a new category name.');
+    if (name && expenseSubcats(group).some((x) => sameName(x, name))) throw new Error('“' + name + '” is already under ' + group + '.');
+    rec = { kind, group, name };
+  }
+  const c = { id: nextId(DATA.categories, 'CAT-', 3), ...rec, createdAt: new Date() };
+  DATA.categories.push(c);
+  syncCategories(DATA.categories);
+  saveRecordToFirestore('categories', c.id, c);
+  return c;
+}
+
+/** Takes an added category off the lists. Entries already made under it keep its name. */
+export function removeCategory(id) {
+  const c = mustFind(DATA.categories, id, 'Category');
+  DATA.categories = DATA.categories.filter((x) => x.id !== id);
+  syncCategories(DATA.categories);
+  deleteRecordFromFirestore('categories', c.id);
+  return c;
+}
+
+/** Every expense category with its sub-categories, what was spent under each in the range and how many entries. */
+export function expenseCategoryStats(r, f) {
+  const exp = DATA.expenses.filter((e) => e.group !== 'Assets' && inR(e.date, r) && (!f || f.office === 'all' || e.office === f.office));
+  const groups = Array.from(new Set([...EXPENSE_GROUPS.filter((g) => g !== 'Assets'), ...exp.map((e) => e.group).filter(Boolean)]));
+  const added = DATA.categories || [];
+  return groups.map((g) => {
+    const of = exp.filter((e) => e.group === g);
+    const subs = Array.from(new Set([...expenseSubcats(g), ...of.map((e) => e.category).filter(Boolean)])).map((s) => ({
+      name: s,
+      amount: of.filter((e) => e.category === s).reduce((a, e) => a + e.amount, 0),
+      count: of.filter((e) => e.category === s).length,
+      added: added.find((c) => c.kind === 'expense' && c.group === g && c.name === s) || null,
+    }));
+    return {
+      name: g,
+      builtin: !!EXPENSE_TREE[g],
+      business: NON_EXPENSE_GROUPS.indexOf(g) < 0,
+      amount: of.reduce((a, e) => a + e.amount, 0),
+      count: of.length,
+      subs,
+      added: added.filter((c) => c.kind === 'expense' && c.group === g),
+    };
+  });
+}
+
+/** Every income category, what was earned under it in the range and how many entries. */
+export function incomeCategoryStats(r, f) {
+  const rows = incomeEntries(r, f);
+  const kinds = Array.from(new Set([...INCOME_CATEGORIES, ...rows.map((x) => x.category).filter(Boolean)]));
+  return kinds.map((k) => ({
+    name: k,
+    builtin: BUILTIN_INCOME.indexOf(k) >= 0,
+    amount: rows.filter((x) => x.category === k).reduce((a, x) => a + x.amount, 0),
+    count: rows.filter((x) => x.category === k).length,
+    added: (DATA.categories || []).find((c) => c.kind === 'income' && c.name === k) || null,
+  }));
+}
+
 export const TAX_TYPES = ['Advance Tax §236K', 'Advance Tax §236C', 'Capital Gains Tax', 'Stamp Duty', 'Capital Value Tax (CVT)', 'Withholding Tax', 'Income Tax', 'Property Tax', 'Other'];
 
 export function addTax(v) {
@@ -2074,6 +2182,7 @@ export function normalizeLedger(name, rows) {
   if (name === 'income') rows.forEach((x) => { x.outstanding = Math.max(0, (x.amount || 0) - (x.received || 0)); x.status = incomeStatus(x); });
   if (name === 'commissions') rows.forEach((c) => { if (c.outstanding > 0 && isDate(c.date) && c.date < addDays(TODAY, -30)) c.status = 'Overdue'; });
   if (name === 'projects') syncProjects(rows);
+  if (name === 'categories') syncCategories(rows);
   if (name === 'payments') rows.sort((a, b) => b.date - a.date);
   // A balance saved before it was worked out automatically may not match its total and token.
   if (name === 'invoices') {

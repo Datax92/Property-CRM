@@ -505,6 +505,7 @@ export function FinancePage() {
           L('Property expenses', -k.propertyExp),
           L('Employee expenses', -k.employeeExp),
           L('Other expenses', -k.other),
+          ...(k.customGroups || []).filter((x: any) => x[1]).map((x: any) => L(x[0], -x[1])),
           L('Operating profit', bv.op, 't'),
           L('DEDUCTIONS FROM PROFIT', null, 'h'),
           L('Capital gains tax (CGT)', -k.deal.cgt),

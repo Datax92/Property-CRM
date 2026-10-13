@@ -2272,3 +2272,16 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mrp-page .mr-tbl th:first-child, .mrp-page .mr-tbl td:first-child { width: 150px; white-space: normal; }
 .mrp-page .mr-tbl td, .mrp-page .mr-tbl th { padding: 2.5px 4px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .mrp-page .mr-tbl td[colspan] { white-space: normal; }
+
+/* ------------------------------ expense and income categories ------------------------------ */
+.catl td.strong .tag { margin-left: 8px; }
+.catl-note { margin-left: 8px; font-size: 12px; font-weight: 400; }
+.catl-subs { display: flex; flex-wrap: wrap; gap: 5px; max-width: 640px; }
+.catl-sub { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; background: var(--paper-2); font-size: 12.5px; color: var(--ink); }
+.catl-sub b { font-weight: 600; color: var(--brand-2); font-variant-numeric: tabular-nums; }
+.catl-sub.own { background: var(--brand-wash); border: 1px solid var(--brand-edge); }
+.catl-sub .iconbtn { width: 20px; height: 20px; }
+.catl-sub .iconbtn svg { width: 12px; height: 12px; }
+.catl-addsub { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; border: 1px dashed #B6BAC3; font-size: 12.5px; color: var(--brand-2); background: transparent; }
+.catl-addsub:hover { background: var(--brand-wash); }
+.catl td.wrap { max-width: none; }

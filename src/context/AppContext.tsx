@@ -425,7 +425,7 @@ export const FORMS_DEF: Record<string, any> = {
             g,
             g === 'Assets' ? 'Assets (kept as an asset, not an expense)' : g === 'Personal Expenses' ? 'Personal Expenses (owner, not business)' : g,
           ]),
-        hint: 'Personal spending is the owner’s, not a business cost: it is taken off in “Profit after personal spending” on the dashboard. Pick a business category for costs of the business.',
+        hint: 'Personal spending is the owner’s, not a business cost: it is taken off in “Profit after personal spending” on the dashboard. Pick a business category for costs of the business. Add your own categories under Costs → Categories.',
       },
       {
         k: 'category',
@@ -569,6 +569,8 @@ export const FORMS_DEF: Record<string, any> = {
           'Other Expenses',
           'Personal Expenses',
           'Assets',
+          // Expense categories added under Costs → Categories.
+          ...M.EXPENSE_GROUPS.filter((g: string) => !M.isBuiltinCategory('expense', g)),
         ],
       },
       { k: 'party', l: 'Customer / vendor', req: true, ph: 'Kamran Aziz' },
@@ -615,7 +617,7 @@ export const FORMS_DEF: Record<string, any> = {
     sub: 'Money earned outside property trading: rent, profit on deposits, commission earned and the like. It counts as revenue in profit and loss on the date it was earned; what is received goes into the account you pick.',
     fields: [
       { g: 'Income' },
-      { k: 'category', l: 'Kind of income', req: true, ph: 'Pick or type a kind', list: () => M.incomeKinds(), def: () => M.INCOME_CATEGORIES[0] },
+      { k: 'category', l: 'Kind of income', req: true, ph: 'Pick or type a kind', list: () => M.incomeKinds(), def: () => M.INCOME_CATEGORIES[0], hint: 'Add your own kinds under Income → Categories.' },
       { k: 'party', l: 'Received from', req: true, ph: 'Tenant, bank or payer' },
       { k: 'date', l: 'Date earned', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { k: 'dueDate', l: 'Due to be received by', type: 'date', hint: 'For income not received yet, e.g. rent due at month end.' },
@@ -830,6 +832,51 @@ export const FORMS_DEF: Record<string, any> = {
     submit: (v: any) => {
       const p = M.addTaskProject(v);
       return { id: p.id, msg: 'Project ' + p.name + ' added', go: 'tasks/projects' };
+    },
+  },
+  expenseCategory: {
+    title: 'Add an expense category',
+    sub: 'A new category, or a sub-category under one already there. It can then be picked when adding an expense, and what is spent under it shows in the reports.',
+    fields: [
+      { g: 'Category' },
+      {
+        k: 'group',
+        l: 'Category',
+        req: true,
+        ph: 'Type a new category, or pick one',
+        list: () => M.EXPENSE_GROUPS.filter((g: string) => g !== 'Assets'),
+        hint: 'A new name makes a new category of business expense. Pick one already there to add a sub-category under it.',
+      },
+      { k: 'name', l: 'Sub-category', ph: 'e.g. Fuel, Generator, Tea & refreshments', hint: 'Optional for a new category.' },
+    ],
+    validate: (v: any) => {
+      const g = String(v.group || '').trim().toLowerCase();
+      const nm = String(v.name || '').trim().toLowerCase();
+      const known = M.EXPENSE_GROUPS.find((x: string) => x.toLowerCase() === g);
+      if (known === 'Assets') return { group: 'Kinds of asset are added under Finance → Assets.' };
+      if (known && !nm) return { name: '“' + known + '” is already a category — type a sub-category to add under it.' };
+      if (known && M.expenseSubcats(known).some((x: string) => x.toLowerCase() === nm)) return { name: 'Already under ' + known + '.' };
+      return {};
+    },
+    submit: (v: any) => {
+      const c = M.addCategory({ kind: 'expense', group: v.group, name: v.name });
+      return { id: c.id, msg: c.name ? c.name + ' added under ' + c.group : 'Category ' + c.group + ' added', go: 'costs/categories' };
+    },
+  },
+  incomeCategory: {
+    title: 'Add an income category',
+    sub: 'A new kind of income. It can then be picked when adding income, and what is earned under it shows in the reports.',
+    fields: [
+      { g: 'Category' },
+      { k: 'name', l: 'Income category', req: true, ph: 'e.g. Consultancy, Profit on investment' },
+    ],
+    validate: (v: any) => {
+      const nm = String(v.name || '').trim().toLowerCase();
+      return M.INCOME_CATEGORIES.concat(M.CAPITAL_CATEGORIES).some((x: string) => x.toLowerCase() === nm) ? { name: 'This category is already there.' } : {};
+    },
+    submit: (v: any) => {
+      const c = M.addCategory({ kind: 'income', name: v.name });
+      return { id: c.id, msg: 'Income category ' + c.name + ' added', go: 'income/categories' };
     },
   },
   project: {
@@ -1419,7 +1466,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects', 'income'];
+    const LEDGERS = ['categories', 'properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects', 'income'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;

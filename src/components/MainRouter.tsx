@@ -19,6 +19,7 @@ import { TasksPage } from './pages/TasksPage';
 import { AppearancePage } from './pages/AppearancePage';
 import { IncomePage } from './pages/IncomePage';
 import { BankPage } from './pages/BankPage';
+import { CategoriesPage } from './pages/CategoriesPage';
 
 export function MainRouter() {
   const { page, tab, role, denied } = useApp();
@@ -64,11 +65,11 @@ export function MainRouter() {
       // Other income moved to its own Income module.
       return tab === 'income' ? <IncomePage /> : <FinancePage />;
     case 'income':
-      return <IncomePage />;
+      return tab === 'categories' ? <CategoriesPage kind="income" /> : <IncomePage />;
     case 'bank':
       return <BankPage />;
     case 'costs':
-      return <CostsPage />;
+      return tab === 'categories' ? <CategoriesPage kind="expense" /> : <CostsPage />;
     case 'admin':
       return <AdminPage />;
     case 'account':
