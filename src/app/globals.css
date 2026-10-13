@@ -2113,7 +2113,7 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-print-head svg { width: 100%; height: auto; max-height: 70px; }
 .mr-print-title { display: flex; justify-content: space-between; align-items: baseline; border-top: 3px solid #1F2456; border-bottom: 1px solid #ccc; padding: 5px 0; margin: 4px 0 8px; font-size: 9pt; color: #444; }
 .mr-print-title b { font-size: 13pt; color: #1F2456; letter-spacing: .06em; margin-right: 10px; }
-.mr-print .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; gap: 6px; margin-bottom: 8px; }
+.mr-print .kpis { grid-template-columns: none !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 8px; }
 .mr-print .kpi { padding: 6px 8px; }
 .mr-print .kpi .v { font-size: 13pt; }
 .mr-print .kpi .k, .mr-print .kpi .f { font-size: 7.5pt; }
