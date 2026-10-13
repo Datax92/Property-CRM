@@ -115,7 +115,7 @@ export function HomePage() {
   const count = (n: number, one: string, many: string) => `${M.fmtNum(n)} ${n === 1 ? one : many}`;
 
   const TILES: Record<string, Tile> = {
-    dashboard: { icon: 'dashboard', label: 'Dashboard', value: 'Graphs & comparison', go: 'dashboard/overview' },
+    dashboard: { icon: 'dashboard', label: 'Dashboard', value: 'Key figures & monthly report', go: 'dashboard/overview' },
     pnl: { icon: 'pnl', label: 'Profit / Loss', value: money(bv.net), go: 'finance/pnl', need: 'pnl' },
     sales: { icon: 'sales', label: 'Total Sales', value: money(k.salesRevenue), go: 'sales/register' },
     purchase: { icon: 'purchase', label: 'Total Purchase', value: money(k.purchaseCost), go: 'properties/purchases', need: 'purchases' },

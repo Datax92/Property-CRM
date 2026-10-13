@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChartBarGroups, ChartBars } from './Charts';
 import { Icon } from './Icons';
-import { BrandBanner } from './Brand';
+import { BrandBanner, BrandFooter } from './Brand';
 import { PrintNow } from './PrintNow';
 import * as M from '../lib/re-data';
 
@@ -28,7 +28,17 @@ function loadTarget(): Target {
 
 const pct = (n: number) => (isFinite(n) ? `${n.toFixed(2)}%` : '—');
 
-export function MonthlyReport() {
+export function MonthlyReport({
+  printSignal = 0,
+  printTitle = 'MONTHLY COMPARISON REPORT',
+  printTop,
+}: {
+  /** Bumped from outside (the dashboard's "Print dashboard") to print this report. */
+  printSignal?: number;
+  printTitle?: string;
+  /** Printed above the report, e.g. the dashboard's key figures. */
+  printTop?: React.ReactNode;
+} = {}) {
   const { effectiveFilters: f, numbers } = useApp();
   const thisYear = M.TODAY.getFullYear();
   const [year, setYear] = useState(thisYear);
@@ -36,6 +46,13 @@ export function MonthlyReport() {
   const [editTarget, setEditTarget] = useState(false);
   const [printing, setPrinting] = useState(false);
   useEffect(() => setTarget(loadTarget()), []);
+  const [extra, setExtra] = useState(false);
+  useEffect(() => {
+    if (printSignal > 0) {
+      setExtra(true);
+      setPrinting(true);
+    }
+  }, [printSignal]);
 
   const rep = M.monthlyComparison(year, f, target);
   const months: any[] = rep.months;
@@ -161,7 +178,7 @@ export function MonthlyReport() {
             </div>
           </div>
 
-          <div className="panel">
+          <div className={`panel ${forPrint ? 'mrp-table' : ''}`}>
             <div className="tblwrap">
               <table className="tbl mr-tbl">
                 <thead>
@@ -293,19 +310,37 @@ export function MonthlyReport() {
       <div className="mr-body">{body(false)}</div>
 
       {printing && cur && (
-        <PrintNow onDone={() => setPrinting(false)} page="A4 landscape" margin="8mm">
+        <PrintNow
+          onDone={() => {
+            setPrinting(false);
+            setExtra(false);
+          }}
+          page="A4 landscape"
+          margin="7mm"
+        >
           <div className="mr-print">
-            <div className="mr-print-head">
-              <BrandBanner />
-              <div className="mr-print-title">
-                <div>
-                  <b>MONTHLY COMPARISON REPORT</b>
-                  <span>Month of {cur.full}</span>
-                </div>
+            <div className="mrp-head">
+              <div className="mrp-brand">
+                <BrandBanner />
+              </div>
+              <div className="mrp-meta">
                 <span>Printed {M.fmtDate(M.TODAY)}</span>
+                <span>{M.COMPANY_PHONE}</span>
+                <span>{M.COMPANY_EMAIL}</span>
               </div>
             </div>
+            <div className="mrp-band">
+              <div>
+                <span className="mrp-kicker">{extra ? printTitle : 'MONTHLY COMPARISON REPORT'}</span>
+                <b>{cur.full}</b>
+              </div>
+              <span>{prev ? `compared with ${prev.full} and every earlier month of ${year}` : `the months of ${year}`}</span>
+            </div>
+            {extra && printTop}
             {body(true)}
+            <div className="mrp-foot">
+              <BrandFooter />
+            </div>
           </div>
         </PrintNow>
       )}

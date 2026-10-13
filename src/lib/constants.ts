@@ -9,7 +9,8 @@ export const NAV: NavSection[] = [
     group: 'Main',
     tabs: [
       { id: 'home', label: 'Home' },
-      { id: 'overview', label: 'Graphs & comparison' },
+      { id: 'overview', label: 'Dashboard' },
+      { id: 'more', label: 'More details' },
       { id: 'alerts', label: 'Alerts' },
     ],
   },
@@ -151,6 +152,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'tasks/projects': { t: 'Projects', u: 'پراجیکٹس', p: 'Groups of tasks and how far each one has got.' },
   'tasks/summary': { t: 'Project summary', u: 'خلاصہ', p: 'Completion, overdue work and tasks per project.' },
   'dashboard/overview': { t: 'Dashboard', u: 'ڈیش بورڈ' },
+  'dashboard/more': { t: 'More details', u: 'مزید تفصیل' },
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost all in (landed cost), what it is worth today, and the difference.' },
   'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought: net buy cost, the expenses on top, landed cost, and what is still owed to the seller.' },

@@ -2132,11 +2132,6 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .acctlist .r.acct-kind { font-weight: 600; color: var(--ink); padding-top: 10px; }
 .acctlist .r.acct-sub { padding-left: 14px; color: var(--ink-2); font-size: 12.5px; }
 .acctlist .r.acct-total { border-top: 2px solid var(--rule-2); font-weight: 700; font-size: 14px; }
-.dash-pick { margin-bottom: 14px; }
-.dash-pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.dash-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; font-size: 13px; cursor: pointer; background: var(--card); color: var(--ink-2); }
-.dash-chip.on { border-color: var(--brand-edge); background: var(--brand-wash); color: var(--ink); font-weight: 600; }
-.dash-chip input { margin: 0; }
 
 /* ---- monthly comparison report: one framed report with a header band ---- */
 .mr { margin: 18px 0 14px; border: 1px solid var(--rule); border-radius: 12px; background: var(--card); overflow: hidden; box-shadow: 0 1px 2px rgba(17,24,39,.05); }
@@ -2172,3 +2167,92 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .tlist .ttable td.nowrap, .tlist .ttable .nowrap { white-space: nowrap; }
 .tlist .ttable .pbar { min-width: 130px; }
 @media (max-width: 700px) { .tt-main { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; } .tt-main b { font-size: 21px; } .tt-side { margin-left: 0; text-align: left; } }
+
+/* ------------------------------ dashboard: hero, net profit and key figures ------------------------------ */
+.dhero {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 18px; margin: 0 0 16px; padding: 22px 24px;
+  border-radius: 14px; color: #fff; position: relative; overflow: hidden;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 55%), linear-gradient(120deg, var(--brand) 0%, var(--brand-2) 100%);
+  box-shadow: 0 10px 30px -18px rgba(17,24,39,.6);
+}
+.dhero::after { content: ''; position: absolute; right: -60px; bottom: -80px; width: 260px; height: 260px; border-radius: 50%; border: 40px solid rgba(255,255,255,.06); pointer-events: none; }
+.dhero-t .kicker { color: rgba(255,255,255,.75); }
+.dhero-t h1 { margin: 4px 0 2px; font-size: 28px; line-height: 1.15; color: #fff; font-family: var(--display); }
+.dhero-t p { margin: 0; font-size: 13px; color: rgba(255,255,255,.82); }
+.dhero-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; position: relative; z-index: 1; }
+.dhero-acts .fldsel { background: #fff; color: var(--ink); border-color: transparent; }
+.dhero-acts .vs { color: rgba(255,255,255,.85); }
+.dhero-acts .dhero-print { background: #fff; color: var(--brand); border-color: #fff; font-weight: 600; }
+.dhero-acts .dhero-print:hover { background: rgba(255,255,255,.9); }
+
+.dtop { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2.2fr); gap: 14px; margin-bottom: 14px; }
+.dbig {
+  display: flex; flex-direction: column; text-align: left; gap: 4px; padding: 20px 22px; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(160deg, var(--good-wash) 0%, var(--card) 70%); border: 1px solid var(--rule); border-left: 5px solid var(--good);
+  transition: box-shadow .15s, transform .15s;
+}
+.dbig:hover { box-shadow: 0 8px 22px -14px rgba(17,24,39,.45); transform: translateY(-1px); }
+.dbig.loss { background: linear-gradient(160deg, var(--bad-wash) 0%, var(--card) 70%); border-left-color: var(--bad); }
+.dbig .k { font-size: 13px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .06em; }
+.dbig .v { font-size: 38px; font-weight: 700; color: var(--good); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.dbig.loss .v { color: var(--bad); }
+.dbig .f { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; color: var(--ink-2); }
+.dbig .f em { font-style: normal; font-weight: 600; }
+.dbig .f em.up { color: var(--good); } .dbig .f em.down { color: var(--bad); }
+.dbig-rows { display: grid; gap: 4px; margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--rule-2); font-size: 13px; color: var(--ink-2); }
+.dbig-rows span { display: flex; justify-content: space-between; gap: 10px; }
+.dbig-rows b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.dfigs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dfig {
+  display: flex; align-items: center; gap: 12px; text-align: left; padding: 14px 16px; border-radius: 12px; min-width: 0;
+  background: var(--card); border: 1px solid var(--rule); transition: border-color .15s, box-shadow .15s;
+}
+button.dfig { cursor: pointer; }
+button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14px rgba(17,24,39,.5); }
+.dfig-ic { flex: 0 0 auto; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 12px; background: var(--brand-wash); }
+.dfig-t { display: flex; flex-direction: column; min-width: 0; }
+.dfig .k { font-size: 12.5px; color: var(--ink-3); }
+.dfig .v { font-size: 20px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dfig .v.pos { color: var(--good); } .dfig .v.neg { color: var(--bad); }
+.dfig .f { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dalert {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; margin: 0 0 14px; padding: 10px 14px; border-radius: 10px;
+  background: var(--warn-wash); border: 1px solid #F1D9A6; color: var(--ink); font-size: 13px; cursor: pointer;
+}
+.dalert .ic { color: var(--warn); }
+
+@media (max-width: 1100px) { .dtop { grid-template-columns: 1fr; } }
+@media (max-width: 760px) {
+  .dfigs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dhero { padding: 18px 16px; } .dhero-t h1 { font-size: 22px; }
+  .dbig .v { font-size: 30px; }
+  .dfig { padding: 12px; gap: 10px; } .dfig-ic { width: 38px; height: 38px; } .dfig .v { font-size: 17px; }
+}
+
+/* ------------------------------ printed dashboard / monthly report ------------------------------ */
+.mrp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
+.mrp-brand { flex: 0 0 52%; }
+.mrp-brand svg { width: 100%; height: auto; max-height: 64px; }
+.mrp-meta { display: flex; flex-direction: column; align-items: flex-end; font-size: 8pt; color: #555; gap: 1px; }
+.mrp-band { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 8px 12px; margin-bottom: 8px; border-radius: 6px; background: #1F2456; color: #fff; }
+.mrp-band b { display: block; font-size: 16pt; line-height: 1.1; }
+.mrp-band > span { font-size: 8.5pt; color: rgba(255,255,255,.85); }
+.mrp-kicker { display: block; font-size: 8pt; letter-spacing: .14em; color: #F2C3C6; font-weight: 700; }
+.dp-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.dp-fig { border: 1px solid #DADDE5; border-top: 3px solid #1F2456; border-radius: 5px; padding: 5px 8px; background: #fff; }
+.dp-fig.lead { border-top-color: #1E7E34; background: #F1FAF3; }
+.dp-fig span { display: block; font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+.dp-fig b { display: block; font-size: 13pt; color: #111; font-variant-numeric: tabular-nums; }
+.dp-fig b.neg { color: #C82333; }
+.dp-fig i { display: block; font-style: normal; font-size: 7pt; color: #777; }
+.dp-period { grid-column: 1 / -1; font-size: 7.5pt; color: #666; text-align: right; }
+.mr-print .mr-card { border-top-width: 3px; }
+.mr-print .mr-chip { font-size: 7pt; padding: 0 5px; }
+.mr-print .mr-tbl thead th { background: #1F2456 !important; color: #fff !important; }
+.mr-print .mr-tbl th.mr-sel { background: #2B4C9B !important; color: #fff !important; }
+.mr-print .mr-tbl tr.strong td { background: #F3F5FA; }
+.mr-print .mrp-table { break-before: page; page-break-before: always; margin-top: 4px; }
+.mrp-foot { margin-top: 8px; break-inside: avoid; }
+.mrp-foot svg { width: 100%; height: auto; display: block; }
