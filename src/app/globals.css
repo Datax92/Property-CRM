@@ -2427,3 +2427,10 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mrp-page.solo .mr-tbl { font-size: 11pt; }
 .mrp-page.solo .mr-tbl td, .mrp-page.solo .mr-tbl th { padding: 3.5px 6px; }
 .mrp-page.solo .mr-tbl th:first-child, .mrp-page.solo .mr-tbl td:first-child { width: 250px; }
+
+/* More details on paper: one grid of halves and quarters, every gap on the same line */
+.dmore.print .dmore-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 10px; }
+.dmore.print .dmore-top-one { margin-bottom: 10px; }
+.dmore.print .dmore-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; min-width: 0; }
+.dmore.print .dmore-pair > .panel { display: flex; flex-direction: column; }
+.dmore.print .kpis { gap: 10px; }

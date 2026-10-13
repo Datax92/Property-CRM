@@ -217,18 +217,28 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
       {cash}
     </div>
   ) : null;
+  const pairOnPaper =
+    attention && cash ? (
+      <div className="dmore-pair">
+        {attention}
+        {cash}
+      </div>
+    ) : (
+      attention || cash || null
+    );
   return (
     <div className={`dmore ${forPrint ? 'print' : ''}`}>
       {/* On paper the three sit in one row, to leave room for the investments. */}
-      {forPrint && (money || attention || cash) && (
-        <div className="grid eq dmore-top">
+      {/* On paper the page keeps to one grid: the money panel takes half, attention and cash a
+          quarter each, the same lines as the investment cards and charts below. */}
+      {forPrint && (money || pairOnPaper) && (
+        <div className={money && pairOnPaper ? 'grid eq dmore-top' : 'dmore-top-one'}>
           {money}
-          {attention}
-          {cash}
+          {pairOnPaper}
         </div>
       )}
       {!forPrint && (money || side) && (
-        <div className={money && side ? 'grid c2u eq' : ''} style={{ marginBottom: '14px' }}>
+        <div className={money && side ? 'grid c2 eq' : ''} style={{ marginBottom: '14px' }}>
           {money}
           {side}
         </div>

@@ -183,7 +183,8 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
         </div>
   );
 
-  // A panel left out lets the one beside it take the whole row.
+  // Both rows split in half, so the panels above and below line up. A panel left out lets the one
+  // beside it take the whole row.
   const pair = (a: React.ReactNode, b: React.ReactNode, cls: string) =>
     a && b ? (
       <div className={`grid ${cls} eq`}>
@@ -195,7 +196,7 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
     );
   return (
     <div className="inv-charts">
-      {pair(portfolio, gains, 'c2u')}
+      {pair(portfolio, gains, 'c2')}
       {pair(vsworth, pnl, 'c2')}
     </div>
   );
