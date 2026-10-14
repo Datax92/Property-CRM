@@ -2438,11 +2438,11 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 /* Printed charts (dashboard and more details): solid black (colours print as pale grey on a black-and-white
    printer) and larger text throughout. */
 :is(.dmore.print, .mr-charts.print) .chart svg rect:not([fill="transparent"]) { fill: #000; }
-:is(.dmore.print, .mr-charts.print) .chart svg rect.hollow { fill: #fff; stroke: #000; stroke-width: 1.6; }
+:is(.dmore.print, .mr-charts.print) .chart svg rect.hollow { fill: #000; }
 :is(.dmore.print, .mr-charts.print) .dlab.in { fill: #fff; }
 :is(.dmore.print, .mr-charts.print) .dlab.in.on-hollow, :is(.dmore.print, .mr-charts.print) .dlab.tag.up, :is(.dmore.print, .mr-charts.print) .dlab.tag.down { fill: #000; }
 :is(.dmore.print, .mr-charts.print) .legend .sw { background: #000 !important; }
-:is(.dmore.print, .mr-charts.print) .legend .sw.hollow { background: #fff !important; border: 1.5px solid #000; }
+:is(.dmore.print, .mr-charts.print) .legend .sw.hollow { background: #000 !important; }
 :is(.dmore.print, .mr-charts.print) .gridline { stroke: #9CA3AF; }
 :is(.dmore.print, .mr-charts.print) .axline { stroke: #000; stroke-width: 1.5; }
 /* Donut slices: black first, then lighter steps, each edged in black so the palest still shows */
@@ -2456,7 +2456,7 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .dmore.print .ranked .sw { outline: 1px solid #000; }
 :is(.dmore.print, .mr-charts.print) .chart svg text { fill: #000; }
 :is(.dmore.print, .mr-charts.print) .chart svg .dlab.in { fill: #fff; }
-:is(.dmore.print, .mr-charts.print) .chart svg .dlab.in.on-hollow { fill: #000; }
+:is(.dmore.print, .mr-charts.print) .chart svg .dlab.in.on-hollow { fill: #fff; }
 :is(.dmore.print, .mr-charts.print) .ax { font-size: 15px; }
 :is(.dmore.print, .mr-charts.print) .dlab { font-size: 14.5px; font-weight: 600; }
 :is(.dmore.print, .mr-charts.print) .dlab.sm { font-size: 13px; }
