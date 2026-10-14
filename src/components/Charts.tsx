@@ -495,7 +495,8 @@ export function ChartBarGroups({
   low = false,
 }: {
   rows: any[];
-  series: { key: string; label: string; c: string }[];
+  /** `hollow`: drawn as an outline on paper, where every other bar is solid black. */
+  series: { key: string; label: string; c: string; hollow?: boolean }[];
   label?: string;
   width?: number;
   /** A fixed distance between the grid lines, in rupees. */
@@ -513,12 +514,12 @@ export function ChartBarGroups({
   const barW = Math.max(4, Math.min(22, (bw - 12) / series.length - 2));
   const groupW = series.length * (barW + 2) - 2;
   // An amount written up the bar: inside a bar tall enough to hold it, otherwise just above it.
-  const valueLabel = (x: number, top: number, h: number, text: string) => {
+  const valueLabel = (x: number, top: number, h: number, text: string, hollow?: boolean) => {
     const inside = h > text.length * 6.2 + 10;
     const px = (x + 3.5).toFixed(1),
       py = (inside ? top + 6 : top - 4).toFixed(1);
     return (
-      <text className={`dlab sm ${inside ? 'in' : ''}`} x={px} y={py} textAnchor={inside ? 'end' : 'start'} transform={`rotate(-90 ${px} ${py})`}>
+      <text className={`dlab sm ${inside ? 'in' : ''} ${hollow ? 'on-hollow' : ''}`} x={px} y={py} textAnchor={inside ? 'end' : 'start'} transform={`rotate(-90 ${px} ${py})`}>
         {text}
       </text>
     );
@@ -529,7 +530,7 @@ export function ChartBarGroups({
       <div className="legend">
         {series.map((s) => (
           <span key={s.key} className="it">
-            <i className="sw" style={{ background: s.c }} />
+            <i className={`sw ${s.hollow ? 'hollow' : ''}`} style={{ background: s.c }} />
             {s.label}
           </span>
         ))}
@@ -562,8 +563,8 @@ export function ChartBarGroups({
                 const bx = x0 + si * (barW + 2);
                 return (
                   <React.Fragment key={s.key}>
-                    <rect x={bx.toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={s.c} />
-                    {values && v > 0 && valueLabel(bx + barW / 2, top, h, axMoney(v, numbers))}
+                    <rect className={s.hollow ? 'hollow' : undefined} x={bx.toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={s.c} />
+                    {values && v > 0 && valueLabel(bx + barW / 2, top, h, axMoney(v, numbers), s.hollow)}
                   </React.Fragment>
                 );
               })}

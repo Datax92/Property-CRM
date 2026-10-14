@@ -102,7 +102,7 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
               label="Amount invested in each holding"
               width={width}
               low={!!width}
-              legend={kinds}
+              legend={width ? undefined : kinds}
               rows={rows.map((x) => ({
                 label: x.name,
                 v: x.invested,
@@ -150,7 +150,7 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
               series={[
                 // Two colours that cannot be mistaken for each other, on screen or on paper.
                 { key: 'invested', label: 'Invested', c: 'var(--brand)' },
-                { key: 'worth', label: 'Worth today', c: 'var(--s4)' },
+                { key: 'worth', label: 'Worth today', c: 'var(--s4)', hollow: true },
               ]}
             />
           </div>
@@ -168,10 +168,14 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
               signed
               width={width}
               low={!!width}
-              legend={[
-                { k: 'Profit', c: 'var(--good)' },
-                { k: 'Loss', c: 'var(--bad)' },
-              ]}
+              legend={
+                width
+                  ? undefined
+                  : [
+                      { k: 'Profit', c: 'var(--good)' },
+                      { k: 'Loss', c: 'var(--bad)' },
+                    ]
+              }
               rows={byType.map((t: any) => ({
                 label: t.type,
                 v: t.gain,
