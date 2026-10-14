@@ -2435,16 +2435,16 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .dmore.print .dmore-pair > .panel { display: flex; flex-direction: column; }
 .dmore.print .kpis { gap: 10px; }
 
-/* More details on paper: solid black charts (colours print as pale grey on a black-and-white
+/* Printed charts (dashboard and more details): solid black (colours print as pale grey on a black-and-white
    printer) and larger text throughout. */
-.dmore.print .chart svg rect:not([fill="transparent"]) { fill: #000; }
-.dmore.print .chart svg rect.hollow { fill: #fff; stroke: #000; stroke-width: 1.6; }
-.dmore.print .dlab.in { fill: #fff; }
-.dmore.print .dlab.in.on-hollow, .dmore.print .dlab.tag.up, .dmore.print .dlab.tag.down { fill: #000; }
-.dmore.print .legend .sw { background: #000 !important; }
-.dmore.print .legend .sw.hollow { background: #fff !important; border: 1.5px solid #000; }
-.dmore.print .gridline { stroke: #9CA3AF; }
-.dmore.print .axline { stroke: #000; stroke-width: 1.5; }
+:is(.dmore.print, .mr-charts.print) .chart svg rect:not([fill="transparent"]) { fill: #000; }
+:is(.dmore.print, .mr-charts.print) .chart svg rect.hollow { fill: #fff; stroke: #000; stroke-width: 1.6; }
+:is(.dmore.print, .mr-charts.print) .dlab.in { fill: #fff; }
+:is(.dmore.print, .mr-charts.print) .dlab.in.on-hollow, :is(.dmore.print, .mr-charts.print) .dlab.tag.up, :is(.dmore.print, .mr-charts.print) .dlab.tag.down { fill: #000; }
+:is(.dmore.print, .mr-charts.print) .legend .sw { background: #000 !important; }
+:is(.dmore.print, .mr-charts.print) .legend .sw.hollow { background: #fff !important; border: 1.5px solid #000; }
+:is(.dmore.print, .mr-charts.print) .gridline { stroke: #9CA3AF; }
+:is(.dmore.print, .mr-charts.print) .axline { stroke: #000; stroke-width: 1.5; }
 /* Donut slices: black first, then lighter steps, each edged in black so the palest still shows */
 .dmore.print .chart svg path { stroke: #000; stroke-width: 1; }
 .dmore.print .chart svg path:nth-of-type(1), .dmore.print .ranked .r:nth-child(1) .sw { fill: #000; background: #000 !important; }
@@ -2454,12 +2454,12 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .dmore.print .chart svg path:nth-of-type(5), .dmore.print .ranked .r:nth-child(5) .sw { fill: #E4E4E4; background: #E4E4E4 !important; }
 .dmore.print .chart svg path:nth-of-type(6), .dmore.print .ranked .r:nth-child(6) .sw { fill: #fff; background: #fff !important; }
 .dmore.print .ranked .sw { outline: 1px solid #000; }
-.dmore.print .chart svg text { fill: #000; }
-.dmore.print .chart svg .dlab.in { fill: #fff; }
-.dmore.print .chart svg .dlab.in.on-hollow { fill: #000; }
-.dmore.print .ax { font-size: 15px; }
-.dmore.print .dlab { font-size: 14.5px; font-weight: 600; }
-.dmore.print .dlab.sm { font-size: 13px; }
+:is(.dmore.print, .mr-charts.print) .chart svg text { fill: #000; }
+:is(.dmore.print, .mr-charts.print) .chart svg .dlab.in { fill: #fff; }
+:is(.dmore.print, .mr-charts.print) .chart svg .dlab.in.on-hollow { fill: #000; }
+:is(.dmore.print, .mr-charts.print) .ax { font-size: 15px; }
+:is(.dmore.print, .mr-charts.print) .dlab { font-size: 14.5px; font-weight: 600; }
+:is(.dmore.print, .mr-charts.print) .dlab.sm { font-size: 13px; }
 .dmore.print .panel-h h3 { font-size: 13pt; }
 .dmore.print .panel-h .sub { font-size: 10pt; }
 .dmore.print .sech h2 { font-size: 14pt; }
@@ -2476,3 +2476,16 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .dmore.print .kpis .kpi .k { font-size: 10pt; }
 .dmore.print .kpis .kpi .v { font-size: 16pt; }
 .dmore.print .kpis .kpi .f { font-size: 9.5pt; }
+
+/* The printed dashboard page: larger text on the cards and in the month table */
+.mr-print .mr-charts.print .panel-h h3 { font-size: 13pt; }
+.mr-print .mr-charts.print .panel-h .sub { font-size: 10pt; }
+.mr-print .mr-charts.print .legend .it { font-size: 10.5pt; }
+.mr-print .mr-kpis .kpi .k { font-size: 9.5pt; }
+.mr-print .mr-kpis .kpi .v { font-size: 13.5pt; }
+.mr-print .mr-kpis .kpi .f, .mr-print .mr-kpis .mr-chip { font-size: 8.5pt; }
+.mr-print .dp-fig span { font-size: 9.5pt; }
+.mr-print .dp-fig b { font-size: 14pt; }
+.mr-print .dp-fig i { font-size: 8.5pt; }
+.mrp-page .mr-tbl { font-size: 10pt; }
+.mrp-page.solo .mr-tbl { font-size: 11pt; }

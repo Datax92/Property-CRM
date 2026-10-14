@@ -211,10 +211,10 @@ export function MonthlyReport({
                   rows={months.map((m) => ({ label: m.label, full: m.full, net: m.net, target: m.target }))}
                   series={[
                     { key: 'net', label: 'Net profit', c: 'var(--s1)' },
-                    { key: 'target', label: 'Target', c: 'var(--s2)' },
+                    { key: 'target', label: 'Target', c: 'var(--s2)', hollow: true },
                   ]}
                   label="Net profit against target by month"
-                  width={forPrint ? 680 : undefined}
+                  width={forPrint ? 540 : undefined}
                   low={forPrint}
                 />
               </div>
@@ -228,12 +228,17 @@ export function MonthlyReport({
                 <ChartBars
                   signed
                   rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))}
-                  legend={[
-                    { k: 'Grew', c: 'var(--good)' },
-                    { k: 'Fell', c: 'var(--bad)' },
-                  ]}
+                  // On paper every bar is black: a fall shows by going below the line.
+                  legend={
+                    forPrint
+                      ? undefined
+                      : [
+                          { k: 'Grew', c: 'var(--good)' },
+                          { k: 'Fell', c: 'var(--bad)' },
+                        ]
+                  }
                   label="Growth by month"
-                  width={forPrint ? 680 : undefined}
+                  width={forPrint ? 540 : undefined}
                   low={forPrint}
                 />
               </div>
