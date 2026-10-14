@@ -542,7 +542,7 @@ export function monthlySeries(year, f) {
 
 /** The monthly target as the owner sets it: a share of the capital each month for inflation,
     growth, profit and Zakat (the "Monthly comparison report" workbook). */
-export const DEFAULT_MONTHLY_TARGET = { capital: 45000000, inflation: 0.83, growth: 0.3, profit: 0.5, zakat: 0.2083 };
+export const DEFAULT_MONTHLY_TARGET = { capital: 0, inflation: 0.83, growth: 0.3, profit: 0.5, zakat: 0.2083 };
 export const monthlyTargetPct = (t) => (+t.inflation || 0) + (+t.growth || 0) + (+t.profit || 0) + (+t.zakat || 0);
 
 /** What the business holds at the end of a day: unsold plots at landed cost, assets at cost,
