@@ -16,11 +16,14 @@ export function AdminPage() {
     range: r,
     user,
     voidPayment,
+    changePaymentAccount,
     openModal,
     numbers,
   } = useApp();
 
   const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  // The ledger row whose account is being changed.
+  const [moving, setMoving] = useState<string | null>(null);
 
   useEffect(() => {
     const db = getFirebaseFirestore();
@@ -157,7 +160,46 @@ export function AdminPage() {
     { key: 'party', label: 'Customer / vendor' },
     { key: 'amount', label: 'Amount', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.amount, numbers) },
     { key: 'method', label: 'Method' },
-    { key: 'account', label: 'Account' },
+    {
+      key: 'account',
+      label: 'Account',
+      // A live entry can be moved to another account, e.g. one saved under the wrong bank.
+      render: (p: any) => {
+        const cur = p.account || '';
+        if (p.status === 'Voided') return cur || M.NO_ACCOUNT;
+        if (moving !== p.id)
+          return (
+            <span className="nowrap">
+              {cur || M.NO_ACCOUNT}{' '}
+              <button type="button" className="btn sm gh" title={`Change the account of ${p.id}`} aria-label={`Change the account of ${p.id}`} data-noprint="1" onClick={() => setMoving(p.id)}>
+                <Icon name="edit" size={12} />
+              </button>
+            </span>
+          );
+        const names = M.accountNames();
+        return (
+          <select
+            className="fldsel"
+            value={cur}
+            autoFocus
+            aria-label={`Account for ${p.id}`}
+            onBlur={() => setMoving(null)}
+            onChange={(e) => {
+              if (e.target.value) changePaymentAccount(p.id, e.target.value);
+              setMoving(null);
+            }}
+          >
+            {!cur && <option value="">{M.NO_ACCOUNT} — pick one</option>}
+            {cur && names.indexOf(cur) < 0 && <option value={cur}>{cur}</option>}
+            {names.map((a: string) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
     { key: 'ref', label: 'Reference' },
     { key: 'createdBy', label: 'Created by' },
     { key: 'approvedBy', label: 'Approved by' },

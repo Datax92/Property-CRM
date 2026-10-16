@@ -1233,6 +1233,27 @@ export function voidPayment(id, user) {
   return t;
 }
 
+/** Moves a payment to another bank or cash account: the amount and everything it settled stay. */
+export function changePaymentAccount(id, account, user) {
+  const t = DATA.payments.find((p) => p.id === id);
+  const to = String(account || '').trim();
+  if (!t) throw new Error(id + ' was not found.');
+  if (!to) throw new Error('Pick the account to move it to.');
+  if (t.status === 'Voided') throw new Error(id + ' is voided — it no longer moves money.');
+  const from = t.account || NO_ACCOUNT;
+  if (from === to) return null;
+  t.account = to;
+  saveRecordToFirestore('payments', t.id, t);
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: t.id, action: 'Edited',
+    user: user || ACTOR, entity: t.category, prevAmount: t.amount, newAmount: t.amount,
+    note: 'Account changed from ' + from + ' to ' + to, manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+  return t;
+}
+
 /* ====================================================================
    INVOICES — Sale Invoice (given to buyer) & Purchase Invoice (kept by company)
    ==================================================================== */

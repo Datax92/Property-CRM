@@ -61,6 +61,7 @@ interface AppContextType {
   setModalField: (key: string, value: any) => void;
   submitModal: () => void;
   voidPayment: (id: string) => void;
+  changePaymentAccount: (id: string, account: string) => void;
   deleteRecord: (coll: string, id: string) => boolean;
   showTip: (html: string, x: number, y: number) => void;
   hideTip: () => void;
@@ -169,10 +170,21 @@ const accountField = (addOnly = true) => ({
   k: 'account',
   l: 'Bank / cash account',
   list: () => M.accountNames(),
-  def: () => M.accountNames()[0],
+  // Never picked for the user: money that moves now must say which account it moved through.
+  def: () => '',
   ph: 'e.g. Bank Islami — 1234',
   addOnly,
+  needsAccount: true,
 });
+
+/** The money a form pays or receives now: the account is required only when this is above zero. */
+const moneyNow = (fields: any[], v: any) => {
+  const fd = fields.find((x) => x.k === 'paid') || fields.find((x) => x.k === 'received');
+  if (!fd) return n(v.amount);
+  // A blank "received now" that defaults to all of it (income) still moves the whole amount.
+  if ((v[fd.k] === '' || v[fd.k] == null) && fd.auto) return n(v.amount);
+  return n(v[fd.k]);
+};
 
 /** A second payment mode, for money paid or received two ways (e.g. part cash, part bank). */
 const splitFields = (what: string) => [
@@ -1439,6 +1451,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       else if (fd.maxToday && v && M.parseDate(v) > M.TODAY)
         errors[fd.k] = 'Cannot be a future date (today is ' + M.fmtDate(M.TODAY) + ').';
     });
+    const acct = F.fields.find((fd: any) => fd.needsAccount);
+    if (acct && !hidden(acct) && !String(values.account || '').trim() && moneyNow(F.fields, values) > 0)
+      errors.account = 'Pick the bank or cash account the money went through.';
     Object.assign(errors, F.validate(values, editId));
     // An error on a field that is not on screen would otherwise block the save silently.
     F.fields.forEach((fd: any) => {
@@ -1506,6 +1521,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const t = M.voidPayment(id, user.name);
       setDataVersion((v) => v + 1);
       toast(t ? `Transaction ${id} voided — the original record is kept` : 'Already voided');
+    },
+    [user.name, toast]
+  );
+
+  const changePaymentAccount = useCallback(
+    (id: string, account: string) => {
+      try {
+        const t = M.changePaymentAccount(id, account, user.name);
+        setDataVersion((v) => v + 1);
+        if (t) toast(`${id} moved to ${account}`);
+      } catch (err: any) {
+        toast(String(err && err.message ? err.message : err));
+      }
     },
     [user.name, toast]
   );
@@ -1725,6 +1753,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setModalField,
         submitModal,
         voidPayment,
+        changePaymentAccount,
         deleteRecord,
         showTip,
         hideTip,
