@@ -667,13 +667,13 @@ export const FORMS_DEF: Record<string, any> = {
     fields: [
       { g: 'Transfer' },
       { k: 'from', l: 'From account', req: true, list: () => M.accountNames(), def: () => M.accountNames()[0], ph: 'e.g. Cash in hand' },
-      { k: 'to', l: 'To account', req: true, list: () => M.accountNames(), def: () => M.accountNames()[1] || '', ph: 'e.g. HBL Current — 0912' },
+      { k: 'to', l: 'To account', req: true, list: () => M.accountNames(), def: () => M.accountNames()[1] || '', ph: 'e.g. Bank Islami — 1234' },
       { k: 'date', l: 'Date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
       { k: 'amount', l: 'Amount (PKR)', type: 'money', req: true, min: 1 },
       { k: 'method', l: 'How', type: 'select', opts: () => M.METHODS, def: 'Cash', req: true },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { k: 'ref', l: 'Reference number', ph: 'Deposit slip or cheque number' },
-      { k: 'note', l: 'Description', ph: 'e.g. Cash deposited in HBL', full: true },
+      { k: 'note', l: 'Description', ph: 'e.g. Cash deposited in the bank', full: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
     calc: (v: any) => [

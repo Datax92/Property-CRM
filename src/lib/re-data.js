@@ -46,7 +46,9 @@ export const TYPES = ['Residential Plot','Commercial Plot','House','Apartment','
 export const STATUSES = ['Available','Reserved','Under Process','Sold'];
 export const PAY_STATUS = ['Paid','Partially Paid','Unpaid','Overdue'];
 export const METHODS = ['Cash','Bank Transfer','Cheque','Online Payment','Other'];
-export const ACCOUNTS = ['HBL Current — 0912','Meezan Business — 4471','Petty Cash — Head Office','Alfalah Escrow — 8830'];
+/** No built-in accounts: the business adds its own. A payment saved without one is listed under this name. */
+export const ACCOUNTS = [];
+export const NO_ACCOUNT = 'No account';
 /** Money in that is earned outside property trading. It counts as revenue in profit and loss. */
 const BUILTIN_INCOME = ['Rental Income', 'Profit on Deposit', 'Commission Earned', 'Dividend', 'Other Income'];
 /** The built-in kinds and the ones added under Income → Categories (rebuilt in place when those load). */
@@ -787,7 +789,8 @@ export function cashLedger(r, f) {
 /** The bank and cash accounts in use, most used first, then the standard ones. */
 export function accountNames() {
   const used = {};
-  DATA.payments.forEach((p) => { if (p.account) used[p.account] = (used[p.account] || 0) + 1; });
+  // Voided entries do not count, so an account emptied by voiding drops off the list.
+  livePayments().forEach((p) => { if (p.account) used[p.account] = (used[p.account] || 0) + 1; });
   const names = Object.keys(used).sort((a, b) => used[b] - used[a]);
   return names.concat(ACCOUNTS.filter((a) => names.indexOf(a) < 0));
 }
@@ -797,7 +800,7 @@ export function accountNames() {
 export function accountBalances(asOf, f) {
   const by = {};
   livePayments().filter((p) => p.date <= asOf && (!f || overheadMatch(p, f))).forEach((p) => {
-    const a = p.account || ACCOUNTS[0];
+    const a = p.account || NO_ACCOUNT;
     const x = by[a] || (by[a] = { id: a, account: a, kind: accountKind(a), opening: 0, cashIn: 0, cashOut: 0, transferIn: 0, transferOut: 0, count: 0, last: null });
     const amt = p.dir === 'in' ? p.amount : -p.amount;
     if (isOpeningEntry(p)) x.opening += amt;
@@ -821,7 +824,7 @@ export function cashAndBank(asOf, f) {
 
 /** One account's entries in a period, oldest first, each with the balance after it. */
 export function accountStatement(account, r, f) {
-  const mine = livePayments().filter((p) => (p.account || ACCOUNTS[0]) === account && (!f || overheadMatch(p, f)));
+  const mine = livePayments().filter((p) => (p.account || NO_ACCOUNT) === account && (!f || overheadMatch(p, f)));
   const signed = (p) => (p.dir === 'in' ? p.amount : -p.amount);
   const opening = mine.filter((p) => p.date < r.start).reduce((a, p) => a + signed(p), 0);
   let run = opening;
@@ -1189,7 +1192,7 @@ export function addPayment(v) {
   const t = {
     id: nextId(DATA.payments, 'TXN-', 5), date: parseDate(v.date), dir: v.dir,
     category: v.category, amount: Math.round(+v.amount), method: v.method || 'Bank Transfer',
-    account: v.account || ACCOUNTS[0], party: v.party || '—',
+    account: v.account || '', party: v.party || '—',
     propertyId: v.propertyId || null, agentId: v.agentId || null,
     ref: v.ref || 'REF-' + Math.floor(100000 + Math.random() * 899999),
     note: v.note || v.category, office: v.office || OFFICES[0],
