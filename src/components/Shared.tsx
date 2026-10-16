@@ -52,8 +52,8 @@ export function Fig({ n, cls = '' }: { n: number; cls?: string }) {
   const p = M.fmtParts(n, numbers);
   return (
     <span className={`fig ${cls}`}>
-      {p.sign}
       <span className="cur">PKR</span>
+      {p.sign}
       {p.num}
       {p.unit ? <span className="unit">{p.unit}</span> : null}
     </span>
@@ -61,12 +61,13 @@ export function Fig({ n, cls = '' }: { n: number; cls?: string }) {
 }
 
 export function FigText({ str, cls = '' }: { str: string; cls?: string }) {
-  const m = String(str).match(/^(−?)PKR\s+(.+?)(?:\s+(Cr|Lakh|B|M|K))?$/);
+  // The minus may come before or after the currency; it is shown after it.
+  const m = String(str).match(/^(−?)PKR\s+(−?.+?)(?:\s+(Cr|Lakh|B|M|K))?$/);
   if (!m) return <span className={`fig ${cls}`}>{str}</span>;
   return (
     <span className={`fig ${cls}`}>
-      {m[1]}
       <span className="cur">PKR</span>
+      {m[1]}
       {m[2]}
       {m[3] ? <span className="unit">{m[3]}</span> : null}
     </span>

@@ -153,7 +153,8 @@ export const DATA = buildData();
 /* ============================ formatting ============================ */
 export function fmt(n, mode) {
   const p = fmtParts(n, mode);
-  return p.sign + "PKR " + p.num + (p.unit ? " " + p.unit : "");
+  // The minus goes after the currency: PKR −25,000.
+  return "PKR " + p.sign + p.num + (p.unit ? " " + p.unit : "");
 }
 
 /* Pakistani reporting convention: crore (1 Cr = 10,000,000) and lakh (1 Lakh = 100,000).
