@@ -9,6 +9,7 @@ import { BrandBanner, BrandFooter } from '../Brand';
 import { PrintNow } from '../PrintNow';
 import * as M from '../../lib/re-data';
 import { AttachmentsField } from '../Attachments';
+import { DateField } from '../DateField';
 import type { CostSheet } from '../../lib/types';
 
 /* ---------------------------------------------------------------------------
@@ -57,6 +58,15 @@ const LINES: Line[] = [
   { kind: 'item', no: '5.1', label: 'FBR §236C advance tax on sale', basis: 'of sale price', k: 'tax236C', rate: { pct: 'tax236CPct', base: (cs) => cs.grossSalePrice } },
   { kind: 'item', no: '5.2', label: 'Agent fee — sell side', k: 'sellSideAgentFee' },
   { kind: 'item', no: '5.3', label: 'Other selling expenses', k: 'otherSellingExpenses' },
+  {
+    kind: 'item',
+    no: '5.4',
+    label: 'Agent commission — share of profit',
+    basis: 'of profit before it',
+    k: 'profitShareFee',
+    // A share of what the deal makes after every other cost, e.g. 30% to the agent.
+    rate: { pct: 'profitSharePct', base: (cs) => Math.max(0, cs.profitBeforeShare || 0) },
+  },
   { kind: 'total', label: 'Gross profit', value: (cs) => cs.grossProfit },
   { kind: 'section', no: '6', label: 'Deductions from profit' },
   {
@@ -1037,11 +1047,11 @@ function CostSheetView({ activeCostSheetId }: { activeCostSheetId: string | null
                   </div>
                   <div className={fldCls('purchaseDate')}>
                     <label htmlFor="cs-pdate">Purchase date</label>
-                    <input id="cs-pdate" type="date" value={dateValue(form.purchaseDate)} onChange={(e) => updateField('purchaseDate', e.target.value || M.TODAY)} />
+                    <DateField id="cs-pdate" value={dateValue(form.purchaseDate)} onChange={(v) => updateField('purchaseDate', v || M.TODAY)} />
                   </div>
                   <div className={fldCls('saleDate')}>
                     <label htmlFor="cs-sdate">Sale date</label>
-                    <input id="cs-sdate" type="date" value={dateValue(form.saleDate)} onChange={(e) => updateField('saleDate', e.target.value || null)} />
+                    <DateField id="cs-sdate" value={dateValue(form.saleDate)} onChange={(v) => updateField('saleDate', v || null)} />
                   </div>
                   <div className="fld">
                     <label>Attachments</label>

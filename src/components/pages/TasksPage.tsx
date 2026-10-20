@@ -2,7 +2,10 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell } from '../Shared';
+import { PageShell, DataTable, KpiCard, Tag } from '../Shared';
+import { DateField } from '../DateField';
+import { ChartBarGroups } from '../Charts';
+import { PAGE_META } from '../../lib/constants';
 import { Icon } from '../Icons';
 import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import * as M from '../../lib/re-data';
@@ -477,6 +480,206 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
   );
 }
 
+// ==========================================================================
+// PROJECT PLANS — the future income and cost planned for each project
+// ==========================================================================
+function PlansView() {
+  const { openModal, numbers } = useApp();
+  const [pick, setPick] = useState('');
+  const meta = PAGE_META['tasks/plans'];
+  const money = (n: number) => M.fmt(n, numbers);
+  const pct = (n: number) => (isFinite(n) ? `${n.toFixed(1)}%` : '—');
+
+  const stats = M.projectPlanStats();
+  const shown = pick ? stats.filter((x: any) => x.id === pick) : stats;
+  const sum = (k: string) => shown.reduce((a: number, x: any) => a + (x[k] || 0), 0);
+  const entries = M.DATA.projectPlans.filter((x: any) => !pick || (pick === '-' ? !x.projectId : x.projectId === pick));
+  const months = M.planMonths(pick && pick !== '-' ? pick : '');
+  const preset = (kind: string) => (pick && pick !== '-' ? { projectId: pick, kind } : { kind });
+
+  const projCols = [
+    {
+      key: 'project',
+      label: 'Project',
+      render: (x: any) => (
+        <button type="button" className="linkbtn" onClick={() => setPick(x.id)} title="Show only this project">
+          <b>{x.project}</b>
+        </button>
+      ),
+    },
+    { key: 'status', label: 'Status', render: (x: any) => (x.status ? <Tag text={x.status} /> : '') },
+    { key: 'income', label: 'Planned income', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => <span className="pos">{money(x.income)}</span> },
+    { key: 'cost', label: 'Planned cost', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.cost) },
+    {
+      key: 'profit',
+      label: 'Planned profit',
+      a: 'r' as const,
+      sum: true,
+      cls: 'mono',
+      render: (x: any) => <b className={x.profit >= 0 ? 'pos' : 'neg'}>{money(x.profit)}</b>,
+    },
+    { key: 'margin', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (x: any) => (x.income ? pct(x.margin) : '—') },
+    { key: 'actualIncome', label: 'Actual in', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.actualIncome) },
+    { key: 'actualCost', label: 'Actual out', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.actualCost) },
+    {
+      key: 'actualProfit',
+      label: 'Actual profit',
+      a: 'r' as const,
+      sum: true,
+      cls: 'mono',
+      render: (x: any) => <span className={x.actualProfit >= 0 ? 'pos' : 'neg'}>{money(x.actualProfit)}</span>,
+    },
+    {
+      key: 'next',
+      label: 'Next planned',
+      render: (x: any) =>
+        x.next ? (
+          <span title={x.next.description || x.next.category}>
+            {M.fmtDate(x.next.date)} · {x.next.kind === 'Income' ? '+' : '−'}
+            {money(x.next.amount)}
+          </span>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      key: 'add',
+      label: '',
+      render: (x: any) =>
+        x.projectId ? (
+          <button type="button" className="btn sm" onClick={() => openModal('plan', { projectId: x.projectId })}>
+            <Icon name="plus" size={12} /> Add
+          </button>
+        ) : null,
+    },
+  ];
+
+  const entryCols = [
+    { key: 'id', label: 'Ref' },
+    { key: 'project', label: 'Project', render: (x: any) => (x.projectId ? x.project : <span className="muted">{x.project || '—'} (no project)</span>) },
+    { key: 'kind', label: 'Income / cost', render: (x: any) => <span className={`tag ${x.kind === 'Income' ? 'ok' : 'warn'}`}>{x.kind}</span> },
+    { key: 'category', label: 'Category' },
+    { key: 'description', label: 'Description' },
+    { key: 'task', label: 'Task', render: (x: any) => (x.taskId ? <span title={x.task}>{x.taskId}</span> : '—') },
+    { key: 'date', label: 'Expected', cls: 'mono', render: (x: any) => (x.date ? M.fmtDate(x.date) : '—') },
+    { key: 'amount', label: 'Planned', a: 'r' as const, cls: 'mono', render: (x: any) => <b>{money(x.amount)}</b> },
+    { key: 'actual', label: 'Actual so far', a: 'r' as const, cls: 'mono', render: (x: any) => money(x.actual || 0) },
+    {
+      key: 'left',
+      label: 'Still to come',
+      a: 'r' as const,
+      cls: 'mono',
+      render: (x: any) => (x.status === 'Planned' ? money(Math.max(0, x.amount - (x.actual || 0))) : '—'),
+    },
+    { key: 'status', label: 'Status', render: (x: any) => <Tag text={x.status === 'Done' ? 'Completed' : x.status} /> },
+  ];
+
+  return (
+    <PageShell
+      title={meta.t}
+      u={meta.u}
+      p={meta.p}
+      toolProps={{ filters: false, period: false }}
+      acts={
+        <>
+          <button type="button" className="btn" onClick={() => openModal('plan', preset('Income'))}>
+            <Icon name="plus" /> Planned income
+          </button>
+          <button type="button" className="btn pri" onClick={() => openModal('plan', preset('Cost'))}>
+            <Icon name="plus" /> Planned cost
+          </button>
+        </>
+      }
+    >
+      <div className="toolrow" data-noprint="1">
+        <select className="fldsel" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Project">
+          <option value="">All projects</option>
+          {M.DATA.taskProjects.map((p: any) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+          {stats.some((x: any) => x.id === '-') && <option value="-">No project</option>}
+        </select>
+        {pick && (
+          <button type="button" className="btn sm" onClick={() => setPick('')}>
+            <Icon name="x" size={12} /> All projects
+          </button>
+        )}
+      </div>
+
+      <div className="kpis">
+        <KpiCard k="Planned income" v={sum('income')} tone="pos" f="expected to come in" />
+        <KpiCard k="Planned cost" v={sum('cost')} f="expected to go out" />
+        <KpiCard
+          k="Planned profit"
+          v={sum('profit')}
+          tone={sum('profit') >= 0 ? 'pos' : 'neg'}
+          cls="lead"
+          f={sum('income') ? `${pct(M.pctOf(sum('profit'), sum('income')))} of planned income` : undefined}
+        />
+        <KpiCard k="Actual in so far" v={sum('actualIncome')} f={`of ${money(sum('income'))} planned`} />
+        <KpiCard k="Actual out so far" v={sum('actualCost')} f={`of ${money(sum('cost'))} planned`} />
+      </div>
+
+      {stats.length === 0 ? (
+        <div className="empty">
+          <Icon name="empty" />
+          <h3>No project plans yet</h3>
+          <p>
+            Add the income a project is expected to bring in and the costs it is expected to have, with the month each is due. The
+            plan worth and plan cost typed on a project’s tasks count here too.
+          </p>
+        </div>
+      ) : (
+        <>
+          <DataTable cols={projCols} rows={shown} totals={true} />
+          {months.length > 0 && (
+            <div className="panel" style={{ margin: '14px 0' }}>
+              <div className="panel-h">
+                <h3>Planned month by month</h3>
+                <span className="sub">{pick ? (stats.find((x: any) => x.id === pick) || { project: '' }).project : 'all projects'} · income against cost</span>
+              </div>
+              <div className="panel-b">
+                <ChartBarGroups
+                  rows={months}
+                  values
+                  series={[
+                    { key: 'income', label: 'Planned income', c: 'var(--good)' },
+                    { key: 'cost', label: 'Planned cost', c: 'var(--s2)' },
+                  ]}
+                  label="Planned income and cost by month"
+                  width={1500}
+                  low
+                />
+              </div>
+            </div>
+          )}
+          <div className="sech">
+            <h2>Plan entries</h2>
+            <span className="sub">each line of income or cost planned</span>
+          </div>
+          {entries.length ? (
+            <DataTable cols={entryCols} rows={entries} attach="projectPlans" />
+          ) : (
+            <div className="empty" style={{ padding: '20px' }}>
+              No plan entries {pick ? 'for this project ' : ''}yet — only the plan worth and cost typed on its tasks.
+            </div>
+          )}
+        </>
+      )}
+      <div className="note calm" style={{ marginTop: '14px' }}>
+        <span className="ic">
+          <Icon name="info" />
+        </span>
+        <div>
+          A plan is what is expected, not what has happened: it moves no money and is not in profit &amp; loss or the bank accounts.
+          Record the money itself as income or an expense when it comes in or goes out, and note what has come in or gone out so far
+          against each plan line. The plan worth and plan cost typed on a project’s tasks count in its planned income and cost.
+        </div>
+      </div>
+    </PageShell>
+  );
+}
+
 /** Tasks: a list of tasks, the projects they belong to, and a summary of both. */
 export function TasksPage() {
   const { tab, toast, refreshData, openModal, openEdit, goto, exportCsv, exportXls, print } = useApp();
@@ -521,6 +724,7 @@ export function TasksPage() {
   };
 
   if (tab === 'projects') return <ProjectsView run={run} openTasks={openTasks} />;
+  if (tab === 'plans') return <PlansView />;
   if (tab === 'summary') return <SummaryView openTasks={openTasks} />;
 
   // ========================================================================
@@ -683,9 +887,9 @@ export function TasksPage() {
         )}
         {fPeriod === 'custom' && (
           <>
-            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} aria-label="From date" />
+            <DateField className="sm" value={fFrom} onChange={setFFrom} label="From date" />
             <span className="muted">to</span>
-            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} aria-label="To date" />
+            <DateField className="sm" value={fTo} onChange={setFTo} label="To date" />
           </>
         )}
         <span className="spacer" />
@@ -769,6 +973,8 @@ export function TasksPage() {
               <th>Subject</th>
               <th>Start date</th>
               <th>Deadline</th>
+              <th>Completed on</th>
+              <th className="r" title="Days from the start date to the day it was completed, or to today while it is still open">Days</th>
               <th>Project</th>
               <th>Project status</th>
               <th>Status</th>
@@ -788,7 +994,7 @@ export function TasksPage() {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={17} className="tnone">
+                <td colSpan={19} className="tnone">
                   {filtered ? 'No task matches these filters.' : 'No tasks yet — write one above and press Enter.'}
                 </td>
               </tr>
@@ -797,6 +1003,7 @@ export function TasksPage() {
                 const st = M.taskStatus(t);
                 const proj = t.projectId ? M.DATA.taskProjects.find((p: any) => p.id === t.projectId) : null;
                 const prog = M.taskProgress(t);
+                const days = M.taskDays(t);
                 return (
                   <tr key={t.id} className={picked.includes(t.id) ? 'on' : ''}>
                     <td className="chk" data-noexport="1">
@@ -812,6 +1019,13 @@ export function TasksPage() {
                     <td className={`mono nowrap ${st === 'Overdue' ? 'neg' : 'muted'}`}>
                       {t.date ? M.fmtDate(t.date) : ''}
                       {t.date && st !== 'Completed' && st !== 'Cancelled' && <span className={`tdue ${st === 'Overdue' ? 'late' : ''}`}>{M.dueIn(t.date)}</span>}
+                    </td>
+                    <td className="mono nowrap">{st === 'Completed' && t.doneAt ? M.fmtDate(t.doneAt) : ''}</td>
+                    <td
+                      className={`r mono nowrap ${st === 'Completed' ? '' : 'muted'}`}
+                      title={days == null ? '' : st === 'Completed' ? `Took ${days} ${days === 1 ? 'day' : 'days'}` : `${days} ${days === 1 ? 'day' : 'days'} so far`}
+                    >
+                      {days == null ? '' : M.fmtNum(days)}
                     </td>
                     <td className="tproj">{t.project || ''}</td>
                     <td>{proj ? <span className={`tpill ${proj.status === 'Completed' ? 'st-done' : proj.status === 'Cancelled' ? 'st-cancel' : 'st-open'}`}>{proj.status || 'Open'}</span> : ''}</td>

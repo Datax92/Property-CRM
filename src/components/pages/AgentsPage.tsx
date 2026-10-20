@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
 import { Icon } from '../Icons';
@@ -9,14 +9,41 @@ import * as M from '../../lib/re-data';
 
 export function AgentsPage() {
   const { tab, effectiveFilters: f, range: r, numbers, openModal, openCostSheet } = useApp();
+  // The commission ledger's own filters: who, on which side, how far paid, which plot.
+  const [cAgent, setCAgent] = useState('');
+  const [cSide, setCSide] = useState('');
+  const [cStatus, setCStatus] = useState('');
+  const [cProp, setCProp] = useState('');
 
   const meta = PAGE_META[`agents/${tab}`] || { t: 'Agents' };
 
   if (tab === 'commissions') {
     const ids = new Set(M.DATA.properties.filter((p: any) => M.propMatch(p, f)).map((p: any) => p.id));
-    const rows = M.DATA.commissions.filter(
+    // An agent in the directory is matched by the agent the entry belongs to; any other name as typed.
+    const who = (c: any) => M.commissionAgentId(c) || 'name:' + String(c.agent || '').trim().toLowerCase();
+    const inPeriod = M.DATA.commissions.filter(
       (c: any) => ids.has(c.propertyId) && M.inRange(c.date, r) && (f.agent === 'all' || M.commissionAgentId(c) === f.agent)
     );
+    const rows = inPeriod.filter(
+      (c: any) =>
+        (!cAgent || who(c) === cAgent) &&
+        (!cSide || (c.txnType === 'Purchase' ? 'Purchase' : 'Sale') === cSide) &&
+        (!cStatus || (cStatus === 'Open' ? c.outstanding > 0 : c.status === cStatus)) &&
+        (!cProp || c.propertyId === cProp)
+    );
+    const agentChoices = Array.from(
+      new Map<string, string>(
+        inPeriod.map((c: any) => {
+          const id = M.commissionAgentId(c);
+          const a = id ? M.DATA.agents.find((x: any) => x.id === id) : null;
+          return [who(c), a ? a.name : String(c.agent || '—')] as [string, string];
+        })
+      )
+    ).sort((a, b) => a[1].localeCompare(b[1]));
+    const propChoices = Array.from(new Map<string, string>(inPeriod.map((c: any) => [c.propertyId, c.property] as [string, string]))).sort((a, b) =>
+      String(a[1]).localeCompare(String(b[1]))
+    );
+    const filtered = !!(cAgent || cSide || cStatus || cProp);
     // The same commission entered twice counts twice on the cost sheet and in profit.
     const dupes = M.duplicateCommissions().filter((g: any[]) => g.some((c: any) => rows.indexOf(c) >= 0));
 
@@ -108,6 +135,41 @@ export function AgentsPage() {
         }
       >
         <SummaryKpis pairs={summaryPairs} />
+        <div className="toolrow" data-noprint="1">
+          <select className="fldsel" value={cAgent} onChange={(e) => setCAgent(e.target.value)} aria-label="Filter by agent">
+            <option value="">All agents</option>
+            {agentChoices.map(([k, name]) => (
+              <option key={k} value={k}>{name}</option>
+            ))}
+          </select>
+          <select className="fldsel" value={cSide} onChange={(e) => setCSide(e.target.value)} aria-label="Filter by purchase or sale">
+            <option value="">Purchase and sale</option>
+            <option value="Purchase">On purchases</option>
+            <option value="Sale">On sales</option>
+          </select>
+          <select className="fldsel" value={cStatus} onChange={(e) => setCStatus(e.target.value)} aria-label="Filter by payment">
+            <option value="">Paid and unpaid</option>
+            <option value="Open">Still to pay</option>
+            <option value="Paid">Paid</option>
+            <option value="Partially Paid">Partially paid</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Overdue">Overdue</option>
+          </select>
+          <select className="fldsel" value={cProp} onChange={(e) => setCProp(e.target.value)} aria-label="Filter by property">
+            <option value="">All properties</option>
+            {propChoices.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+          {filtered && (
+            <button type="button" className="btn sm" onClick={() => { setCAgent(''); setCSide(''); setCStatus(''); setCProp(''); }}>
+              <Icon name="x" size={12} /> Clear
+            </button>
+          )}
+          <span className="vs">
+            {M.fmtNum(rows.length)} of {M.fmtNum(inPeriod.length)} {inPeriod.length === 1 ? 'entry' : 'entries'} in {r.label}
+          </span>
+        </div>
         {dupes.length > 0 && (
           <div className="note bad" style={{ marginBottom: '14px' }}>
             <span className="ic">

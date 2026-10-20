@@ -177,12 +177,13 @@ const accountField = (addOnly = true) => ({
   needsAccount: true,
 });
 
-/** The money a form pays or receives now: the account is required only when this is above zero. */
+/** The money a form pays or receives now by its first mode: the account is required only when this is above zero. */
 const moneyNow = (fields: any[], v: any) => {
   const fd = fields.find((x) => x.k === 'paid') || fields.find((x) => x.k === 'received');
   if (!fd) return n(v.amount);
-  // A blank "received now" that defaults to all of it (income) still moves the whole amount.
-  if ((v[fd.k] === '' || v[fd.k] == null) && fd.auto) return n(v.amount);
+  // A blank "received now" that defaults to all of it (income) still moves the whole amount,
+  // less whatever went by a second mode.
+  if ((v[fd.k] === '' || v[fd.k] == null) && fd.auto) return n(v.amount) - (v.method2 ? n(v.amount2) : 0);
   return n(v[fd.k]);
 };
 
@@ -194,18 +195,33 @@ const splitFields = (what: string) => [
     type: 'select',
     opts: () => [['', '— None, one way only —'], ...M.METHODS.map((m: string) => [m, m])],
     addOnly: true,
-    hint: 'For money ' + what + ' two ways, e.g. part cash and part bank transfer.',
+    hint: 'For money ' + what + ' two ways, e.g. part by bank transfer and part cash.',
   },
-  { k: 'amount2', l: 'Amount by the second mode (PKR)', type: 'money', addOnly: true, hint: 'The rest goes by the first mode.' },
-  { k: 'account2', l: 'Second bank / cash account', list: () => M.accountNames(), ph: 'e.g. Cash in hand', addOnly: true },
+  { k: 'amount2', l: 'Amount by the second mode (PKR)', type: 'money', addOnly: true, hint: 'Added on top of the amount above: both together are ' + what + '.' },
+  { k: 'account2', l: 'Second bank / cash account', list: () => M.accountNames(), ph: 'e.g. Cash in hand', addOnly: true, hint: 'The account the second mode’s money went through.' },
 ];
-/** The second mode must differ from the first and carry part of the amount. */
-const splitErrors = (v: any, total: number, e: Record<string, string>) => {
+/** The second mode must differ from the first, carry an amount, and say which account it went through. */
+const splitErrors = (v: any, e: Record<string, string>) => {
   if (!v.method2) return;
   if (v.method2 === v.method && (v.account2 || '') === (v.account || '')) e.method2 = 'Pick a different mode or account from the first one.';
   else if (n(v.amount2) <= 0) e.amount2 = 'Enter how much went by the second mode.';
-  else if (n(v.amount2) > total) e.amount2 = 'Cannot be more than the amount paid (' + M.fmt(total, 'full') + ').';
+  else if (!String(v.account2 || '').trim()) e.account2 = 'Pick the bank or cash account the second mode’s money went through.';
 };
+/** Everything paid or received now: the first mode's amount and the second mode's on top. */
+const totalNow = (first: any, v: any) => n(first) + (v.method2 ? n(v.amount2) : 0);
+/** Income received now by the first mode: what was typed, or, left blank, all of it less any second mode. */
+const incomeFirst = (v: any) =>
+  v.received === '' || v.received == null ? Math.max(0, n(v.amount) - (v.method2 ? n(v.amount2) : 0)) : n(v.received);
+const incomeNow = (v: any) => totalNow(incomeFirst(v), v);
+/** The amounts a form moves now, by mode, for its live figures. */
+const splitCalc = (first: any, v: any, what: string) =>
+  v.method2 && n(v.amount2) > 0
+    ? [
+        ['  by ' + (v.method || 'first mode'), n(first)],
+        ['  by ' + v.method2, n(v.amount2)],
+        [what + ' now, both modes', totalNow(first, v)],
+      ]
+    : [[what + ' now', n(first)]];
 
 export const FORMS_DEF: Record<string, any> = {
   property: {
@@ -235,13 +251,14 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Purchase' },
       { k: 'seller', l: 'Seller / vendor', req: true, ph: 'Falcon Developers' },
       { k: 'purchaseDate', l: 'Purchase date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'estampNo', l: 'e-Stamp no.', ph: 'Number on the e-Stamp paper' },
       { k: 'price', l: 'Purchase price (PKR)', type: 'money', req: true, min: 1 },
       { k: 'registration', l: 'Registration / transfer', type: 'money' },
       { k: 'legal', l: 'Legal charges', type: 'money' },
       { k: 'development', l: 'Development charges', type: 'money' },
       { k: 'otherCost', l: 'Other purchase costs', type: 'money' },
       { g: 'Payment & valuation' },
-      { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'Cannot exceed total cost.', addOnly: true },
+      { k: 'paid', l: 'Amount paid to seller', type: 'money', hint: 'By the payment method below. Paid two ways? Put the second part under the second mode.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', addOnly: true },
       accountField(),
       ...splitFields('paid'),
@@ -254,21 +271,25 @@ export const FORMS_DEF: Record<string, any> = {
       },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
-    calc: (v: any) => {
+    calc: (v: any, editId?: string) => {
       const total = n(v.price) + n(v.registration) + n(v.legal) + n(v.development) + n(v.otherCost);
+      // A saved purchase already holds everything paid, both modes together.
+      const paid = editId ? n(v.paid) : totalNow(v.paid, v);
       return [
         ['Purchase price', n(v.price)],
         ['Acquisition costs', total - n(v.price)],
         ['Total property cost', total, true],
-        ['Paid', n(v.paid)],
-        ['Remaining to seller', Math.max(0, total - n(v.paid))],
+        ...(editId ? [['Paid', paid]] : splitCalc(v.paid, v, 'Paid')),
+        ['Remaining to seller', Math.max(0, total - paid)],
       ];
     },
-    validate: (v: any) => {
+    validate: (v: any, editId?: string) => {
       const e: Record<string, string> = {};
       const total = n(v.price) + n(v.registration) + n(v.legal) + n(v.development) + n(v.otherCost);
-      if (n(v.paid) > total) e.paid = 'Paid cannot exceed the total cost of ' + M.fmt(total, 'cr') + '.';
-      splitErrors(v, n(v.paid), e);
+      if (editId) return e;
+      if (totalNow(v.paid, v) > total)
+        e[v.method2 && n(v.amount2) > 0 ? 'amount2' : 'paid'] = 'Paid (' + M.fmt(totalNow(v.paid, v), 'full') + ') cannot exceed the total cost of ' + M.fmt(total, 'full') + '.';
+      splitErrors(v, e);
       return e;
     },
     submit: (v: any) => {
@@ -309,9 +330,10 @@ export const FORMS_DEF: Record<string, any> = {
         hint: 'Add agents under Agents → Agent directory.',
       },
       { k: 'date', l: 'Sale date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
+      { k: 'estampNo', l: 'e-Stamp no.', ph: 'Number on the e-Stamp paper' },
       { g: 'Money' },
       { k: 'sellingPrice', l: 'Selling price (PKR)', type: 'money', req: true, min: 1 },
-      { k: 'received', l: 'Amount received', type: 'money', hint: 'Cannot exceed the selling price.', addOnly: true },
+      { k: 'received', l: 'Amount received', type: 'money', hint: 'By the payment method below. Received two ways? Put the second part under the second mode.', addOnly: true },
       { k: 'method', l: 'Payment method', type: 'select', opts: () => M.METHODS, def: 'Bank Transfer', req: true, addOnly: true },
       accountField(),
       ...splitFields('received'),
@@ -356,7 +378,7 @@ export const FORMS_DEF: Record<string, any> = {
       },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
-    calc: (v: any) => {
+    calc: (v: any, editId?: string) => {
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
       const price = n(v.sellingPrice);
       const ag = M.DATA.agents.find((a: any) => a.id === v.agentId);
@@ -383,6 +405,9 @@ export const FORMS_DEF: Record<string, any> = {
       const otherSell = sim ? sim.otherSellingExpenses : n(v.otherExpenses);
       const after = sim ? sim.cgtAmount + sim.zakat + sim.charity + sim.officeExpenseDeduction : 0;
       return [
+        // A saved sale already holds everything received, both modes together.
+        ...(editId ? [] : splitCalc(v.received, v, 'Received')),
+        ['Still to receive', Math.max(0, price - (editId ? n(v.received) : totalNow(v.received, v)))],
         ['Landed cost (from cost sheet)', cost],
         ['Selling price', price],
         ['Withholding tax §236C', -tax],
@@ -397,8 +422,9 @@ export const FORMS_DEF: Record<string, any> = {
       const e: Record<string, string> = {};
       if (!editId && !M.DATA.properties.some((p: any) => p.status !== 'Sold'))
         e.propertyId = 'No unsold property in the register — add the property purchase first.';
-      if (n(v.received) > n(v.sellingPrice)) e.received = 'Received cannot exceed the selling price.';
-      if (!editId) splitErrors(v, n(v.received), e);
+      if (!editId && totalNow(v.received, v) > n(v.sellingPrice))
+        e[v.method2 && n(v.amount2) > 0 ? 'amount2' : 'received'] = 'Received (' + M.fmt(totalNow(v.received, v), 'full') + ') cannot exceed the selling price.';
+      if (!editId) splitErrors(v, e);
       const p = M.DATA.properties.find((x: any) => x.id === v.propertyId);
       if (p && v.date && M.parseDate(v.date) < p.purchaseDate)
         e.date = 'Sale date is before the property was purchased (' + M.fmtDate(p.purchaseDate) + ').';
@@ -651,25 +677,24 @@ export const FORMS_DEF: Record<string, any> = {
       { k: 'note', l: 'Description', ph: 'What this income is for', full: true },
       { k: 'attachments', l: 'Attachments', type: 'files', full: true },
     ],
-    calc: (v: any) => {
-      const got = v.received === '' || v.received == null ? n(v.amount) : n(v.received);
+    calc: (v: any, editId?: string) => {
+      const got = editId ? 0 : incomeNow(v);
       return [
         ['Earned', n(v.amount)],
-        ['Received now', got],
+        ...(editId ? [] : splitCalc(incomeFirst(v), v, 'Received')),
         ['Still to receive', Math.max(0, n(v.amount) - got), true],
       ];
     },
     validate: (v: any, editId?: string) => {
       const e: Record<string, string> = {};
       if (editId) return e;
-      const got = v.received === '' || v.received == null ? n(v.amount) : n(v.received);
-      if (got > n(v.amount)) e.received = 'Cannot be more than the amount earned.';
+      if (incomeNow(v) > n(v.amount)) e[v.method2 && n(v.amount2) > 0 ? 'amount2' : 'received'] = 'Cannot be more than the amount earned.';
       if (v.dueDate && v.date && M.parseDate(v.dueDate) < M.parseDate(v.date)) e.dueDate = 'Cannot be before the date earned.';
-      splitErrors(v, got, e);
+      splitErrors(v, e);
       return e;
     },
     submit: (v: any) => {
-      const x = M.addIncome({ ...v, received: v.received === '' || v.received == null ? v.amount : v.received });
+      const x = M.addIncome({ ...v, received: incomeFirst(v) });
       return { id: x.id, msg: 'Income ' + x.id + ' recorded', go: 'income/register' };
     },
   },
@@ -790,6 +815,13 @@ export const FORMS_DEF: Record<string, any> = {
       { g: 'Dates' },
       { k: 'startDate', l: 'Start date', type: 'date', def: () => dstr(M.TODAY) },
       { k: 'date', l: 'Deadline', type: 'date', hint: 'It turns Overdue after this date and shows in alerts as it comes near.' },
+      {
+        k: 'doneAt',
+        l: 'Completed on',
+        type: 'date',
+        maxToday: true,
+        hint: 'Filled in with today when the task is marked Completed; change it if it was finished on another day.',
+      },
       { g: 'Plan and progress' },
       { k: 'plannedHours', l: 'Planned workload (hours)', type: 'number', min: 0 },
       { k: 'planWorth', l: 'Plan worth (PKR)', type: 'money', min: 0, hint: 'What finishing it is worth to the business.' },
@@ -805,15 +837,73 @@ export const FORMS_DEF: Record<string, any> = {
       },
       { k: 'description', l: 'Details', ph: 'Optional notes', full: true },
     ],
+    // A completed task has a completed date, and a completed date makes the task completed.
+    onChange: (key: string, value: any, prev: any) => {
+      if (key === 'status') return value === 'Completed' ? (prev.doneAt ? null : { doneAt: dstr(M.TODAY) }) : { doneAt: '' };
+      if (key === 'doneAt' && value) return prev.status === 'Completed' ? null : { status: 'Completed' };
+      return null;
+    },
     validate: (v: any) => {
       const e: Record<string, string> = {};
       if (n(v.progress) > 100) e.progress = 'Cannot be more than 100%.';
       if (v.startDate && v.date && M.parseDate(v.date) < M.parseDate(v.startDate)) e.date = 'The deadline is before the start date.';
+      if (v.startDate && v.doneAt && M.parseDate(v.doneAt) < M.parseDate(v.startDate)) e.doneAt = 'Completed before the start date.';
       return e;
     },
     submit: (v: any) => {
       const t = M.addTask(v);
       return { id: t.id, msg: 'Task ' + t.id + ' added', go: 'tasks/list' };
+    },
+  },
+  plan: {
+    title: 'Add to a project plan',
+    editTitle: 'Edit plan entry',
+    coll: 'projectPlans',
+    update: (id: string, v: any) => M.updatePlan(id, v),
+    sub: 'Income a project is expected to bring in, or a cost it is expected to have, and when. Planning moves no money: it is not on the cash ledger or in profit and loss.',
+    fields: [
+      { g: 'Plan' },
+      {
+        k: 'projectId',
+        l: 'Project',
+        type: 'select',
+        req: true,
+        opts: () => [['', '— Select —'], ...M.DATA.taskProjects.map((p: any) => [p.id, p.name])],
+        hint: 'Add projects under Tasks → Projects.',
+      },
+      { k: 'kind', l: 'Income or cost', type: 'select', req: true, opts: () => [['Cost', 'Cost — money expected to go out'], ['Income', 'Income — money expected to come in']], def: 'Cost' },
+      { k: 'category', l: 'Category', ph: 'Pick or type one', list: (v: any) => (M.PLAN_CATEGORIES as any)[v.kind === 'Income' ? 'Income' : 'Cost'] },
+      { k: 'description', l: 'Description', ph: 'e.g. Boundary wall, 2nd instalment from buyer', full: true },
+      {
+        k: 'taskId',
+        l: 'Task (optional)',
+        type: 'select',
+        opts: (v?: any) => [
+          ['', '— Not for one task —'],
+          ...M.DATA.tasks.filter((t: any) => !v || !v.projectId || t.projectId === v.projectId).map((t: any) => [t.id, t.id + ' · ' + t.text]),
+        ],
+      },
+      { k: 'date', l: 'Expected date', type: 'date', hint: 'The month it is planned for.' },
+      { g: 'Amount' },
+      { k: 'amount', l: 'Planned amount (PKR)', type: 'money', req: true, min: 1 },
+      { k: 'actual', l: 'Actual so far (PKR)', type: 'money', min: 0, hint: 'What has actually come in or gone out against this line.' },
+      { k: 'status', l: 'Status', type: 'select', opts: () => M.PLAN_STATUSES, def: 'Planned', req: true },
+      { k: 'note', l: 'Note', ph: 'Optional', full: true },
+    ],
+    onChange: (key: string, value: any, prev: any) => {
+      // A task picked from another project is dropped when the project changes.
+      if (key === 'projectId' && prev.taskId && !M.DATA.tasks.some((t: any) => t.id === prev.taskId && t.projectId === value)) return { taskId: '' };
+      return null;
+    },
+    calc: (v: any) => [
+      [v.kind === 'Income' ? 'Planned income' : 'Planned cost', n(v.amount)],
+      ['Actual so far', n(v.actual)],
+      [v.kind === 'Income' ? 'Still to come in' : 'Still to spend', n(v.amount) - n(v.actual), true],
+    ],
+    validate: () => ({}),
+    submit: (v: any) => {
+      const x = M.addPlan(v);
+      return { id: x.id, msg: 'Plan entry ' + x.id + ' added', go: 'tasks/plans' };
     },
   },
   taskProject: {
@@ -1454,6 +1544,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const acct = F.fields.find((fd: any) => fd.needsAccount);
     if (acct && !hidden(acct) && !String(values.account || '').trim() && moneyNow(F.fields, values) > 0)
       errors.account = 'Pick the bank or cash account the money went through.';
+    // Money paid by bank transfer, cheque or online goes through a bank account, never cash in hand.
+    if (acct && !hidden(acct) && F.fields.some((fd: any) => fd.k === 'method')) {
+      const first = moneyNow(F.fields, values) > 0 ? M.methodAccountError(values.method, String(values.account || '').trim()) : null;
+      if (first && !errors.account) errors.account = first;
+      const second = values.method2 && n(values.amount2) > 0 ? M.methodAccountError(values.method2, String(values.account2 || '').trim()) : null;
+      if (second && !errors.account2) errors.account2 = second;
+    }
     Object.assign(errors, F.validate(values, editId));
     // An error on a field that is not on screen would otherwise block the save silently.
     F.fields.forEach((fd: any) => {
@@ -1481,7 +1578,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const LEDGERS = ['categories', 'properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects', 'income'];
+    const LEDGERS = ['categories', 'properties', 'sales', 'commissions', 'expenses', 'payments', 'audit', 'invoices', 'agents', 'taxes', 'zakat', 'bills', 'salaries', 'tasks', 'taskProjects', 'projectPlans', 'income'];
     const before: Record<string, number> = {};
     LEDGERS.forEach((key) => {
       before[key] = (M.DATA as any)[key].length;

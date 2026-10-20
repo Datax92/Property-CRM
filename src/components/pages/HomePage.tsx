@@ -117,8 +117,8 @@ export function HomePage() {
   const TILES: Record<string, Tile> = {
     dashboard: { icon: 'dashboard', label: 'Dashboard', value: 'Key figures & monthly report', go: 'dashboard/overview' },
     pnl: { icon: 'pnl', label: 'Profit / Loss', value: money(bv.net), go: 'finance/pnl', need: 'pnl' },
-    sales: { icon: 'sales', label: 'Total Sales', value: money(k.salesRevenue), go: 'sales/register' },
-    purchase: { icon: 'purchase', label: 'Total Purchase', value: money(k.purchaseCost), go: 'properties/purchases', need: 'purchases' },
+    sales: { icon: 'sales', label: 'Sale Register', value: money(k.salesRevenue) + ' sold', go: 'sales/register' },
+    purchase: { icon: 'purchase', label: 'Purchase Register', value: money(k.purchaseCost) + ' bought', go: 'properties/purchases', need: 'purchases' },
     cash: { icon: 'cash', label: 'Cash in Hand', value: money(cb.cash) + ' cash · ' + money(cb.bank) + ' bank', go: 'bank/accounts', need: 'cashflow' },
     bank: { icon: 'bank', label: 'Bank & Cash', value: money(cb.total) + ' in all accounts', go: 'bank/accounts', need: 'cashflow' },
     income: { icon: 'income', label: 'Income', value: money(k.otherIncome) + (k.incomeDue > 0 ? ' · ' + money(k.incomeDue) + ' due' : ''), go: 'income/register', need: 'pnl' },

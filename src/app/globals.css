@@ -230,6 +230,28 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--display); font-weight: 600; lette
 .cs-table tr.mirror-diff td { background: var(--warn-wash); }
 .cs-table tr.mirror-diff input { border-color: var(--warn); }
 .cs-table .mirror-was { display: block; font-size: 11px; margin-top: 2px; }
+/* A purchase or sale paid two ways: each mode on its own line with its amount. */
+.paidby { display: inline-flex; flex-direction: column; gap: 1px; white-space: nowrap; font-size: 12px; line-height: 1.35; }
+.paidby b { font-weight: 600; }
+/* A date typed day first (DD/MM/YYYY), with a button that opens the calendar. */
+.datefld { position: relative; display: flex; align-items: center; min-width: 0; }
+.datefld > input[type="text"] { flex: 1 1 auto; width: 100%; min-width: 0; padding-right: 34px; font-variant-numeric: tabular-nums; }
+.datefld-cal {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); width: 28px; height: 26px; padding: 0;
+  display: grid; place-items: center; border: 0; border-radius: 3px; background: transparent; color: var(--ink-3); cursor: pointer;
+}
+.datefld-cal:hover { background: var(--paper-2); color: var(--brand); }
+.datefld > input.datefld-native {
+  position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none;
+}
+.datefld-bad { font-size: 12px; color: var(--bad); font-weight: 500; }
+.datefld.sm { flex: 0 0 auto; width: 138px; }
+.datefld.sm > input[type="text"] {
+  height: 31px; padding: 0 32px 0 9px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card); font-size: 13.5px;
+}
+.datefld.sm > input[type="text"]:focus { outline: none; border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(1,126,132,.16); }
+.datefld > input[aria-invalid="true"] { border-color: var(--bad); }
+.tfilters .datefld.sm > input[type="text"] { height: 34px; border: 0; border-radius: 8px; background: #EEF0F3; }
 .fld .hint { font-size: 12px; color: var(--ink-3); font-weight: 400; }
 .fld .bad { font-size: 12px; color: var(--bad); font-weight: 500; }
 select.fldsel, input.fldsel {

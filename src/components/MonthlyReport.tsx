@@ -142,9 +142,14 @@ export function MonthlyReport({
     ...rep.types.map((t: string) => ({ id: 'type:' + t, label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
     { id: 'cash', label: 'Cash & bank', get: (m) => m.holdings.cash, total: null },
     { id: 'receivable', label: 'Receivables', get: (m) => m.holdings.receivable, total: null },
-    { id: 'holdTotal', label: 'Total', kind: 't', get: (m) => m.holdings.total, total: null },
+    { id: 'holdTotal', label: 'Total held', kind: 't', get: (m) => m.holdings.total, total: null },
+    { id: 'payable', label: 'Less: what the business owes', get: (m) => -m.holdings.payable, total: null },
+    { id: 'netWorth', label: 'Net worth', kind: 't', get: (m) => m.holdings.net, total: null },
+    ...(months.some((m) => m.capital)
+      ? [{ id: 'capital', label: 'Owner capital put in (not growth)', get: (m: any) => m.capital, total: sum('capital') }]
+      : []),
     { id: 'growth', label: 'Growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
-    { id: 'growthPct', label: 'Growth %', get: (m) => m.growthPct, total: M.pctOf(sum('growth'), rep.opening.total), fmt: pct },
+    { id: 'growthPct', label: 'Growth %', get: (m) => m.growthPct, total: rep.opening.net > 0 ? M.pctOf(sum('growth'), rep.opening.net) : NaN, fmt: pct },
   ];
   // Rows with nothing in any month of the year, which the Rows list can hide in one go.
   const emptyRows = allRows.filter((row) => row.kind !== 'h' && months.every((m) => !row.get!(m)) && !row.total).map((row) => row.id);
@@ -193,7 +198,7 @@ export function MonthlyReport({
               ? compare('After personal spending', cur.afterPersonal, prev && prev.afterPersonal)
               : null}
             {compare('Against target', cur.vsTarget, prev && prev.vsTarget)}
-            {compare('Business holds', cur.holdings.total, prev && prev.holdings.total)}
+            {compare('Net worth', cur.holdings.net, prev && prev.holdings.net)}
             {compare('Growth in the month', cur.growth, prev && prev.growth)}
             {forPrint && printFigures}
           </div>
@@ -214,6 +219,7 @@ export function MonthlyReport({
                     { key: 'target', label: 'Target', c: 'var(--s2)', hollow: true },
                   ]}
                   label="Net profit against target by month"
+                  values
                   width={forPrint ? 540 : undefined}
                   low={forPrint}
                 />
@@ -222,7 +228,7 @@ export function MonthlyReport({
             <div className="panel">
               <div className="panel-h">
                 <h3>Growth in what the business holds</h3>
-                <span className="sub">change on the month before</span>
+                <span className="sub">net worth gained in the month, owner capital left out</span>
               </div>
               <div className="panel-b">
                 <ChartBars
@@ -298,7 +304,10 @@ export function MonthlyReport({
           <p className="muted mr-note">
             Profit follows the P&amp;L: each plot counts whole in the month it is sold, as on its cost sheet. Holdings are
             what the business has at each month end — unsold plots at landed cost, assets at what was paid for them, bank
-            and cash, and what buyers still owe. Growth is the change in that total from the month before.
+            and cash (an opening balance from the start, whatever day it was entered), and what buyers still owe. Less what
+            the business still owes — sellers, agents, expenses, tax, bills and salaries — that is its net worth. Growth is
+            the net worth gained on the month before, leaving out money the owner put in: buying a plot on credit or paying
+            off a seller is not growth or a fall.
           </p>
           )}
           </>

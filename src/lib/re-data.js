@@ -62,7 +62,22 @@ export const isTransfer = (p) => p.category === TRANSFER_CATEGORY;
 const isIncomeReceipt = (p) => String(p.settleKey || '').startsWith('inc:');
 /** Cash in hand or a bank account. An account named for cash ("Cash in hand", "Petty Cash") is cash. */
 export const ACCOUNT_KINDS = ['Cash', 'Bank'];
-export const accountKind = (name) => (/cash|petty|in hand|\bhand\b|tijori|locker/i.test(String(name || '')) ? 'Cash' : 'Bank');
+export const accountKind = (name) => {
+  const s = String(name || '');
+  // A kind written in brackets on the account wins: "JazzCash (Bank)".
+  if (/\(bank\)\s*$/i.test(s)) return 'Bank';
+  if (/\(cash\)\s*$/i.test(s)) return 'Cash';
+  // A mobile wallet holds money like a bank account, though "cash" is in its name.
+  if (/jazz\s*cash|easy\s*paisa|sada\s*pay|naya\s*pay|wallet/i.test(s)) return 'Bank';
+  return /cash|petty|in hand|\bhand\b|tijori|locker/i.test(s) ? 'Cash' : 'Bank';
+};
+/** Ways of paying that move money through a bank account, never through cash in hand. */
+export const BANK_METHODS = ['Bank Transfer', 'Cheque', 'Online Payment'];
+/** Why a payment by this method cannot go through this account, or null when it can. */
+export function methodAccountError(method, account) {
+  if (!account || BANK_METHODS.indexOf(method) < 0 || accountKind(account) !== 'Cash') return null;
+  return method + ' moves money through a bank account, not ' + account + '. Pick or type the bank account.';
+}
 
 const AGENT_NAMES = ['Ahmed Khan','Sana Malik','Bilal Raza','Hina Qureshi','Usman Sheikh','Farah Iqbal','Zain Abbas','Nida Aslam'];
 const BUYERS = ['Kamran Aziz','Ayesha Tariq','Rehan Dar','Mahnoor Sethi','Junaid Butt','Saira Hameed','Adnan Yousaf','Tania Rafiq','Waleed Chaudhry','Noor Fatima','Imran Sial','Beenish Anwar','Shahid Mahmood','Rabia Zafar','Danish Alvi','Komal Nadeem','Tariq Jameel','Sundas Ali','Haris Baig','Mehreen Shah'];
@@ -142,9 +157,10 @@ function buildData() {
 
   const tasks = [];
   const taskProjects = [];
+  const projectPlans = [];
   const income = [];
   const categories = [];
-  return { categories, projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects, income };
+  return { categories, projects, agents, employees, properties, sales, commissions, expenses, salaries, bills, taxes, zakat, zakatSummary, payments, audit, costSheets, invoices, tasks, taskProjects, projectPlans, income };
 }
 
 
@@ -343,7 +359,7 @@ export function computeKPIs(r, f) {
     deal.propertyIds.push(s.propertyId);
     deal.buyPrice += rec.netBuyCost; deal.transfer += rec.totalSocietyGovtTransfer; deal.buyTax += rec.tax236K;
     deal.handling += rec.totalHandlingExpenses; deal.buyAgent += rec.buySideAgentFee;
-    deal.saleTax += rec.tax236C; deal.sellAgent += rec.sellSideAgentFee; deal.otherSelling += rec.otherSellingExpenses;
+    deal.saleTax += rec.tax236C; deal.sellAgent += rec.sellSideAgentFee + rec.profitShareFee; deal.otherSelling += rec.otherSellingExpenses;
     deal.cgt += rec.cgtAmount; deal.zakat += rec.zakat; deal.charity += rec.charity;
   });
   deal.landed = deal.buyPrice + deal.transfer + deal.buyTax + deal.handling + deal.buyAgent;
@@ -549,7 +565,8 @@ export const DEFAULT_MONTHLY_TARGET = { capital: 0, inflation: 0.83, growth: 0.3
 export const monthlyTargetPct = (t) => (+t.inflation || 0) + (+t.growth || 0) + (+t.profit || 0) + (+t.zakat || 0);
 
 /** What the business holds at the end of a day: unsold plots at landed cost, assets at cost,
-    bank and cash, and what buyers still owe. */
+    bank and cash, and what buyers still owe; less what it still owes, which leaves its net worth.
+    What an account held to begin with counts from the start, whatever date it was entered on. */
 export function holdingsAt(asOf, f) {
   const sold = (p) => DATA.sales.some((s) => s.propertyId === p.id && s.date <= asOf);
   // A plot at what it had cost by that day: its landed cost less what was recorded for it later.
@@ -567,13 +584,36 @@ export function holdingsAt(asOf, f) {
     const t = investmentType(e);
     byType[t] = (byType[t] || 0) + e.amount;
   });
-  const cash = accountBalances(asOf, f).reduce((a, b) => a + b.balance, 0);
-  const owed = (total, key) => Math.max(0, total - livePayments().filter((p) => p.settleKey === key && p.date <= asOf).reduce((x, p) => x + p.amount, 0));
+  const live = livePayments().filter((p) => !f || overheadMatch(p, f));
+  const cash = live.filter((p) => p.date <= asOf || isOpeningEntry(p)).reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), 0);
+  const settledBy = {};
+  live.forEach((p) => { if (p.settleKey && p.date <= asOf) settledBy[p.settleKey] = (settledBy[p.settleKey] || 0) + p.amount; });
+  const owed = (total, key) => Math.max(0, (total || 0) - (settledBy[key] || 0));
   // What buyers still owe, and income earned but not yet received.
   const receivable = DATA.sales.filter((s) => s.date <= asOf).reduce((a, s) => a + owed(s.sellingPrice, 'sale:' + s.id), 0)
     + (DATA.income || []).filter((x) => x.date <= asOf && (!f || overheadMatch(x, f))).reduce((a, x) => a + owed(x.amount, 'inc:' + x.id), 0);
+  // What the business still owes on that day: sellers, agents, expenses, tax, bills and salaries.
+  // A plot bought on credit is held at its whole cost, so what is still owed on it comes off here.
+  const sum = (rows, amount, key) => rows.reduce((a, x) => a + owed(amount(x), key(x)), 0);
+  const on = (d) => d instanceof Date && d <= asOf;
+  const payable = sum(DATA.properties.filter((p) => on(p.purchaseDate) && (!f || propMatch(p, f))), (p) => p.totalCost, (p) => 'prop:' + p.id)
+    + sum(DATA.commissions.filter((c) => on(c.date)), (c) => c.amount, (c) => 'comm:' + c.id)
+    + sum(DATA.expenses.filter((e) => on(e.date) && (!f || overheadMatch(e, f))), (e) => e.amount, (e) => 'exp:' + e.id)
+    + sum(DATA.taxes.filter((t) => on(t.date) && (!f || overheadMatch(t, f))), (t) => t.amount, (t) => 'tax:' + t.id)
+    + sum(DATA.bills.filter((b) => on(b.dueDate) && (!f || overheadMatch(b, f))), (b) => b.amount, (b) => 'bill:' + b.id)
+    + sum(DATA.salaries.filter((s) => on(s.date) && (!f || overheadMatch(s, f))), (s) => s.net, (s) => 'sal:' + s.id)
+    // §236C typed on a sale with no tax entry of its own: a cost of the deal that no payment shows.
+    + DATA.sales.filter((s) => on(s.date)).reduce((a, s) => a + saleTaxCounted(s), 0);
   const assets = Object.keys(byType).reduce((a, k) => a + byType[k], 0);
-  return { property, byType, assets, cash, receivable, total: property + assets + cash + receivable };
+  const total = property + assets + cash + receivable;
+  return { property, byType, assets, cash, receivable, total, payable, net: total - payable };
+}
+
+/** Money the owner put into the business in a period (taken back out counts against it). */
+export function capitalIn(r, f) {
+  return livePayments()
+    .filter((p) => p.category === 'Owner Capital' && inR(p.date, r) && (!f || overheadMatch(p, f)))
+    .reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), 0);
 }
 
 /** Month by month for one calendar year, up to the current month: profit as the P&L counts it,
@@ -591,13 +631,17 @@ export function monthlyComparison(year, f, target = DEFAULT_MONTHLY_TARGET) {
     const bv = basisView(k, 'cogs');
     const asOf = r.end > TODAY ? endOfDay(TODAY) : r.end;
     const h = holdingsAt(asOf, f);
+    // Growth is what the net worth gained in the month, less money the owner put in: capital
+    // brought in is not growth, and paying off what was owed is not a fall.
+    const capital = capitalIn(r, f);
+    const growth = h.net - prev.net - capital;
     months.push({
       month: m, label: MONTHS[m], full: r.label,
       revenue: k.totalRevenue, sold: k.counts.soldInRange, landed: bv.cost, selling: k.directCosts, gross: bv.gross,
       expenses: k.operatingCosts, deductions: k.tax + k.zakat + k.charity, net: bv.net, margin: pctOf(bv.net, k.totalRevenue),
       otherIncome: k.otherIncome, personal: k.personal, afterPersonal: bv.net - k.personal,
       target: targetProfit, vsTarget: bv.net - targetProfit,
-      holdings: h, growth: h.total - prev.total, growthPct: pctOf(h.total - prev.total, prev.total),
+      holdings: h, capital, growth, growthPct: prev.net > 0 ? pctOf(growth, prev.net) : NaN,
     });
     prev = h;
   }
@@ -1068,37 +1112,42 @@ export function addProperty(v) {
     location: project.city, block: v.block || '—', unit: v.unit || '—', size: v.size,
     seller: v.seller, purchaseDate: parseDate(v.purchaseDate), price: +v.price,
     extras: { registration: +v.registration || 0, legal: +v.legal || 0, development: +v.development || 0, other: +v.otherCost || 0 },
-    paid: +v.paid || 0, status: v.status, office: v.office,
-    currentValue: +v.currentValue || +v.price,
-    method: v.method || 'Bank Transfer', ...splitOf(v, +v.paid || 0),
+    paid: paidNow(v.paid, v), status: v.status, office: v.office,
+    currentValue: +v.currentValue || +v.price, estampNo: String(v.estampNo || '').trim(),
+    method: v.method || 'Bank Transfer', ...splitOf(v),
     manual: true, attachments: v.attachments || [],
   });
   DATA.properties.push(p);
   saveRecordToFirestore('properties', p.id, p);
   postSplit({
-    date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: p.paid,
+    date: v.purchaseDate, dir: 'out', category: 'Property Purchase', amount: Math.max(0, p.paid - secondAmount(v)),
     party: p.seller, propertyId: p.id, office: p.office, method: v.method || 'Bank Transfer', account: v.account,
     note: 'Purchase payment — ' + p.name, settleKey: 'prop:' + p.id,
   }, v);
   return p;
 }
 
-/** A payment made two ways (e.g. part cash, part bank transfer): the second mode's part is
-    posted on its own, from its own account, and the rest by the first mode. One way when no
+/** What went by the second mode of a payment made two ways. */
+const secondAmount = (v) => (v.method2 ? Math.max(0, Math.round(+v.amount2 || 0)) : 0);
+/** Everything paid or received now: the amount by the first mode and, on top of it, the amount
+    by the second mode (e.g. 50 Lakh by bank transfer and 50 Lakh cash is 1 Cr paid). */
+export const paidNow = (first, v) => Math.max(0, Math.round(+first || 0)) + secondAmount(v);
+
+/** A payment made two ways (e.g. part cash, part bank transfer): base.amount is the first mode's
+    part, and the second mode's part is posted on its own, into its own account. One way when no
     second mode is given. */
 function postSplit(base, v) {
-  const second = v.method2 ? Math.min(Math.max(0, Math.round(+v.amount2 || 0)), base.amount) : 0;
-  const first = base.amount - second;
+  const second = secondAmount(v);
   const made = [];
-  if (first > 0) made.push(addPayment({ ...base, amount: first }));
+  if (base.amount > 0) made.push(addPayment(base));
   if (second > 0) {
     made.push(addPayment({ ...base, amount: second, method: v.method2, account: v.account2 || base.account }));
   }
   return made;
 }
-/** The payment modes of a purchase or sale paid two ways, as the register shows them. */
-export function splitOf(v, total) {
-  const second = v.method2 ? Math.min(Math.max(0, Math.round(+v.amount2 || 0)), total) : 0;
+/** The second payment mode of a purchase or sale paid two ways, as the register shows it. */
+export function splitOf(v) {
+  const second = secondAmount(v);
   return second > 0 ? { method2: v.method2, amount2: second, account2: v.account2 || '' } : {};
 }
 
@@ -1122,7 +1171,7 @@ export function addSale(v) {
   if (!p) throw new Error('Unknown property');
   // No agent selected = a direct sale: no commission is earned or owed.
   const agent = DATA.agents.find((a) => a.id === v.agentId) || null;
-  const price = +v.sellingPrice, received = Math.min(+v.received || 0, price);
+  const price = +v.sellingPrice, received = Math.min(paidNow(v.received, v), price);
   const pctRate = !agent ? 0 : v.commissionPct === '' || v.commissionPct == null ? agent.rate : +v.commissionPct;
   const commission = Math.round((price * pctRate) / 100);
   const saleTax = v.tax === '' || v.tax == null ? defaultSaleTax(p.id, price) : Math.round(+v.tax);
@@ -1132,7 +1181,8 @@ export function addSale(v) {
     id: nextId(DATA.sales, 'S-', 4), propertyId: p.id, property: p.name,
     buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date: parseDate(v.date),
     sellingPrice: price, received, outstanding: Math.max(0, price - received), dueDate,
-    method: v.method, ...splitOf(v, received), commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
+    method: v.method, ...splitOf(v), estampNo: String(v.estampNo || '').trim(),
+    commissionPct: pctRate, commission, tax: saleTax, otherExpenses: other,
     netRevenue: price - commission - saleTax - other,
     propertyCost: p.totalCost, grossProfit: price - p.totalCost,
     netProfit: price - p.totalCost - commission - saleTax - other,
@@ -1156,7 +1206,7 @@ export function addSale(v) {
     saveRecordToFirestore('commissions', cm.id, cm);
   }
   postSplit({
-    date: v.date, dir: 'in', category: 'Property Sale', amount: received,
+    date: v.date, dir: 'in', category: 'Property Sale', amount: Math.max(0, received - secondAmount(v)),
     party: s.buyer, propertyId: p.id, agentId: agent ? agent.id : null, office: p.office,
     method: v.method, account: v.account, note: 'Sale receipt — ' + p.name, settleKey: 'sale:' + s.id,
   }, v);
@@ -1351,13 +1401,44 @@ export function generateInvoiceFromSale(saleId) {
     saleId: sale.id,
     buyerName: sale.buyer,
     sellerName: COMPANY,
+    estampNo: sale.estampNo || '',
     paymentMode: sale.method || '',
+    // On an invoice the second mode's part is inside the token.
+    paymentMode2: sale.method2 || '',
+    paymentAmount2: sale.amount2 || 0,
     totalAmount: sale.sellingPrice,
     balanceAmount: sale.outstanding,
     tokenAmount: sale.received,
     tokenDate: sale.date,
     receivedByName: ACTOR,
     receivedFromName: sale.buyer,
+  });
+}
+
+/** The purchase invoice of a property bought, if it has one: the company keeps it for its records. */
+export const purchaseInvoiceOf = (propertyId) =>
+  DATA.invoices.find((i) => i.type === 'purchase' && !i.mirrorOf && i.propertyId === propertyId) || null;
+
+/** Purchase invoice for a property bought: the company is the buyer and pays the seller. */
+export function generateInvoiceFromPurchase(propertyId) {
+  const p = DATA.properties.find((x) => x.id === propertyId);
+  if (!p) throw new Error('Property not found');
+  return addInvoice({
+    type: 'purchase',
+    receiptDate: p.purchaseDate,
+    propertyId: p.id,
+    propertyName: p.name + ' · ' + p.project,
+    buyerName: COMPANY,
+    sellerName: p.seller,
+    estampNo: p.estampNo || '',
+    paymentMode: p.method || '',
+    paymentMode2: p.method2 || '',
+    paymentAmount2: p.amount2 || 0,
+    totalAmount: p.totalCost,
+    tokenAmount: p.paid,
+    tokenDate: p.purchaseDate,
+    receivedByName: p.seller,
+    receivedFromName: ACTOR,
   });
 }
 
@@ -1454,6 +1535,8 @@ function commissionBody(v) {
     counterparty: side === 'Purchase' ? p.seller : sale ? sale.buyer : '—',
     date: parseDate(v.date), amount, pct: base > 0 ? (amount / base) * 100 : 0,
     office: p.office, note: v.note || '', source: 'ledger',
+    // Entered from a cost sheet line other than the agent fee (the agent's share of profit).
+    ...(v.sheetLine ? { sheetLine: v.sheetLine } : {}),
   };
 }
 
@@ -1495,7 +1578,7 @@ export function unrecordedAgentFees() {
   dealSheets().forEach((cs) => {
     if (!cs.propertyId) return;
     const recorded = (side) => DATA.commissions.filter((c) => c.propertyId === cs.propertyId && c.txnType === side).reduce((a, c) => a + c.amount, 0);
-    [['Purchase', cs.buySideAgentFee], ['Sale', cs.sellSideAgentFee]].forEach(([side, onSheet]) => {
+    [['Purchase', cs.buySideAgentFee], ['Sale', (cs.sellSideAgentFee || 0) + (cs.profitShareFee || 0)]].forEach(([side, onSheet]) => {
       const missing = Math.round((onSheet || 0) - recorded(side));
       if (missing > 0) out.push({ id: cs.propertyId + ':' + side, propertyId: cs.propertyId, property: cs.name, sheet: cs.fromRecords ? '' : cs.id, side, onSheet, recorded: recorded(side), missing });
     });
@@ -1900,12 +1983,12 @@ export function addIncome(v) {
   x.status = incomeStatus(x);
   DATA.income.push(x);
   saveRecordToFirestore('income', x.id, x);
-  const got = Math.min(Math.round(+v.received || 0), body.amount);
+  const got = Math.min(paidNow(v.received, v), body.amount);
   if (got > 0) {
     // Received two ways (part cash, part bank): one receipt for each, into its own account.
-    Object.assign(x, splitOf(v, got));
+    Object.assign(x, splitOf(v));
     postSplit({
-      date: v.date, dir: 'in', category: x.category, amount: got, method: x.method, account: v.account, party: x.party,
+      date: v.date, dir: 'in', category: x.category, amount: Math.max(0, got - secondAmount(v)), method: x.method, account: v.account, party: x.party,
       propertyId: x.propertyId, office: x.office, ref: v.ref, note: 'Income ' + x.id + ' — ' + x.category, settleKey: 'inc:' + x.id,
     }, v);
     applySettlement('inc:' + x.id, got, v.date);
@@ -1991,7 +2074,7 @@ export function updateProperty(id, v) {
   Object.assign(p, {
     name: v.name, type: v.type, size: v.size, block: v.block || '—', unit: v.unit || '—',
     seller: v.seller, purchaseDate, price: +v.price, extras, office: v.office,
-    currentValue: +v.currentValue || +v.price, attachments: v.attachments || p.attachments || [],
+    currentValue: +v.currentValue || +v.price, estampNo: String(v.estampNo || '').trim(), attachments: v.attachments || p.attachments || [],
     // A property with a sale on the register stays sold whatever the form says.
     status: sale ? 'Sold' : v.status,
   });
@@ -2028,7 +2111,7 @@ export function updateSale(id, v) {
     buyer: v.buyer, agentId: agent ? agent.id : null, agent: agent ? agent.name : 'Direct sale', date,
     sellingPrice: price, dueDate: addDays(date, 60), commissionPct: pctRate, commission,
     tax: v.tax === '' || v.tax == null ? defaultSaleTax(s.propertyId, price) : Math.round(+v.tax),
-    otherExpenses: +v.otherExpenses || 0, attachments: v.attachments || s.attachments || [],
+    otherExpenses: +v.otherExpenses || 0, estampNo: String(v.estampNo || '').trim(), attachments: v.attachments || s.attachments || [],
   });
   if (p) s.propertyCost = p.totalCost;
   recomputeSale(s);
@@ -2314,13 +2397,19 @@ export function calculateCostSheet(v) {
   const sellSideAgentFee = Math.max(0, +(v.sellSideAgentFee !== undefined ? v.sellSideAgentFee : (v.saleBrokerage !== undefined ? v.saleBrokerage : Math.round(grossSalePrice * 0.01))));
   const saleBrokerage = sellSideAgentFee;
   const saleBrokeragePct = grossSalePrice > 0 ? (saleBrokerage / grossSalePrice) * 100 : (v.saleBrokeragePct || 1.0);
-  const totalCommissions = buySideAgentFee + sellSideAgentFee;
 
   // PROFIT & LOSS WATERFALL
   // What it costs to sell (advance tax on sale, the sell-side agent and any other selling cost)
   // comes off the sale price: these are real outflows of the deal, not just figures on the sheet.
   const otherSellingExpenses = Math.max(0, +(v.otherSellingExpenses || 0));
-  const saleSideCosts = tax236C + sellSideAgentFee + otherSellingExpenses;
+  // An agent paid a share of the profit (e.g. 30% of it) rather than a fee on the price: a share
+  // of what the deal makes once every other cost is paid, so it is worked out last.
+  const profitBeforeShare = grossSalePrice - tax236C - sellSideAgentFee - otherSellingExpenses - purchasePrice;
+  const profitSharePct = v.profitSharePct !== undefined && v.profitSharePct !== '' && v.profitSharePct != null ? +v.profitSharePct || 0 : 0;
+  const profitShareFee = Math.max(0, +(v.profitShareFee !== undefined && v.profitShareFee !== '' && v.profitShareFee != null
+    ? v.profitShareFee : Math.round((Math.max(0, profitBeforeShare) * profitSharePct) / 100)) || 0);
+  const totalCommissions = buySideAgentFee + sellSideAgentFee + profitShareFee;
+  const saleSideCosts = tax236C + sellSideAgentFee + otherSellingExpenses + profitShareFee;
   const netSaleProceeds = grossSalePrice - saleSideCosts;
   const grossProfit = netSaleProceeds - purchasePrice;
   const grossProfitPct = grossSalePrice > 0 ? (grossProfit / grossSalePrice) * 100 : 0;
@@ -2395,6 +2484,10 @@ export function calculateCostSheet(v) {
     saleBrokerage,
     saleBrokeragePct,
     totalCommissions,
+    profitBeforeShare,
+    // Kept blank until a share is set, so its box on the sheet starts empty.
+    profitSharePct: profitSharePct || '',
+    profitShareFee,
     saleSideCosts,
     netSaleProceeds,
     grossProfit,
@@ -2569,7 +2662,7 @@ const ZERO_LINES = {
   ndcFee: 0, stampDuty: 0, cvt: 0, cdaRdaTransferFee: 0, societyTransferFee: 0, legalCharges: 0,
   developmentCharges: 0, otherAcquisition: 0, tax236K: 0, handlingExpenses: 0, renovationRepairs: 0,
   maintenanceBills: 0, marketingExpenses: 0, fuelTravelling: 0, salaryExpenses: 0, buySideAgentFee: 0,
-  tax236C: 0, sellSideAgentFee: 0, otherSellingExpenses: 0, cgtAmount: 0, zakat: 0, charity: 0,
+  tax236C: 0, sellSideAgentFee: 0, otherSellingExpenses: 0, profitShareFee: 0, cgtAmount: 0, zakat: 0, charity: 0,
   officeExpenseDeduction: 0,
 };
 export const SHEET_AMOUNT_KEYS = Object.keys(ZERO_LINES).concat(['netBuyCost', 'grossSalePrice']);
@@ -2627,9 +2720,10 @@ export function sheetFromRecords(propertyId) {
   // with no ledger entry of its own still counts.
   const comms = DATA.commissions.filter((c) => c.propertyId === p.id);
   comms.forEach((c) => {
-    const key = c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee';
+    const share = c.sheetLine === 'profitShareFee' && c.txnType !== 'Purchase';
+    const key = share ? 'profitShareFee' : c.txnType === 'Purchase' ? 'buySideAgentFee' : 'sellSideAgentFee';
     v[key] += c.amount || 0;
-    src(c.id, 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale') + ' · ' + c.agent, c.amount || 0, key, c.paid || 0, c.date);
+    src(c.id, (share ? 'Agent share of profit' : 'Agent commission on ' + (c.txnType === 'Purchase' ? 'purchase' : 'sale')) + ' · ' + c.agent, c.amount || 0, key, c.paid || 0, c.date);
   });
   if (sale) {
     if (sale.commission && !comms.some((c) => c.txnType === 'Sale' && c.source !== 'ledger')) {
@@ -2670,6 +2764,10 @@ export function syncSheetWithRecords(cs) {
   const cgtAtRate = (cs.cgtAmount || 0) > 0
     && Math.abs((cs.cgtAmount || 0) - Math.max(0, Math.round(((cs.grossProfit || 0) * (cs.cgtRatePct || 0)) / 100))) <= 1;
   if (cgtAtRate && moved.indexOf('cgtAmount') < 0) next.cgtAmount = '';
+  // So does an agent's share of profit left at its rate.
+  const shareAtRate = (cs.profitShareFee || 0) > 0 && +cs.profitSharePct > 0
+    && Math.abs((cs.profitShareFee || 0) - Math.round((Math.max(0, cs.profitBeforeShare || 0) * cs.profitSharePct) / 100)) <= 1;
+  if (shareAtRate && moved.indexOf('profitShareFee') < 0) next.profitShareFee = '';
   return calculateCostSheet(next);
 }
 
@@ -2726,6 +2824,31 @@ export function landedCost(propertyId) {
   return cs ? cs.purchasePrice : 0;
 }
 
+/** A deal's cost sheet in the columns the purchase and sale registers show. On the purchase side
+    buy cost + expenses + agent fee + §236K is the landed cost; on a sale, the sale price less
+    every column is the net margin, exactly as on the sheet. Zakat, charity and an office share
+    are among the expenses of a sale. */
+export function dealColumns(propertyId) {
+  const cs = propertyId ? realSheet(propertyId) : null;
+  if (!cs) return null;
+  const buyExpenses = (cs.totalSocietyGovtTransfer || 0) + (cs.totalHandlingExpenses || 0);
+  const afterProfit = (cs.zakat || 0) + (cs.charity || 0) + (cs.officeExpenseDeduction || 0);
+  return {
+    sheet: cs.fromRecords || !cs.id ? '' : cs.id,
+    buyCost: cs.netBuyCost || 0, buyExpenses, buyAgent: cs.buySideAgentFee || 0, tax236K: cs.tax236K || 0,
+    landed: cs.purchasePrice || 0, salePrice: cs.grossSalePrice || 0,
+    expenses: buyExpenses + (cs.otherSellingExpenses || 0) + afterProfit,
+    expenseParts: [
+      ['Transfer, stamp duty, CVT & fees', cs.totalSocietyGovtTransfer || 0],
+      ['Handling expenses', cs.totalHandlingExpenses || 0],
+      ['Other selling expenses', cs.otherSellingExpenses || 0],
+      ['Zakat', cs.zakat || 0], ['Charity', cs.charity || 0], ['Office expense share', cs.officeExpenseDeduction || 0],
+    ].filter((x) => x[1]),
+    commission: cs.totalCommissions || 0, tax236C: cs.tax236C || 0, cgt: cs.cgtAmount || 0,
+    grossProfit: cs.grossProfit || 0, netMargin: cs.netMargin || 0, netMarginPct: cs.netMarginPct || 0, roiPct: cs.roiPct || 0,
+  };
+}
+
 /* ====================================================================
    AMOUNTS ONLY ON A COST SHEET
    A line typed on a sheet that no record holds counts on the sheet but
@@ -2753,12 +2876,13 @@ export const SHEET_LINE_RECORDS = {
   tax236C: ['saleTax'],
   sellSideAgentFee: ['commission', 'Sale'],
   otherSellingExpenses: ['expense', 'Property Expenses', 'Selling Costs'],
+  profitShareFee: ['commission', 'Sale'],
   cgtAmount: ['tax', 'Capital Gains Tax'],
   zakat: ['zakat'],
   charity: ['expense', 'Other Expenses', 'Charity'],
 };
 /** Lines about the sale: on an unsold plot they are estimates, so they wait for the sale. */
-const SALE_SIDE_LINES = ['tax236C', 'sellSideAgentFee', 'otherSellingExpenses', 'cgtAmount', 'zakat', 'charity'];
+const SALE_SIDE_LINES = ['tax236C', 'sellSideAgentFee', 'otherSellingExpenses', 'profitShareFee', 'cgtAmount', 'zakat', 'charity'];
 
 /** Where a linked cost sheet and its property's records disagree, line by line: a positive
     difference is typed on the sheet only, a negative one is recorded but not on the sheet.
@@ -2805,7 +2929,10 @@ export function recordSheetGaps(sheetId, opts = {}) {
       made.push(e.id);
     } else if (how === 'commission') {
       const agent = a === 'Sale' && sale && sale.agentId ? sale.agentId : '';
-      const c = addCommission({ ...pay, side: a, propertyId: p.id, agentId: agent, agentName: agent ? '' : 'Agent / dealer', amount, paid, note });
+      const c = addCommission({
+        ...pay, side: a, propertyId: p.id, agentId: agent, agentName: agent ? '' : 'Agent / dealer', amount, paid, note,
+        ...(g.key === 'profitShareFee' ? { sheetLine: g.key } : {}),
+      });
       made.push(c.id);
     } else if (how === 'zakat') {
       const z = addZakat({ ...pay, period: fyLabel(fyStartYear(date)), eligibleAssets: 0, liabilities: 0, rate: '', amount, propertyId: p.id, ref: cs.id });
@@ -2993,12 +3120,25 @@ export function taskTotals(list) {
   };
 }
 
+/** The day a task was completed: the date picked on the form, else the day it is ticked off. */
+const completedOn = (v, fallback) => (v.doneAt ? parseDate(v.doneAt) : fallback || TODAY);
+
+/** Days a task took, from its start (or the day it was made) to the day it was completed, or
+    to today while it is still open. Null without a start. */
+export function taskDays(t) {
+  const from = t.startDate || t.createdAt;
+  if (!(from instanceof Date)) return null;
+  const to = taskStatus(t) === 'Completed' && t.doneAt instanceof Date ? t.doneAt : TODAY;
+  const day0 = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.max(0, Math.round((day0(to) - day0(from)) / day));
+}
+
 export function addTask(v) {
   const t = {
     id: nextId(DATA.tasks, 'TK-', 5), ...taskBody(v),
     doneAt: null, createdBy: ACTOR, createdAt: new Date(),
   };
-  if (t.done) t.doneAt = new Date();
+  if (t.done) t.doneAt = completedOn(v);
   DATA.tasks.push(t);
   saveRecordToFirestore('tasks', t.id, t);
   return t;
@@ -3008,11 +3148,13 @@ export function updateTask(id, patch) {
   const t = mustFind(DATA.tasks, id, 'Task');
   const wasDone = t.status === 'Completed' || t.done;
   // A quick tick sends only { done }; the form sends every field.
-  const next = patch.done !== undefined && patch.status === undefined
+  const quick = patch.done !== undefined && patch.status === undefined;
+  const next = quick
     ? { ...t, status: patch.done ? 'Completed' : (t.status === 'Completed' ? 'Open' : t.status || 'Open') }
     : { ...t, ...patch };
   Object.assign(t, taskBody({ ...next, date: next.date === undefined ? t.date : next.date }));
-  if (t.done && !wasDone) t.doneAt = new Date();
+  // The form may set or correct the completed date; a tick completes it today.
+  if (t.done) t.doneAt = !quick && patch.doneAt ? parseDate(patch.doneAt) : wasDone && t.doneAt ? t.doneAt : TODAY;
   if (!t.done) t.doneAt = null;
   saveRecordToFirestore('tasks', t.id, t);
   return t;
@@ -3045,7 +3187,7 @@ function logDelete(id, entity, amount, note) {
 }
 
 /** The ledgers whose records can be deleted from their register. */
-export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', 'bills', 'salaries', 'commissions', 'invoices', 'agents', 'costSheets', 'income'];
+export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', 'bills', 'salaries', 'commissions', 'invoices', 'agents', 'costSheets', 'income', 'projectPlans'];
 
 export function deleteRecord(coll, id) {
   const rec = (DATA[coll] || []).find((x) => x.id === id);
@@ -3097,7 +3239,7 @@ export function deleteRecord(coll, id) {
   if (coll === 'invoices' || coll === 'costSheets') DATA[coll].filter((x) => x.mirrorOf === id).map((x) => x.id).forEach((mid) => removeFrom(coll, mid));
   removeFrom(coll, id);
   if (coll === 'zakat') refreshZakatSummary();
-  const entity = { income: 'Income', expenses: rec.group === 'Assets' ? 'Asset' : 'Expense', taxes: 'Tax', zakat: 'Zakat', bills: 'Bill', salaries: 'Salary', commissions: 'Agent Commission', invoices: 'Invoice', agents: 'Agent', costSheets: 'Trading Cost Sheet' }[coll] || coll;
+  const entity = { projectPlans: 'Project plan', income: 'Income', expenses: rec.group === 'Assets' ? 'Asset' : 'Expense', taxes: 'Tax', zakat: 'Zakat', bills: 'Bill', salaries: 'Salary', commissions: 'Agent Commission', invoices: 'Invoice', agents: 'Agent', costSheets: 'Trading Cost Sheet' }[coll] || coll;
   const amount = rec.amount != null ? rec.amount : rec.net != null ? rec.net : rec.totalAmount != null ? rec.totalAmount : rec.netMargin != null ? rec.netMargin : null;
   logDelete(id, entity, amount, entity + ' ' + id + ' deleted' + (settle ? '; its payments voided' : ''));
   return rec;
@@ -3156,19 +3298,110 @@ export function updateTaskProject(id, v) {
   if (DATA.taskProjects.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) throw new Error('A project named “' + name + '” already exists.');
   Object.assign(p, { name, ...taskProjectBody(v) });
   saveRecordToFirestore('taskProjects', p.id, p);
-  // Tasks carry the project's name for their list.
+  // Tasks and plan entries carry the project's name for their lists.
   DATA.tasks.filter((t) => t.projectId === id).forEach((t) => { t.project = name; saveRecordToFirestore('tasks', t.id, t); });
+  (DATA.projectPlans || []).filter((x) => x.projectId === id).forEach((x) => { x.project = name; saveRecordToFirestore('projectPlans', x.id, x); });
   return p;
 }
 
-/** Deleting a project keeps its tasks; they are simply no longer in a project. */
+/** Deleting a project keeps its tasks and plan entries; they are simply no longer in a project. */
 export function deleteTaskProject(id) {
   const i = DATA.taskProjects.findIndex((x) => x.id === id);
   if (i < 0) return false;
   DATA.taskProjects.splice(i, 1);
   deleteRecordFromFirestore('taskProjects', id);
   DATA.tasks.filter((t) => t.projectId === id).forEach((t) => { t.projectId = null; t.project = ''; saveRecordToFirestore('tasks', t.id, t); });
+  (DATA.projectPlans || []).filter((x) => x.projectId === id).forEach((x) => { x.projectId = null; saveRecordToFirestore('projectPlans', x.id, x); });
   return true;
+}
+
+/* ====================================================================
+   PROJECT PLANS — the money side of a project, planned ahead: what it is
+   expected to earn and what it is expected to cost, line by line and
+   month by month, with what has actually come in or gone out against
+   each line so far. Planning moves no money: nothing here is on the cash
+   ledger or in profit and loss until it is entered there.
+   ==================================================================== */
+export const PLAN_KINDS = ['Income', 'Cost'];
+export const PLAN_STATUSES = ['Planned', 'Done', 'Cancelled'];
+export const PLAN_CATEGORIES = {
+  Income: ['Sale proceeds', 'Rent', 'Commission', 'Advance / token', 'Investment return', 'Other income'],
+  Cost: ['Land / property', 'Construction', 'Material', 'Labour', 'Legal & transfer', 'Marketing', 'Salaries', 'Utilities', 'Other cost'],
+};
+
+function planBody(v) {
+  const proj = v.projectId ? DATA.taskProjects.find((p) => p.id === v.projectId) : null;
+  if (!proj) throw new Error('Pick the project this is planned for.');
+  const kind = v.kind === 'Income' ? 'Income' : 'Cost';
+  const amount = Math.round(+v.amount || 0);
+  if (amount <= 0) throw new Error('Enter the planned amount.');
+  const task = v.taskId ? DATA.tasks.find((t) => t.id === v.taskId) : null;
+  return {
+    projectId: proj.id, project: proj.name, kind,
+    category: String(v.category || '').trim() || (kind === 'Income' ? 'Other income' : 'Other cost'),
+    description: String(v.description || '').trim(),
+    taskId: task ? task.id : null, task: task ? task.text : '',
+    date: v.date ? parseDate(v.date) : null,
+    amount, actual: Math.max(0, Math.round(+v.actual || 0)),
+    status: PLAN_STATUSES.indexOf(v.status) >= 0 ? v.status : 'Planned',
+    note: v.note || '',
+  };
+}
+
+export function addPlan(v) {
+  const x = { id: nextId(DATA.projectPlans, 'PL-', 4), ...planBody(v), createdBy: ACTOR, createdAt: new Date(), manual: true };
+  DATA.projectPlans.push(x);
+  saveRecordToFirestore('projectPlans', x.id, x);
+  return x;
+}
+
+export function updatePlan(id, v) {
+  const x = mustFind(DATA.projectPlans, id, 'Plan entry');
+  const prev = x.amount;
+  Object.assign(x, planBody(v));
+  saveRecordToFirestore('projectPlans', x.id, x);
+  logEdit(x.id, 'Project plan', prev, x.amount);
+  return x;
+}
+
+/** Each project's plan: planned income and cost (its plan entries, plus the worth and cost planned
+    on its tasks), the profit that leaves, and what has actually come in and gone out so far.
+    Cancelled entries and tasks count neither way. */
+export function projectPlanStats() {
+  const live = (DATA.projectPlans || []).filter((x) => x.status !== 'Cancelled');
+  const stat = (id, name, extra) => {
+    const of = live.filter((x) => (x.projectId || null) === id);
+    const sum = (kind, k) => of.filter((x) => x.kind === kind).reduce((a, x) => a + (x[k] || 0), 0);
+    const ts = DATA.tasks.filter((t) => (t.projectId || null) === id && taskStatus(t) !== 'Cancelled');
+    const taskWorth = ts.reduce((a, t) => a + (t.planWorth || 0), 0), taskCost = ts.reduce((a, t) => a + (t.planCost || 0), 0);
+    const income = sum('Income', 'amount') + taskWorth, cost = sum('Cost', 'amount') + taskCost;
+    const actualIncome = sum('Income', 'actual'), actualCost = sum('Cost', 'actual');
+    return {
+      id: id || '-', projectId: id, project: name, ...extra, entries: of.length, taskWorth, taskCost,
+      income, cost, profit: income - cost, margin: pctOf(income - cost, income),
+      actualIncome, actualCost, actualProfit: actualIncome - actualCost,
+      next: of.filter((x) => x.status === 'Planned' && x.date instanceof Date && x.date >= TODAY).sort((a, b) => a.date - b.date)[0] || null,
+    };
+  };
+  const rows = DATA.taskProjects.map((p) => stat(p.id, p.name, { status: p.status || 'Open', type: p.type || '' }));
+  const loose = stat(null, 'No project', { status: '', type: '' });
+  return (loose.entries || loose.income || loose.cost ? rows.concat(loose) : rows).filter((x) => x.entries || x.income || x.cost);
+}
+
+/** Planned income and cost month by month, from the first planned month to the last (three years at most). */
+export function planMonths(projectId) {
+  const of = (DATA.projectPlans || []).filter((x) => x.status !== 'Cancelled' && x.date instanceof Date && (!projectId || x.projectId === projectId));
+  if (!of.length) return [];
+  const key = (d) => d.getFullYear() * 12 + d.getMonth();
+  const lo = Math.min(...of.map((x) => key(x.date))), hi = Math.max(...of.map((x) => key(x.date)));
+  const out = [];
+  for (let k = lo; k <= Math.min(hi, lo + 35); k++) {
+    const y = Math.floor(k / 12), m = k % 12;
+    const inM = of.filter((x) => key(x.date) === k);
+    const sum = (kind) => inM.filter((x) => x.kind === kind).reduce((a, x) => a + x.amount, 0);
+    out.push({ label: MONTHS[m] + (m === 0 || k === lo ? ' ' + String(y).slice(2) : ''), full: MONTHS[m] + ' ' + y, income: sum('Income'), cost: sum('Cost'), net: sum('Income') - sum('Cost') });
+  }
+  return out;
 }
 
 /** Progress of each project: cancelled tasks do not count either way. */

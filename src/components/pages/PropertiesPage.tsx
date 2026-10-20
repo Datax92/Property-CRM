@@ -1,34 +1,65 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, Tag } from '../Shared';
+import { PageShell, SummaryKpis, DataTable, Tag, PaidBy } from '../Shared';
 import { Icon } from '../Icons';
 import { PAGE_META } from '../../lib/constants';
+import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import * as M from '../../lib/re-data';
+import { InvoiceReceiptModal } from '../InvoiceReceiptModal';
+import type { Invoice } from '../../lib/types';
 
 export function PropertiesPage() {
-  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet } = useApp();
+  const { tab, effectiveFilters: f, range: r, openModal, numbers, openCostSheet, toast, refreshData } = useApp();
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const closeReceipt = useCallback(() => setSelectedInvoice(null), []);
 
   const meta = PAGE_META[`properties/${tab}`] || { t: 'Properties' };
 
   if (tab === 'purchases') {
     const rows = M.DATA.properties
       .filter((p: any) => M.propMatch(p, f) && M.inRange(p.purchaseDate, r))
-      // Landed cost is what the plot cost all in, from its cost sheet; expenses are everything on
-      // top of the price (fees, taxes, expenses picked for it, buy-side agent fee).
+      // Every amount is the plot's cost sheet: net buy cost + §236K + expenses + agent fee = landed cost.
       .map((p: any) => {
-        const landed = M.landedCost(p.id);
-        return { ...p, landed, expenses: landed - p.price };
+        const d: any = M.dealColumns(p.id) || {};
+        const sale = M.DATA.sales.find((s: any) => s.propertyId === p.id);
+        // Held until it was sold, or until today while it is still held.
+        const until = sale ? sale.date : M.TODAY;
+        return {
+          ...p,
+          landed: d.landed || 0,
+          tax236K: d.tax236K || 0,
+          expenses: d.buyExpenses || 0,
+          buyAgent: d.buyAgent || 0,
+          heldDays: p.purchaseDate instanceof Date ? Math.max(0, Math.round((until - p.purchaseDate) / 864e5)) : null,
+          heldTo: sale ? 'sold ' + M.fmtDate(sale.date) : 'still held',
+        };
       });
 
+    const sum = (key: string) => rows.reduce((a: number, p: any) => a + (p[key] || 0), 0);
     const summaryPairs: [string, string][] = [
       ['Properties bought', M.fmtNum(rows.length)],
-      ['Net buy cost', M.fmt(rows.reduce((a: number, p: any) => a + p.price, 0), numbers)],
-      ['Expenses', M.fmt(rows.reduce((a: number, p: any) => a + p.expenses, 0), numbers)],
-      ['Landed cost', M.fmt(rows.reduce((a: number, p: any) => a + p.landed, 0), numbers)],
-      ['Still payable to sellers', M.fmt(rows.reduce((a: number, p: any) => a + p.remaining, 0), numbers)],
+      ['Net buy cost', M.fmt(sum('price'), numbers)],
+      ['§236K tax', M.fmt(sum('tax236K'), numbers)],
+      ['Expenses', M.fmt(sum('expenses'), numbers)],
+      ['Landed cost', M.fmt(sum('landed'), numbers)],
+      ['Still payable to sellers', M.fmt(sum('remaining'), numbers)],
     ];
+
+    const purchaseVoucher = (p: any) => {
+      let inv = M.purchaseInvoiceOf(p.id);
+      if (!inv) {
+        if (!ledgersReady() || ledgerError()) {
+          toast('Not made — your records are not reachable right now');
+          return;
+        }
+        inv = M.generateInvoiceFromPurchase(p.id);
+        refreshData();
+        toast(`Purchase invoice ${inv.id} made for ${p.name}`);
+      }
+      setSelectedInvoice(inv);
+    };
 
     const cols = [
       { key: 'id', label: 'ID' },
@@ -37,25 +68,49 @@ export function PropertiesPage() {
       { key: 'project', label: 'Project' },
       { key: 'seller', label: 'Seller' },
       { key: 'purchaseDate', label: 'Purchase date', cls: 'mono', render: (p: any) => M.fmtDate(p.purchaseDate) },
-      { key: 'price', label: 'Net buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.price, numbers) },
-      { key: 'expenses', label: 'Expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
-      { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.landed, numbers) },
-      { key: 'paid', label: 'Paid to seller', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
       {
-        key: 'method',
-        label: 'Paid by',
-        render: (p: any) =>
-          p.method2 ? (
-            <span title={`${M.fmt(p.paid - p.amount2, 'full')} by ${p.method}, ${M.fmt(p.amount2, 'full')} by ${p.method2}`}>
-              {p.method} + {p.method2}
-            </span>
-          ) : (
-            p.method || '—'
-          ),
+        key: 'heldDays',
+        label: 'Days held',
+        a: 'r' as const,
+        cls: 'mono',
+        render: (p: any) => (p.heldDays == null ? '—' : <span title={`From the purchase date, ${p.heldTo}`}>{M.fmtNum(p.heldDays)}</span>),
       },
+      { key: 'estampNo', label: 'e-Stamp no.', cls: 'mono', render: (p: any) => p.estampNo || '—' },
+      { key: 'price', label: 'Net buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.price, numbers) },
+      { key: 'tax236K', label: '§236K tax', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.tax236K, numbers) },
+      {
+        key: 'expenses',
+        label: 'Expenses',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (p: any) => <span title="Transfer, stamp duty, CVT and fees, and the expenses picked for this plot, as on its cost sheet">{M.fmt(p.expenses, numbers)}</span>,
+      },
+      { key: 'buyAgent', label: 'Agent fee', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.buyAgent, numbers) },
+      { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => <b>{M.fmt(p.landed, numbers)}</b> },
+      { key: 'paid', label: 'Paid to seller', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
+      { key: 'method', label: 'Paid by', render: (p: any) => <PaidBy x={p} total={p.paid} numbers={numbers} /> },
       { key: 'remaining', label: 'Remaining', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.remaining, numbers) },
       { key: 'payStatus', label: 'Payment', render: (p: any) => <Tag text={p.payStatus} /> },
       { key: 'status', label: 'Status', render: (p: any) => <Tag text={p.status} /> },
+      {
+        key: 'voucher',
+        label: 'Purchase invoice',
+        render: (p: any) => {
+          const inv = M.purchaseInvoiceOf(p.id);
+          return (
+            <button
+              type="button"
+              className={`btn sm ${inv ? '' : 'pri'}`}
+              style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
+              onClick={() => purchaseVoucher(p)}
+              title={inv ? `Open purchase invoice ${inv.id}` : 'Make the purchase invoice from this purchase, as a sale invoice is made from a sale'}
+            >
+              <Icon name="print" size={12} /> {inv ? inv.id : 'Make invoice'}
+            </button>
+          );
+        },
+      },
       {
         key: 'pay',
         label: '',
@@ -101,6 +156,7 @@ export function PropertiesPage() {
       >
         <SummaryKpis pairs={summaryPairs} />
         <DataTable cols={cols} rows={rows} totals={true} attach="properties" />
+        <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
       </PageShell>
     );
   }

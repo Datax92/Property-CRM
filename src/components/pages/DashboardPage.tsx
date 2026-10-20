@@ -704,6 +704,19 @@ export function DashboardPage() {
 
       {role === 'CEO' && (() => {
         const netDelta = M.deltaPct(bv.net, bvPrev.net);
+        // Two margins, each named for what it is: the business's (net profit, after company expenses,
+        // as a share of revenue) and the deals' own (net margin on the cost sheets of the plots sold).
+        const perf = M.propertyPerf(r, f);
+        const dealSale = perf.reduce((a: number, x: any) => a + (x.grossSalePrice || 0), 0);
+        const dealNet = perf.reduce((a: number, x: any) => a + (x.netMargin || 0), 0);
+        const dealPct = dealSale > 0 ? M.pctOf(dealNet, dealSale) : null;
+        const netPctText = k.totalRevenue > 0 ? `${bv.netMargin.toFixed(1)}% net margin (net profit ÷ revenue)` : 'no revenue in this period';
+        const netPctWhy =
+          k.totalRevenue > 0
+            ? `Net margin ${bv.netMargin.toFixed(1)}% = net profit ${M.fmt(bv.net, 'full')} ÷ revenue ${M.fmt(k.totalRevenue, 'full')}, for ${r.label}. ` +
+              `Net profit is after the cost of the plots sold, selling costs, company expenses (salaries, office, bills), tax, Zakat and charity.` +
+              (dealPct != null ? ` The plots sold earned ${dealPct.toFixed(1)}% on their own cost sheets, before company expenses.` : '')
+            : 'Nothing was sold and no income was earned in this period, so there is no margin to work out.';
         const al = M.alerts().filter((a: any) => !denied(a.view));
 
         // What the business has money in and still holds, and what each bank and cash account holds.
@@ -711,7 +724,7 @@ export function DashboardPage() {
         const page1 = pick.figures || pick.cards || pick.charts || pick.table;
         // The key figures on the printed dashboard; the last four are not among the month's cards.
         const figures: [string, number, string][] = [
-          ['Net profit', bv.net, isFinite(bv.netMargin) ? `${bv.netMargin.toFixed(1)}% of revenue` : ''],
+          ['Net profit', bv.net, k.totalRevenue > 0 ? `${bv.netMargin.toFixed(1)}% net margin (÷ revenue)` : ''],
           ['Revenue', k.totalRevenue, `${M.fmtNum(k.counts.soldInRange)} plots sold`],
           ['Gross profit', bv.gross, ''],
           ...(k.personal > 0 ? [['After personal spending', bv.net - k.personal, `${M.fmt(k.personal, 'full')} personal`] as [string, number, string]] : []),
@@ -773,8 +786,8 @@ export function DashboardPage() {
                   <button type="button" className={`dbig ${bv.net < 0 ? 'loss' : ''}`} onClick={() => goto('finance/pnl')}>
                     <span className="k">Net profit</span>
                     <b className="v">{M.fmt(bv.net, numbers)}</b>
-                    <span className="f">
-                      {isFinite(bv.netMargin) ? `${bv.netMargin.toFixed(1)}% of revenue` : 'no revenue yet'}
+                    <span className="f" title={netPctWhy}>
+                      <span>{netPctText}</span>
                       {netDelta != null && isFinite(netDelta) && (
                         <em className={netDelta >= 0 ? 'up' : 'down'}>
                           {netDelta >= 0 ? '▲' : '▼'} {Math.abs(netDelta).toFixed(0)}% vs previous period
@@ -788,6 +801,11 @@ export function DashboardPage() {
                       <span>
                         Gross profit <b>{M.fmt(bv.gross, numbers)}</b>
                       </span>
+                      {dealPct != null && (
+                        <span title="Net margin on the cost sheets of the plots sold in this period, as a share of their sale price — before company expenses">
+                          Deals&apos; margin (cost sheets) <b>{dealPct.toFixed(1)}%</b>
+                        </span>
+                      )}
                       {k.personal > 0 && (
                         <span>
                           After personal spending <b>{M.fmt(bv.net - k.personal, numbers)}</b>

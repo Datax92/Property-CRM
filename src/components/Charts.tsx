@@ -21,6 +21,21 @@ function axMoney(n: number, numbersFormat: string) {
 
 const pct = (n: number, d = 1) => (isFinite(n) ? n.toFixed(d) + '%' : '—');
 
+/** The figure written on a bar: every digit when "Full PKR" is picked, otherwise in crore or lakh
+    to two places (1.73Cr, 67.25Lakh) and in full below a lakh, so no bar is rounded out of shape. */
+export function barValue(n: number, numbersFormat: string) {
+  const sign = n < 0 ? '−' : '';
+  const a = Math.abs(n);
+  if (numbersFormat === 'full') return sign + Math.round(a).toLocaleString('en-US');
+  if (numbersFormat === 'm') return axMoney(n, numbersFormat);
+  const two = (v: number) => String(+v.toFixed(2));
+  if (a >= 9.995e6) return sign + two(a / 1e7) + 'Cr';
+  if (a >= 1e5) return sign + two(a / 1e5) + 'Lakh';
+  return sign + Math.round(a).toLocaleString('en-US');
+}
+/** Roughly how wide a bar's figure is drawn, in the units of the chart. */
+const textW = (t: string) => t.length * 6.3 + 6;
+
 export function ChartGroupedBars({
   rows,
   s1,
@@ -354,16 +369,19 @@ function niceScale(lo: number, hi: number, fixedStep?: number) {
 /** Labels are tilted only when they would run into each other level. */
 const LABEL_PX = 6.4;
 const tilt = (rows: { label: string }[], slot: number) => rows.some((r) => String(r.label).length * LABEL_PX > slot - 6);
-const clip = (s: string, n = 16) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+const clip = (s: string, n = 24) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 /** One plot size for every bar chart, so two charts side by side line up: the same top, the same
     zero line and the same room for the labels under it. A chart with more grid lines is taller. */
-function frame(width: number, rows: { label: string }[], ticks: number, low = false, PL = 54) {
+function frame(width: number, rows: { label: string }[], ticks: number, low = false, PL0 = 54) {
   const PR = 12,
     PT = 26;
+  const tilted = tilt(rows, (width - PL0 - PR) / (rows.length || 1));
+  // A slanted name runs left of its bar: the first one gets room enough not to be cut off.
+  const first = rows.length ? clip(String(rows[0].label)).length * LABEL_PX * 0.82 : 0;
+  const PL = tilted ? Math.min(160, Math.max(PL0, first - (width - PL0 - PR) / (rows.length || 1) / 2 + 6)) : PL0;
   const slot = (width - PL - PR) / (rows.length || 1);
-  const tilted = tilt(rows, slot);
-  const PB = tilted ? 70 : 30;
+  const PB = tilted ? 92 : 30;
   // A low chart (on a printed page) keeps the same top and bottom, with less between.
   const ih = Math.max(low ? 96 : 196, (ticks - 1) * (low ? 15 : 26));
   return { W: width, H: PT + ih + PB, PL, PR, PT, PB, iw: width - PL - PR, ih, slot, tilted };
@@ -375,10 +393,25 @@ function XLabel({ x, y, text, tilted }: { x: number; y: number; text: string; ti
     ly = y.toFixed(1);
   return tilted ? (
     <text className="ax" x={lx} y={ly} textAnchor="end" transform={`rotate(-35 ${lx} ${ly})`}>
+      <title>{text}</title>
       {clip(text)}
     </text>
   ) : (
     <text className="ax" x={lx} y={ly} textAnchor="middle">
+      {text}
+    </text>
+  );
+}
+
+/** A figure written up a bar: inside it when the bar is tall enough, otherwise just beyond its end
+    (above a gain, below a loss). */
+function upLabel(x: number, top: number, h: number, v: number, text: string, hollow?: boolean) {
+  const inside = h > textW(text) + 4;
+  const px = (x + 3.5).toFixed(1);
+  const py = (inside ? top + 6 : v >= 0 ? top - 4 : top + h + 4).toFixed(1);
+  const anchor = inside || v < 0 ? 'end' : 'start';
+  return (
+    <text className={`dlab sm ${inside ? 'in' : ''} ${hollow ? 'on-hollow' : ''}`} x={px} y={py} textAnchor={anchor} transform={`rotate(-90 ${px} ${py})`}>
       {text}
     </text>
   );
@@ -416,7 +449,8 @@ export function ChartBars({
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
   const barW = Math.max(6, Math.min(46, bw * 0.62));
   const colour = (r: { v: number; c?: string }) => (signed ? (r.v >= 0 ? 'var(--good)' : 'var(--bad)') : r.c || 'var(--s1)');
-  const labels = rows.length <= 14;
+  // Every bar carries its figure. Too narrow to write it across, it runs up the bar instead.
+  const upright = rows.some((r) => r.v && textW(barValue(r.v, numbers)) > bw - 2);
 
   return (
     <div className="chart">
@@ -454,12 +488,13 @@ export function ChartBars({
           return (
             <React.Fragment key={i}>
               {v !== 0 && <rect x={(cx - barW / 2).toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={colour(r)} />}
-              {labels && v !== 0 && (
+              {upright && v !== 0 && upLabel(cx, top, h, v, barValue(v, numbers))}
+              {!upright && v !== 0 && (
                 <text className="dlab" x={cx.toFixed(1)} y={(ly - (r.tag ? 17 : 5)).toFixed(1)} textAnchor="middle">
-                  {axMoney(v, numbers)}
+                  {barValue(v, numbers)}
                 </text>
               )}
-              {labels && v !== 0 && r.tag && (
+              {!upright && v !== 0 && r.tag && (
                 <text className={`dlab tag ${signed ? (v >= 0 ? 'up' : 'down') : ''}`} x={cx.toFixed(1)} y={(ly - 5).toFixed(1)} textAnchor="middle">
                   {r.tag}
                 </text>
@@ -513,17 +548,6 @@ export function ChartBarGroups({
   const y = (v: number) => PT + ih - ((v - min) / (max - min || 1)) * ih;
   const barW = Math.max(4, Math.min(22, (bw - 12) / series.length - 2));
   const groupW = series.length * (barW + 2) - 2;
-  // An amount written up the bar: inside a bar tall enough to hold it, otherwise just above it.
-  const valueLabel = (x: number, top: number, h: number, text: string, hollow?: boolean) => {
-    const inside = h > text.length * 6.2 + 10;
-    const px = (x + 3.5).toFixed(1),
-      py = (inside ? top + 6 : top - 4).toFixed(1);
-    return (
-      <text className={`dlab sm ${inside ? 'in' : ''} ${hollow ? 'on-hollow' : ''}`} x={px} y={py} textAnchor={inside ? 'end' : 'start'} transform={`rotate(-90 ${px} ${py})`}>
-        {text}
-      </text>
-    );
-  };
 
   return (
     <div className="chart">
@@ -564,7 +588,7 @@ export function ChartBarGroups({
                 return (
                   <React.Fragment key={s.key}>
                     <rect className={s.hollow ? 'hollow' : undefined} x={bx.toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={s.c} />
-                    {values && v > 0 && valueLabel(bx + barW / 2, top, h, axMoney(v, numbers), s.hollow)}
+                    {values && upLabel(bx + barW / 2, top, h, v, barValue(v, numbers), s.hollow)}
                   </React.Fragment>
                 );
               })}

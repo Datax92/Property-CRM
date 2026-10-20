@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { useApp, FORMS_DEF } from '../../context/AppContext';
-import { PageShell, SummaryKpis, DataTable, Tag, MirrorChanges } from '../Shared';
+import { PageShell, SummaryKpis, DataTable, Tag, MirrorChanges, PaidBy } from '../Shared';
 import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { ShareBar, RankedList } from '../Charts';
 import { Icon } from '../Icons';
@@ -299,7 +299,11 @@ export function SalesPage() {
             <h3>No {kindWord} invoices yet</h3>
             <p>
               Click “{btnLabel}” to create one
-              {tab === 'saleInvoices' ? ', or use “Receipt Slip” on a row of the sales register.' : '.'}
+              {tab === 'saleInvoices'
+                ? ', or use “Receipt Slip” on a row of the sales register.'
+                : tab === 'purchaseInvoices'
+                  ? ', or use “Make invoice” on a row of the purchase register.'
+                  : '.'}
             </p>
           </div>
         ) : (
@@ -313,27 +317,40 @@ export function SalesPage() {
 
   // Sales register (default)
   const ids = new Set(M.DATA.properties.filter((p: any) => M.propMatch(p, f)).map((p: any) => p.id));
-  // Each sale with how long its plot was held and the net margin on its cost sheet.
+  // Each sale with how long its plot was held and its cost sheet, column by column: the sale price
+  // less buy cost, expenses, commission, §236K, §236C and CGT is the net margin on the sheet.
   const rows = M.DATA.sales
     .filter((s: any) => M.saleMatch(s, f, ids) && M.inRange(s.date, r))
     .map((s: any) => {
       const p = M.DATA.properties.find((x: any) => x.id === s.propertyId);
-      const cs: any = M.realSheet(s.propertyId);
+      const d: any = M.dealColumns(s.propertyId);
       return {
         ...s,
         heldDays: p && p.purchaseDate instanceof Date ? Math.max(0, Math.round((s.date - p.purchaseDate) / 864e5)) : null,
-        netMargin: cs ? cs.netMargin : 0,
-        netMarginPct: cs ? cs.netMarginPct : 0,
+        buyCost: d ? d.buyCost : s.propertyCost || 0,
+        landed: d ? d.landed : s.propertyCost || 0,
+        expenses: d ? d.expenses : s.otherExpenses || 0,
+        expenseParts: d ? d.expenseParts : [],
+        dealCommission: d ? d.commission : s.commission || 0,
+        tax236K: d ? d.tax236K : 0,
+        tax236C: d ? d.tax236C : s.tax || 0,
+        cgt: d ? d.cgt : 0,
+        netMargin: d ? d.netMargin : s.netProfit || 0,
+        netMarginPct: d ? d.netMarginPct : M.pctOf(s.netProfit || 0, s.sellingPrice),
+        roiPct: d ? d.roiPct : 0,
       };
     });
 
+  const tot = (key: string) => rows.reduce((a: number, s: any) => a + (s[key] || 0), 0);
+  const pct = (n: number) => (isFinite(n) ? `${n.toFixed(1)}%` : '—');
   const summaryPairs: [string, string][] = [
     ['Properties sold', M.fmtNum(rows.length)],
-    ['Revenue', M.fmt(rows.reduce((a: number, s: any) => a + s.sellingPrice, 0), numbers)],
-    ['Received', M.fmt(rows.reduce((a: number, s: any) => a + s.received, 0), numbers)],
-    ['Outstanding', M.fmt(rows.reduce((a: number, s: any) => a + s.outstanding, 0), numbers)],
-    ['Commission', M.fmt(rows.reduce((a: number, s: any) => a + s.commission, 0), numbers)],
-    ['Net margin', M.fmt(rows.reduce((a: number, s: any) => a + s.netMargin, 0), numbers)],
+    ['Revenue', M.fmt(tot('sellingPrice'), numbers)],
+    ['Received', M.fmt(tot('received'), numbers)],
+    ['Outstanding', M.fmt(tot('outstanding'), numbers)],
+    ['Net margin', M.fmt(tot('netMargin'), numbers)],
+    ['Net margin %', pct(M.pctOf(tot('netMargin'), tot('sellingPrice')))],
+    ['ROI %', pct(M.pctOf(tot('netMargin'), tot('landed')))],
   ];
 
   const cols = [
@@ -343,23 +360,35 @@ export function SalesPage() {
     { key: 'agent', label: 'Agent' },
     { key: 'date', label: 'Sale date', cls: 'mono', render: (s: any) => M.fmtDate(s.date) },
     { key: 'heldDays', label: 'Days held', a: 'r' as const, cls: 'mono', render: (s: any) => (s.heldDays == null ? '—' : M.fmtNum(s.heldDays)) },
-    { key: 'sellingPrice', label: 'Selling price', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.sellingPrice, numbers) },
+    { key: 'estampNo', label: 'e-Stamp no.', cls: 'mono', render: (s: any) => s.estampNo || '—' },
+    { key: 'sellingPrice', label: 'Selling price', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => <b>{M.fmt(s.sellingPrice, numbers)}</b> },
     { key: 'received', label: 'Received', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.received, numbers) },
+    { key: 'method', label: 'Received by', render: (s: any) => <PaidBy x={s} total={s.received} numbers={numbers} /> },
     { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.outstanding, numbers) },
+    { key: 'buyCost', label: 'Buy cost', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.buyCost, numbers) },
     {
-      key: 'method',
-      label: 'Method',
-      render: (s: any) =>
-        s.method2 ? (
-          <span title={`${M.fmt(s.received - s.amount2, 'full')} by ${s.method}, ${M.fmt(s.amount2, 'full')} by ${s.method2}`}>
-            {s.method} + {s.method2}
-          </span>
-        ) : (
-          s.method || '—'
-        ),
+      key: 'expenses',
+      label: 'Expenses',
+      a: 'r' as const,
+      sum: true,
+      cls: 'mono',
+      render: (s: any) => (
+        <span title={s.expenseParts.length ? s.expenseParts.map((x: any) => `${x[0]}: ${M.fmt(x[1], 'full')}`).join('\n') : 'No expenses on its cost sheet'}>
+          {M.fmt(s.expenses, numbers)}
+        </span>
+      ),
     },
-    { key: 'commission', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.commission, numbers) },
-    { key: 'netRevenue', label: 'Net revenue', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.netRevenue, numbers) },
+    {
+      key: 'dealCommission',
+      label: 'Commission',
+      a: 'r' as const,
+      sum: true,
+      cls: 'mono',
+      render: (s: any) => <span title="Agent fees on the purchase and the sale, and any agent's share of profit, as on the cost sheet">{M.fmt(s.dealCommission, numbers)}</span>,
+    },
+    { key: 'tax236K', label: '§236K', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.tax236K, numbers) },
+    { key: 'tax236C', label: 'FBR §236C', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.tax236C, numbers) },
+    { key: 'cgt', label: 'CGT', a: 'r' as const, sum: true, cls: 'mono', render: (s: any) => M.fmt(s.cgt, numbers) },
     {
       key: 'netMargin',
       label: 'Net margin',
@@ -367,10 +396,24 @@ export function SalesPage() {
       sum: true,
       cls: 'mono',
       render: (s: any) => (
-        <span className={s.netMargin >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }} title={`${s.netMarginPct.toFixed(1)}% of the sale, from its cost sheet`}>
+        <span className={s.netMargin >= 0 ? 'pos' : 'neg'} style={{ fontWeight: 700 }} title="From its cost sheet">
           {M.fmt(s.netMargin, numbers)}
         </span>
       ),
+    },
+    {
+      key: 'netMarginPct',
+      label: 'Margin %',
+      a: 'r' as const,
+      cls: 'mono',
+      render: (s: any) => <span title="Net margin as a share of the selling price, as on the cost sheet">{pct(s.netMarginPct)}</span>,
+    },
+    {
+      key: 'roiPct',
+      label: 'ROI %',
+      a: 'r' as const,
+      cls: 'mono',
+      render: (s: any) => <span title="Net margin as a share of what the plot cost all in (landed cost), as on the cost sheet">{pct(s.roiPct)}</span>,
     },
     { key: 'payStatus', label: 'Payment', render: (s: any) => <Tag text={s.payStatus} /> },
     { key: 'saleStatus', label: 'Sale', render: (s: any) => <Tag text={s.saleStatus} /> },

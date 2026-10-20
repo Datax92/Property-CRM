@@ -5,6 +5,7 @@ import { useApp, FORMS_DEF } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
 import { AttachmentsField } from './Attachments';
+import { DateField } from './DateField';
 
 const dstr = (d: Date | string) => (d instanceof Date ? M.dateInput(d) : d);
 
@@ -63,7 +64,7 @@ export function Modals() {
     groups.push(currentGroup);
   }
 
-  const calc = F.calc ? F.calc(values) : null;
+  const calc = F.calc ? F.calc(values, editId) : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -118,8 +119,20 @@ export function Modals() {
                     ctl = <input type="text" readOnly tabIndex={-1} value={M.fmt(fd.compute(values), 'full')} />;
                   } else if (fd.type === 'files') {
                     ctl = <AttachmentsField value={values[fd.k] || []} onChange={(next) => setModalField(fd.k, next)} />;
+                  } else if (fd.type === 'date') {
+                    // Typed and shown day first, whatever the computer's language.
+                    ctl = (
+                      <DateField
+                        inputRef={inputRef}
+                        value={val}
+                        max={fd.maxToday ? dstr(M.TODAY) : undefined}
+                        label={fd.l}
+                        invalid={!!err}
+                        onChange={(iso) => setModalField(fd.k, iso)}
+                      />
+                    );
                   } else if (fd.type === 'select') {
-                    const rawOpts = fd.opts();
+                    const rawOpts = fd.opts(values);
                     const opts = rawOpts.map((o: any) => (Array.isArray(o) ? o : [o, o]));
                     ctl = (
                       <select
@@ -136,8 +149,7 @@ export function Modals() {
                       </select>
                     );
                   } else {
-                    const type =
-                      fd.type === 'date' ? 'date' : fd.type === 'money' || fd.type === 'number' ? 'number' : 'text';
+                    const type = fd.type === 'money' || fd.type === 'number' ? 'number' : 'text';
                     // A text field may offer suggestions while still accepting anything typed.
                     const suggest: string[] | null = fd.list ? fd.list(values) : null;
                     ctl = (
@@ -149,7 +161,6 @@ export function Modals() {
                         list={suggest ? `dl-${fd.k}` : undefined}
                         // A field left blank is worked out automatically; its placeholder shows the live figure.
                         placeholder={fd.auto ? fd.auto(values) : fd.ph}
-                        max={fd.maxToday ? dstr(M.TODAY) : undefined}
                         min={fd.min != null ? fd.min : fd.type === 'money' ? '0' : undefined}
                         step={fd.type === 'money' ? '1000' : fd.type === 'number' ? '0.25' : undefined}
                         onChange={(e) => setModalField(fd.k, e.target.value)}

@@ -7,6 +7,7 @@ import * as M from '../lib/re-data';
 import type { TableColumn } from '../lib/types';
 import { AttachButton } from './Attachments';
 import { BrandMark } from './Brand';
+import { DateField } from './DateField';
 
 const Pencil = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -100,6 +101,21 @@ export function Tag({ text }: { text: string }) {
     ? 'warn'
     : 'mute';
   return <span className={`tag ${cls}`}>{text}</span>;
+}
+
+/** How a purchase or sale was paid: one mode, or both modes each with its amount. */
+export function PaidBy({ x, total, numbers }: { x: any; total: number; numbers: any }) {
+  if (!x.method2 || !x.amount2) return <>{total > 0 ? x.method || '—' : '—'}</>;
+  return (
+    <span className="paidby">
+      <span>
+        {x.method} <b className="mono">{M.fmt(Math.max(0, total - x.amount2), numbers)}</b>
+      </span>
+      <span>
+        {x.method2} <b className="mono">{M.fmt(x.amount2, numbers)}</b>
+      </span>
+    </span>
+  );
 }
 
 /** What a mirror changed from its original, or that it matches it. */
@@ -219,27 +235,9 @@ export function PeriodControl() {
       </select>
       {rangeKey === 'custom' && (
         <>
-          <input
-            type="date"
-            className="fldsel"
-            value={custom.start}
-            max={M.dateInput(M.TODAY)}
-            onChange={(e) => setCustom({ ...custom, start: e.target.value })}
-            aria-label="Start date"
-            title="Start date"
-            style={{ width: 'auto', minWidth: '120px' }}
-          />
+          <DateField className="sm" value={custom.start} max={M.dateInput(M.TODAY)} onChange={(v) => v && setCustom({ ...custom, start: v })} label="Start date" />
           <span className="vs">to</span>
-          <input
-            type="date"
-            className="fldsel"
-            value={custom.end}
-            max={M.dateInput(M.TODAY)}
-            onChange={(e) => setCustom({ ...custom, end: e.target.value })}
-            aria-label="End date"
-            title="End date"
-            style={{ width: 'auto', minWidth: '120px' }}
-          />
+          <DateField className="sm" value={custom.end} max={M.dateInput(M.TODAY)} onChange={(v) => v && setCustom({ ...custom, end: v })} label="End date" />
         </>
       )}
       <span className="vs" title={`${M.fmtDate(range.start)} to ${M.fmtDate(range.end)}`}>

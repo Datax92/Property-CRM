@@ -28,6 +28,7 @@ const COLLECTIONS = [
   'audit',
   'tasks',
   'taskProjects',
+  'projectPlans',
   'income',
   'categories',
 ] as const;
