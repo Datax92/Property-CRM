@@ -34,7 +34,9 @@ export function Kind({ type }: { type: string }) {
 /** A gain as a percentage of what went in, with its sign. */
 const signedPct = (n: number) => (isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(2)}%` : '');
 
-export function InvestmentKpis({ rows }: { rows: any[] }) {
+/** Given `cash`, worth today is the holdings and the bank and cash together, as My portfolio
+    draws them; the gain is still on the holdings alone. */
+export function InvestmentKpis({ rows, cash }: { rows: any[]; cash?: number }) {
   const { range: r, effectiveFilters: f, numbers } = useApp();
   const invested = rows.reduce((a, x) => a + x.invested, 0);
   const worth = rows.reduce((a, x) => a + x.worth, 0);
@@ -44,7 +46,13 @@ export function InvestmentKpis({ rows }: { rows: any[] }) {
   return (
     <div className="kpis">
       <KpiCard k="Total invested" v={invested} f={`${M.fmtNum(rows.length)} ${rows.length === 1 ? 'holding' : 'holdings'}`} go="finance/investments" />
-      <KpiCard k="Worth today" v={worth} cls="lead" go="finance/investments" />
+      <KpiCard
+        k="Worth today"
+        v={worth + (cash || 0)}
+        cls="lead"
+        f={cash != null ? `holdings ${M.fmt(worth, numbers)} + bank & cash ${M.fmt(cash, numbers)}` : undefined}
+        go="finance/investments"
+      />
       <KpiCard
         k={gain >= 0 ? 'Unrealised profit' : 'Unrealised loss'}
         v={gain}

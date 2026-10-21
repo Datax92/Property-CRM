@@ -253,7 +253,7 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
               Investment tracking
             </button>
           </div>
-          {on('invKpis') && <InvestmentKpis rows={inv} />}
+          {on('invKpis') && <InvestmentKpis rows={inv} cash={cb.total} />}
           {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? 560 : undefined} cash={cb.total} />}
         </>
       )}

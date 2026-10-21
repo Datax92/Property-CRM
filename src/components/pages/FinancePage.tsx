@@ -350,6 +350,8 @@ export function FinancePage() {
   if (tab === 'investments') {
     // Every holding, however long ago it was bought: unsold plots and assets.
     const rows = M.investments(f);
+    // Bank and cash, as the dashboard counts them, beside the holdings in worth today and My portfolio.
+    const cash = M.cashAndBank(r.end, f).total;
     const cols = [
       { key: 'name', label: 'Holding', render: (x: any) => <b>{x.name}</b> },
       { key: 'type', label: 'Kind', render: (x: any) => <Kind type={x.type} /> },
@@ -398,8 +400,8 @@ export function FinancePage() {
           </>
         }
       >
-        <InvestmentKpis rows={rows} />
-        <InvestmentCharts rows={rows} />
+        <InvestmentKpis rows={rows} cash={cash} />
+        <InvestmentCharts rows={rows} cash={cash} />
         <div style={{ marginTop: '16px' }}>
           <DataTable cols={cols} rows={rows} totals={true} />
         </div>
