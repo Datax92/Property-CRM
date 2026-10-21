@@ -142,7 +142,7 @@ export function MonthlyReport({
     ...rep.types.map((t: string) => ({ id: 'type:' + t, label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
     { id: 'cashInHand', label: 'Cash in hand', get: (m) => m.holdings.cashInHand, total: null },
     { id: 'bank', label: 'Cash in bank', get: (m) => m.holdings.bank, total: null },
-    { id: 'netWorth', label: 'Net worth (inventory + assets + bank + cash)', kind: 't', get: (m) => m.holdings.net, total: null },
+    { id: 'netWorth', label: 'Net worth', kind: 't', get: (m) => m.holdings.net, total: null },
     ...(months.some((m) => m.capital)
       ? [{ id: 'capital', label: 'Owner capital put in (not growth)', get: (m: any) => m.capital, total: sum('capital') }]
       : []),
