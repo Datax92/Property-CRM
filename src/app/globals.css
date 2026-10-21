@@ -2171,6 +2171,7 @@ button.ap-card:hover { transform: translateY(-2px); box-shadow: 0 14px 26px -18p
 .mr-card { border-top: 3px solid var(--rule-2); }
 .mr-card.mr-pos { border-top-color: var(--good); }
 .mr-card.mr-neg { border-top-color: var(--bad); }
+.mr-card .mr-sum { margin-top: 4px; font-size: 11.5px; color: var(--ink-2); white-space: normal; }
 .mr-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-weight: 600; background: var(--wash, #F2F3F5); }
 .mr-chip.pos { background: var(--good-wash); color: var(--good); }
 .mr-chip.neg { background: var(--bad-wash); color: var(--bad); }

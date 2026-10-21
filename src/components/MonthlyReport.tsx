@@ -162,7 +162,7 @@ export function MonthlyReport({
     return (end < 0 ? next : next.slice(0, end)).some((x) => hidden.indexOf(x.id) < 0);
   });
 
-  const compare = (label: string, a: number, b: number | null, opts: { fmt?: (n: number) => string; good?: 'up' | 'down' } = {}) => {
+  const compare = (label: string, a: number, b: number | null, opts: { fmt?: (n: number) => string; good?: 'up' | 'down'; note?: React.ReactNode } = {}) => {
     const show = opts.fmt || money;
     const diff = b == null ? null : a - b;
     const better = diff == null || diff === 0 ? '' : (diff > 0) === (opts.good !== 'down') ? 'pos' : 'neg';
@@ -182,6 +182,7 @@ export function MonthlyReport({
             </>
           )}
         </span>
+        {opts.note && <span className="f mr-sum">{opts.note}</span>}
       </div>
     );
   };
@@ -218,7 +219,10 @@ export function MonthlyReport({
         <>
           {parts.cards && (
           <div className="kpis mr-kpis">
-            {compare('Net worth', cur.holdings.net, prev && prev.holdings.net)}
+            {compare('Net worth', cur.holdings.net, prev && prev.holdings.net, {
+              // What it is made of, so it can be seen that cash is in it.
+              note: `Inventory ${money(cur.holdings.property)} + Assets ${money(cur.holdings.assets)} + Cash ${money(cur.holdings.cash)}`,
+            })}
             {compare('Net profit', cur.net, prev && prev.net)}
             {compare('Gross profit', cur.gross, prev && prev.gross)}
             {cur.personal > 0 || (prev && prev.personal > 0)
