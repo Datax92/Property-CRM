@@ -565,7 +565,7 @@ export const DEFAULT_MONTHLY_TARGET = { capital: 0, inflation: 0.83, growth: 0.3
 export const monthlyTargetPct = (t) => (+t.inflation || 0) + (+t.growth || 0) + (+t.profit || 0) + (+t.zakat || 0);
 
 /** What the business holds at the end of a day: unsold plots at landed cost, assets at cost, and
-    bank and cash, which together are its net worth. What buyers still owe and what the business
+    cash in hand and in the bank, which together are its net worth. What buyers still owe and what the business
     still owes are worked out beside it but not counted in it.
     What an account held to begin with counts from the start, whatever date it was entered on. */
 export function holdingsAt(asOf, f) {
@@ -586,7 +586,11 @@ export function holdingsAt(asOf, f) {
     byType[t] = (byType[t] || 0) + e.amount;
   });
   const live = livePayments().filter((p) => !f || overheadMatch(p, f));
-  const cash = live.filter((p) => p.date <= asOf || isOpeningEntry(p)).reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), 0);
+  const held = live.filter((p) => p.date <= asOf || isOpeningEntry(p));
+  const signedSum = (rows) => rows.reduce((a, p) => a + (p.dir === 'in' ? p.amount : -p.amount), 0);
+  const cash = signedSum(held);
+  // Of that, what is in hand: the accounts named for cash, as on the dashboard; the rest is in the bank.
+  const cashInHand = signedSum(held.filter((p) => accountKind(p.account || NO_ACCOUNT) === 'Cash'));
   const settledBy = {};
   live.forEach((p) => { if (p.settleKey && p.date <= asOf) settledBy[p.settleKey] = (settledBy[p.settleKey] || 0) + p.amount; });
   const owed = (total, key) => Math.max(0, (total || 0) - (settledBy[key] || 0));
@@ -608,7 +612,7 @@ export function holdingsAt(asOf, f) {
   const assets = Object.keys(byType).reduce((a, k) => a + byType[k], 0);
   // Net worth as the owner counts it: plots in stock, assets, and bank and cash.
   const total = property + assets + cash;
-  return { property, byType, assets, cash, receivable, total, payable, net: total };
+  return { property, byType, assets, cash, cashInHand, bank: cash - cashInHand, receivable, total, payable, net: total };
 }
 
 /** The net worth at the end of a day, never later than today. */

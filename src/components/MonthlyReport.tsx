@@ -140,8 +140,9 @@ export function MonthlyReport({
     { id: 'h-holds', label: 'NET WORTH — AT MONTH END', kind: 'h' },
     { id: 'property', label: 'Inventory (plots at landed cost)', get: (m) => m.holdings.property, total: null },
     ...rep.types.map((t: string) => ({ id: 'type:' + t, label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
-    { id: 'cash', label: 'Bank & cash', get: (m) => m.holdings.cash, total: null },
-    { id: 'netWorth', label: 'Net worth', kind: 't', get: (m) => m.holdings.net, total: null },
+    { id: 'cashInHand', label: 'Cash in hand', get: (m) => m.holdings.cashInHand, total: null },
+    { id: 'bank', label: 'Cash in bank', get: (m) => m.holdings.bank, total: null },
+    { id: 'netWorth', label: 'Net worth (inventory + assets + bank + cash)', kind: 't', get: (m) => m.holdings.net, total: null },
     ...(months.some((m) => m.capital)
       ? [{ id: 'capital', label: 'Owner capital put in (not growth)', get: (m: any) => m.capital, total: sum('capital') }]
       : []),
@@ -337,7 +338,7 @@ export function MonthlyReport({
           <p className="muted mr-note">
             Profit follows the P&amp;L: each plot counts whole in the month it is sold, as on its cost sheet. Net worth is
             what the business has at each month end — inventory (unsold plots at landed cost), assets at what was paid for
-            them, and bank and cash (an opening balance from the start, whatever day it was entered). What buyers still owe
+            them, cash in hand and cash in the bank (an opening balance from the start, whatever day it was entered). What buyers still owe
             and what the business still owes are shown below it, not counted in it. Growth is the net worth gained on the
             month before, leaving out money the owner put in.
           </p>
