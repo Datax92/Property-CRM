@@ -305,15 +305,15 @@ export function PropertiesPage() {
   const rows = M.DATA.properties
     .filter((p: any) => M.propMatch(p, f) && p.status !== 'Sold')
     .map((p: any) => {
-      const landed = M.landedCost(p.id);
-      return { ...p, landed, upside: p.currentValue - landed, upPct: M.pctOf(p.currentValue - landed, landed) };
+      const landed = M.landedCost(p.id), worth = M.plotWorth(p);
+      return { ...p, landed, worth, upside: worth - landed, upPct: M.pctOf(worth - landed, landed) };
     })
     .sort((a: any, b: any) => b.upside - a.upside);
 
   const summaryPairs: [string, string][] = [
     ['Unsold properties', M.fmtNum(rows.length)],
     ['Landed cost', M.fmt(rows.reduce((a: number, p: any) => a + p.landed, 0), numbers)],
-    ['Market value', M.fmt(rows.reduce((a: number, p: any) => a + p.currentValue, 0), numbers)],
+    ['Market value', M.fmt(rows.reduce((a: number, p: any) => a + p.worth, 0), numbers)],
     ['Potential profit', M.fmt(rows.reduce((a: number, p: any) => a + p.upside, 0), numbers)],
   ];
 
@@ -325,7 +325,7 @@ export function PropertiesPage() {
     { key: 'location', label: 'City' },
     { key: 'size', label: 'Size' },
     { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.landed, numbers) },
-    { key: 'currentValue', label: 'Current value', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.currentValue, numbers) },
+    { key: 'worth', label: 'Current value', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.worth, numbers) },
     {
       key: 'upside',
       label: 'Potential profit',

@@ -442,7 +442,7 @@ export function computeKPIs(r, f) {
 
   const unsold = props.filter((p) => p.status !== 'Sold');
   const portfolioCost = unsold.reduce((a, p) => a + landedCost(p.id), 0);
-  const portfolioValue = unsold.reduce((a, p) => a + p.currentValue, 0);
+  const portfolioValue = unsold.reduce((a, p) => a + plotWorth(p), 0);
 
   const receivable = D.sales.filter((s) => saleMatch(s, f, propIds)).reduce((a, s) => a + s.outstanding, 0);
   const payableProps = props.reduce((a, p) => a + p.remaining, 0);
@@ -747,13 +747,13 @@ export function alerts() {
   DATA.properties.filter((p) => p.remaining > 0 && p.status !== 'Sold').slice(0, 3)
     .forEach((p) => push('low', 'Property payment due', p.name + ' — ' + fmt(p.remaining) + ' still payable to ' + p.seller, 'purchases'));
   // Stock is judged on what it cost all in, as its cost sheet adds it up.
-  const held = DATA.properties.filter((p) => p.status !== 'Sold').map((p) => ({ p, cost: landedCost(p.id) }));
+  const held = DATA.properties.filter((p) => p.status !== 'Sold').map((p) => ({ p, cost: landedCost(p.id), worth: plotWorth(p) }));
   held.filter((x) => x.p.heldDays > 300).slice(0, 3)
     .forEach(({ p, cost }) => push('med', 'Property held too long', p.name + ' — held ' + p.heldDays + ' days, cost ' + fmt(cost), 'inventory'));
-  held.filter((x) => x.p.currentValue < x.cost * 1.1).slice(0, 3)
-    .forEach(({ p, cost }) => push('low', 'Low potential profit', p.name + ' — upside only ' + fmt(p.currentValue - cost) + ' (' + pctOf(p.currentValue - cost, cost).toFixed(1) + '%)', 'inventory'));
-  held.filter((x) => x.p.currentValue > x.cost * 1.3).slice(0, 2)
-    .forEach(({ p, cost }) => push('good', 'High potential profit', p.name + ' — upside ' + fmt(p.currentValue - cost) + ', consider listing', 'inventory'));
+  held.filter((x) => x.worth < x.cost * 1.1).slice(0, 3)
+    .forEach(({ p, cost, worth }) => push('low', 'Low potential profit', p.name + ' — upside only ' + fmt(worth - cost) + ' (' + pctOf(worth - cost, cost).toFixed(1) + '%)', 'inventory'));
+  held.filter((x) => x.worth > x.cost * 1.3).slice(0, 2)
+    .forEach(({ p, cost, worth }) => push('good', 'High potential profit', p.name + ' — upside ' + fmt(worth - cost) + ', consider listing', 'inventory'));
   // Task deadlines: overdue work first, then anything due in the next two days.
   const pending = DATA.tasks.filter((t) => ['Completed', 'Cancelled'].indexOf(taskStatus(t)) < 0 && t.date instanceof Date)
     .sort((a, b) => a.date - b.date);
@@ -936,6 +936,11 @@ export function investmentType(a) {
   return 'Other';
 }
 
+/** What an unsold plot is worth today: the market value entered for it, else what it cost all in.
+    A plot saved with no value of its own holds its purchase price, which is less than its landed
+    cost, so that is read as no value entered rather than as a loss. */
+export const plotWorth = (p) => (p.currentValue > 0 && p.currentValue !== p.price ? p.currentValue : landedCost(p.id));
+
 /** What an asset is worth today: the value last entered for it, else what it cost. */
 export const assetWorth = (a) => (a.currentValue == null || a.currentValue === '' ? a.amount : +a.currentValue);
 
@@ -944,7 +949,7 @@ export function investments(f) {
   const out = [];
   DATA.properties.filter((p) => p.status !== 'Sold' && (!f || propMatch(p, f))).forEach((p) => {
     const invested = landedCost(p.id);
-    out.push({ id: p.id, coll: 'properties', name: p.name, type: 'Real Estate', detail: p.project, started: p.purchaseDate, invested, worth: p.currentValue || invested });
+    out.push({ id: p.id, coll: 'properties', name: p.name, type: 'Real Estate', detail: p.project, started: p.purchaseDate, invested, worth: plotWorth(p) });
   });
   DATA.expenses.filter((e) => e.group === 'Assets' && (!f || overheadMatch(e, f))).forEach((e) => {
     out.push({
@@ -1027,7 +1032,7 @@ export function projectSummary(r, f) {
   props.forEach((p) => {
     const x = row(p.project, p.location);
     x.total++;
-    if (p.status !== 'Sold') { x.held++; x.heldCost += landedCost(p.id); x.heldValue += p.currentValue; }
+    if (p.status !== 'Sold') { x.held++; x.heldCost += landedCost(p.id); x.heldValue += plotWorth(p); }
   });
   DATA.sales.filter((s) => saleMatch(s, f, ids) && inR(s.date, r)).forEach((s) => {
     const p = props.find((q) => q.id === s.propertyId);

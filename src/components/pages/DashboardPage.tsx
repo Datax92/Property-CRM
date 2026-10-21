@@ -611,7 +611,7 @@ export function DashboardPage() {
         const agents = M.agentSummary(r, f).slice(0, 5);
         const inv = M.DATA.properties
           .filter((p: any) => M.propMatch(p, f) && p.status !== 'Sold')
-          .map((p: any) => ({ ...p, up: p.currentValue - M.landedCost(p.id) }))
+          .map((p: any) => ({ ...p, up: M.plotWorth(p) - M.landedCost(p.id) }))
           .sort((a: any, b: any) => b.up - a.up)
           .slice(0, 4);
 

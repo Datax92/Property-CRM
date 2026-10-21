@@ -486,6 +486,8 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
 function PlansView() {
   const { openModal, numbers } = useApp();
   const [pick, setPick] = useState('');
+  // The graph month by month, or one group of bars for each project.
+  const [chartBy, setChartBy] = useState<'date' | 'project'>('date');
   const meta = PAGE_META['tasks/plans'];
   const money = (n: number) => M.fmt(n, numbers);
   const pct = (n: number) => (isFinite(n) ? `${n.toFixed(1)}%` : '—');
@@ -496,6 +498,10 @@ function PlansView() {
   const entries = M.DATA.projectPlans.filter((x: any) => !pick || (pick === '-' ? !x.projectId : x.projectId === pick));
   const months = M.planMonths(pick && pick !== '-' ? pick : '');
   const preset = (kind: string) => (pick && pick !== '-' ? { projectId: pick, kind } : { kind });
+  // Planned income less planned cost: a surplus when above nil, a deficit below it.
+  const surplusWord = (n: number) => (n >= 0 ? 'surplus' : 'deficit');
+  const byProject = shown.map((x: any) => ({ label: x.project, full: x.project, income: x.income, cost: x.cost, net: x.profit }));
+  const chartRows = chartBy === 'date' ? months : byProject;
 
   const projCols = [
     {
@@ -512,22 +518,30 @@ function PlansView() {
     { key: 'cost', label: 'Planned cost', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.cost) },
     {
       key: 'profit',
-      label: 'Planned profit',
+      label: 'Planned surplus / deficit',
       a: 'r' as const,
       sum: true,
       cls: 'mono',
-      render: (x: any) => <b className={x.profit >= 0 ? 'pos' : 'neg'}>{money(x.profit)}</b>,
+      render: (x: any) => (
+        <b className={x.profit >= 0 ? 'pos' : 'neg'} title={`Planned ${surplusWord(x.profit)}`}>
+          {money(x.profit)}
+        </b>
+      ),
     },
-    { key: 'margin', label: 'Margin %', a: 'r' as const, cls: 'mono', render: (x: any) => (x.income ? pct(x.margin) : '—') },
+    { key: 'margin', label: 'Surplus %', a: 'r' as const, cls: 'mono', render: (x: any) => (x.income ? pct(x.margin) : '—') },
     { key: 'actualIncome', label: 'Actual in', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.actualIncome) },
     { key: 'actualCost', label: 'Actual out', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => money(x.actualCost) },
     {
       key: 'actualProfit',
-      label: 'Actual profit',
+      label: 'Actual surplus / deficit',
       a: 'r' as const,
       sum: true,
       cls: 'mono',
-      render: (x: any) => <span className={x.actualProfit >= 0 ? 'pos' : 'neg'}>{money(x.actualProfit)}</span>,
+      render: (x: any) => (
+        <span className={x.actualProfit >= 0 ? 'pos' : 'neg'} title={`Actual ${surplusWord(x.actualProfit)}`}>
+          {money(x.actualProfit)}
+        </span>
+      ),
     },
     {
       key: 'next',
@@ -610,11 +624,17 @@ function PlansView() {
         <KpiCard k="Planned income" v={sum('income')} tone="pos" f="expected to come in" />
         <KpiCard k="Planned cost" v={sum('cost')} f="expected to go out" />
         <KpiCard
-          k="Planned profit"
+          k={sum('profit') >= 0 ? 'Planned surplus' : 'Planned deficit'}
           v={sum('profit')}
           tone={sum('profit') >= 0 ? 'pos' : 'neg'}
           cls="lead"
-          f={sum('income') ? `${pct(M.pctOf(sum('profit'), sum('income')))} of planned income` : undefined}
+          f={
+            sum('income')
+              ? `${pct(M.pctOf(sum('profit'), sum('income')))} of planned income`
+              : sum('cost')
+                ? 'planned cost with no planned income'
+                : undefined
+          }
         />
         <KpiCard k="Actual in so far" v={sum('actualIncome')} f={`of ${money(sum('income'))} planned`} />
         <KpiCard k="Actual out so far" v={sum('actualCost')} f={`of ${money(sum('cost'))} planned`} />
@@ -632,27 +652,45 @@ function PlansView() {
       ) : (
         <>
           <DataTable cols={projCols} rows={shown} totals={true} />
-          {months.length > 0 && (
-            <div className="panel" style={{ margin: '14px 0' }}>
-              <div className="panel-h">
-                <h3>Planned month by month</h3>
-                <span className="sub">{pick ? (stats.find((x: any) => x.id === pick) || { project: '' }).project : 'all projects'} · income against cost</span>
-              </div>
-              <div className="panel-b">
+          <div className="panel" style={{ margin: '14px 0' }}>
+            <div className="panel-h">
+              <h3>{chartBy === 'date' ? 'Planned month by month' : 'Planned by project'}</h3>
+              <span className="sub">
+                {pick ? (stats.find((x: any) => x.id === pick) || { project: '' }).project : 'all projects'} · income against cost, and the
+                surplus or deficit
+              </span>
+              <span className="spacer" />
+              <span className="seg" data-noprint="1" role="group" aria-label="Show the graph">
+                <button type="button" aria-pressed={chartBy === 'date'} onClick={() => setChartBy('date')}>
+                  By date
+                </button>
+                <button type="button" aria-pressed={chartBy === 'project'} onClick={() => setChartBy('project')}>
+                  By project
+                </button>
+              </span>
+            </div>
+            <div className="panel-b">
+              {chartRows.length ? (
                 <ChartBarGroups
-                  rows={months}
+                  rows={chartRows}
                   values
                   series={[
                     { key: 'income', label: 'Planned income', c: 'var(--good)' },
                     { key: 'cost', label: 'Planned cost', c: 'var(--s2)' },
+                    { key: 'net', label: 'Surplus / deficit', c: 'var(--brand)', hollow: true },
                   ]}
-                  label="Planned income and cost by month"
+                  label={chartBy === 'date' ? 'Planned income, cost and surplus or deficit by month' : 'Planned income, cost and surplus or deficit by project'}
                   width={1500}
                   low
                 />
-              </div>
+              ) : (
+                <div className="empty" style={{ padding: '20px' }}>
+                  No plan line has an expected date yet, so there is nothing to show month by month. Give each line the date it is
+                  expected, or see the graph by project.
+                </div>
+              )}
             </div>
-          )}
+          </div>
           <div className="sech">
             <h2>Plan entries</h2>
             <span className="sub">each line of income or cost planned</span>
