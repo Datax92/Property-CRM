@@ -254,7 +254,7 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
             </button>
           </div>
           {on('invKpis') && <InvestmentKpis rows={inv} />}
-          {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? 560 : undefined} />}
+          {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? 560 : undefined} cash={cb.total} />}
         </>
       )}
     </div>
@@ -722,11 +722,13 @@ export function DashboardPage() {
         // What the business has money in and still holds, and what each bank and cash account holds.
         const inv = M.investments(f);
         const page1 = pick.figures || pick.cards || pick.charts || pick.table;
-        // The key figures on the printed dashboard; the last four are not among the month's cards.
+        // The key figures on the printed dashboard, in the order of the month's cards; the last four
+        // are not among those cards.
         const figures: [string, number, string][] = [
+          ['Net worth', M.netWorthAt(r.end, f), 'inventory + assets + bank & cash'],
           ['Net profit', bv.net, k.totalRevenue > 0 ? `${bv.netMargin.toFixed(1)}% net margin (÷ revenue)` : ''],
-          ['Revenue', k.totalRevenue, `${M.fmtNum(k.counts.soldInRange)} plots sold`],
           ['Gross profit', bv.gross, ''],
+          ['Revenue', k.totalRevenue, `${M.fmtNum(k.counts.soldInRange)} plots sold`],
           ...(k.personal > 0 ? [['After personal spending', bv.net - k.personal, `${M.fmt(k.personal, 'full')} personal`] as [string, number, string]] : []),
           ['Cash in hand', cb.cash, 'in cash'],
           ['Cash in bank', cb.bank, 'in the bank'],

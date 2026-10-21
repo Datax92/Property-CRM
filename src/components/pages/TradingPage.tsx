@@ -157,8 +157,43 @@ const pctText = (n: number) => `${(n || 0).toFixed(1)}%`;
 /** The deal a register row or a link points at, as the calculator should open it. */
 const openKey = (cs: CostSheet) => (cs.fromRecords ? cs.propertyId : cs.id);
 
+const sheetDate = (d: any) => (!d ? null : d instanceof Date ? d : M.parseDate(d));
+
+/** Whether a deal's cost sheet is in the filters and the period picked. A sheet of a plot is matched
+    on the plot itself (project, type, office, status, payment status, the property picked and the
+    plots an agent may see), on its agents, and on being held at some time in the period: bought by
+    its end and not sold before it began. */
+function sheetMatch(cs: CostSheet, f: any, r: { start: Date; end: Date }) {
+  const p: any = cs.propertyId ? M.DATA.properties.find((x: any) => x.id === cs.propertyId) : null;
+  if (p) {
+    if (!M.propMatch(p, f)) return false;
+  } else {
+    // A sheet with no plot of its own: only what is on the sheet is known.
+    if (f.propIds || f.property !== 'all') return false;
+    if (f.project !== 'all' && (M.PROJECTS.find((x: any) => x.name === cs.project) || {}).id !== f.project) return false;
+    if (f.type !== 'all' && cs.type !== f.type) return false;
+    if (f.office !== 'all' && cs.office !== f.office) return false;
+    if (f.status !== 'all' && (f.status === 'Sold') !== (cs.status === 'Sold')) return false;
+  }
+  if (f.agent !== 'all') {
+    const pid = cs.propertyId;
+    const ofAgent =
+      !!pid &&
+      (M.DATA.sales.some((s: any) => s.propertyId === pid && s.agentId === f.agent) ||
+        M.DATA.commissions.some((c: any) => c.propertyId === pid && M.commissionAgentId(c) === f.agent));
+    if (!ofAgent) return false;
+  }
+  // The dates on the records when there is a plot, else those typed on the sheet.
+  const sale: any = p ? M.DATA.sales.find((s: any) => s.propertyId === p.id) : null;
+  const bought = sheetDate(p ? p.purchaseDate : cs.purchaseDate);
+  const sold = p ? (sale ? sheetDate(sale.date) : null) : sheetDate(cs.saleDate);
+  if (bought && bought > r.end) return false;
+  if (sold && sold < r.start) return false;
+  return true;
+}
+
 export function TradingPage() {
-  const { tab, effectiveFilters: f, numbers, activeCostSheetId, openCostSheet, toast, refreshData, deleteRecord } = useApp();
+  const { tab, effectiveFilters: f, range: r, numbers, activeCostSheetId, openCostSheet, toast, refreshData, deleteRecord } = useApp();
   const [printing, setPrinting] = useState<CostSheet | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
@@ -182,7 +217,9 @@ export function TradingPage() {
       const s: any = M.realSheet(m.mirrorOf);
       return order.get(s ? s.id || s.propertyId : m.mirrorOf) ?? order.size;
     };
-    const rows: CostSheet[] = M.mirrorSheets().sort((a: CostSheet, b: CostSheet) => place(a) - place(b));
+    const rows: CostSheet[] = M.mirrorSheets()
+      .filter((cs: CostSheet) => sheetMatch(cs, f, r))
+      .sort((a: CostSheet, b: CostSheet) => place(a) - place(b));
     const sum = (fn: (cs: CostSheet) => number) => rows.reduce((a: number, cs: CostSheet) => a + (fn(cs) || 0), 0);
 
     const summaryPairs: [string, string][] = [
@@ -281,19 +318,7 @@ export function TradingPage() {
   // COST SHEET REGISTER — one row per deal, read from the records
   // =========================================================================
   if (tab === 'sheets') {
-    const rows = M.dealSheets().filter((cs: CostSheet) => {
-      if (f.project !== 'all') {
-        const prj = M.PROJECTS.find((p: any) => p.name === cs.project);
-        if (prj && prj.id !== f.project) return false;
-      }
-      if (f.type !== 'all' && cs.type !== f.type) return false;
-      if (f.office !== 'all' && cs.office !== f.office) return false;
-      if (f.status !== 'all') {
-        if (f.status === 'Sold' && cs.status !== 'Sold') return false;
-        if (f.status !== 'Sold' && cs.status === 'Sold') return false;
-      }
-      return true;
-    });
+    const rows = M.dealSheets().filter((cs: CostSheet) => sheetMatch(cs, f, r));
 
     const sum = (fn: (cs: CostSheet) => number) => rows.reduce((a: number, cs: CostSheet) => a + (fn(cs) || 0), 0);
     const totalSale = sum((cs) => cs.grossSalePrice);
@@ -420,15 +445,17 @@ export function TradingPage() {
   // =========================================================================
   if (tab === 'analytics') {
     const prjMap: Record<string, { count: number; buyCost: number; rev: number; gross: number; net: number; comm: number }> = {};
-    M.dealSheets().forEach((cs: CostSheet) => {
-      const d = prjMap[cs.project] || (prjMap[cs.project] = { count: 0, buyCost: 0, rev: 0, gross: 0, net: 0, comm: 0 });
-      d.count++;
-      d.buyCost += cs.purchasePrice;
-      d.rev += cs.grossSalePrice;
-      d.gross += cs.grossProfit;
-      d.net += cs.netMargin;
-      d.comm += cs.totalCommissions;
-    });
+    M.dealSheets()
+      .filter((cs: CostSheet) => sheetMatch(cs, f, r))
+      .forEach((cs: CostSheet) => {
+        const d = prjMap[cs.project] || (prjMap[cs.project] = { count: 0, buyCost: 0, rev: 0, gross: 0, net: 0, comm: 0 });
+        d.count++;
+        d.buyCost += cs.purchasePrice;
+        d.rev += cs.grossSalePrice;
+        d.gross += cs.grossProfit;
+        d.net += cs.netMargin;
+        d.comm += cs.totalCommissions;
+      });
 
     const prjRows = Object.keys(prjMap)
       .map((prj) => {

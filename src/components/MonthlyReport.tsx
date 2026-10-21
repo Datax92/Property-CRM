@@ -135,21 +135,21 @@ export function MonthlyReport({
           { id: 'afterPersonal', label: 'Left after personal spending', kind: 't' as const, get: (m: any) => m.afterPersonal, total: sum('afterPersonal'), tone: true },
         ]
       : []),
-    { id: 'target', label: `Target profit (${pct(rep.targetPct)} of ${money(+target.capital || 0)})`, get: (m) => m.target, total: sum('target') },
-    { id: 'vsTarget', label: 'Ahead / behind target', kind: 't', get: (m) => m.vsTarget, total: sum('vsTarget'), tone: true },
-    { id: 'h-holds', label: 'WHAT THE BUSINESS HOLDS — AT MONTH END', kind: 'h' },
-    { id: 'property', label: 'Property stock (landed cost)', get: (m) => m.holdings.property, total: null },
+    { id: 'target', label: `Monthly target (${pct(rep.targetPct)} of ${money(+target.capital || 0)})`, get: (m) => m.target, total: sum('target') },
+    { id: 'vsTarget', label: 'Achieved profit ahead / behind target', kind: 't', get: (m) => m.vsTarget, total: sum('vsTarget'), tone: true },
+    { id: 'h-holds', label: 'NET WORTH — AT MONTH END', kind: 'h' },
+    { id: 'property', label: 'Inventory (plots at landed cost)', get: (m) => m.holdings.property, total: null },
     ...rep.types.map((t: string) => ({ id: 'type:' + t, label: t + ' (at cost)', get: (m: any) => m.holdings.byType[t] || 0, total: null })),
-    { id: 'cash', label: 'Cash & bank', get: (m) => m.holdings.cash, total: null },
-    { id: 'receivable', label: 'Receivables', get: (m) => m.holdings.receivable, total: null },
-    { id: 'holdTotal', label: 'Total held', kind: 't', get: (m) => m.holdings.total, total: null },
-    { id: 'payable', label: 'Less: what the business owes', get: (m) => -m.holdings.payable, total: null },
+    { id: 'cash', label: 'Bank & cash', get: (m) => m.holdings.cash, total: null },
     { id: 'netWorth', label: 'Net worth', kind: 't', get: (m) => m.holdings.net, total: null },
     ...(months.some((m) => m.capital)
       ? [{ id: 'capital', label: 'Owner capital put in (not growth)', get: (m: any) => m.capital, total: sum('capital') }]
       : []),
-    { id: 'growth', label: 'Growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
+    { id: 'growth', label: 'Net worth growth on the month before', kind: 'g', get: (m) => m.growth, total: sum('growth'), tone: true },
     { id: 'growthPct', label: 'Growth %', get: (m) => m.growthPct, total: rep.opening.net > 0 ? M.pctOf(sum('growth'), rep.opening.net) : NaN, fmt: pct },
+    { id: 'h-owed', label: 'OWED — NOT COUNTED IN NET WORTH', kind: 'h' },
+    { id: 'receivable', label: 'Receivables (owed to us)', get: (m) => m.holdings.receivable, total: null },
+    { id: 'payable', label: 'Payables (we owe)', get: (m) => m.holdings.payable, total: null },
   ];
   // Rows with nothing in any month of the year, which the Rows list can hide in one go.
   const emptyRows = allRows.filter((row) => row.kind !== 'h' && months.every((m) => !row.get!(m)) && !row.total).map((row) => row.id);
@@ -185,20 +185,45 @@ export function MonthlyReport({
     );
   };
 
+  // The month's target, and the profit achieved against it.
+  const targetCard = () => {
+    const set = cur.target > 0;
+    const tone = !set ? '' : cur.vsTarget >= 0 ? 'pos' : 'neg';
+    return (
+      <div className={`kpi mr-card ${tone ? 'mr-' + tone : ''}`} key="target">
+        <span className="k">Monthly target</span>
+        <span className="v">{set ? money(cur.target) : '—'}</span>
+        <span className="f">
+          {set ? (
+            <>
+              <span className={`mr-chip ${tone}`}>
+                {cur.vsTarget >= 0 ? '▲' : '▼'} {money(Math.abs(cur.vsTarget))} {cur.vsTarget >= 0 ? 'ahead' : 'short'}
+              </span>
+              <span className="muted">
+                achieved profit {money(cur.net)} ({pct(M.pctOf(cur.net, cur.target))})
+              </span>
+            </>
+          ) : (
+            <span className="muted">no target set yet — set one with Target</span>
+          )}
+        </span>
+      </div>
+    );
+  };
+
   const body = (forPrint: boolean, parts: ReportParts = ALL_PARTS) => (
     <>
       {cur ? (
         <>
           {parts.cards && (
           <div className="kpis mr-kpis">
-            {compare('Revenue', cur.revenue, prev && prev.revenue)}
-            {compare('Gross profit', cur.gross, prev && prev.gross)}
+            {compare('Net worth', cur.holdings.net, prev && prev.holdings.net)}
             {compare('Net profit', cur.net, prev && prev.net)}
+            {compare('Gross profit', cur.gross, prev && prev.gross)}
             {cur.personal > 0 || (prev && prev.personal > 0)
               ? compare('After personal spending', cur.afterPersonal, prev && prev.afterPersonal)
               : null}
-            {compare('Against target', cur.vsTarget, prev && prev.vsTarget)}
-            {compare('Net worth', cur.holdings.net, prev && prev.holdings.net)}
+            {targetCard()}
             {compare('Growth in the month', cur.growth, prev && prev.growth)}
             {forPrint && printFigures}
           </div>
@@ -208,17 +233,17 @@ export function MonthlyReport({
           <div className={forPrint ? 'mr-charts print' : 'grid c2 eq mr-charts'}>
             <div className="panel">
               <div className="panel-h">
-                <h3>Net profit against target</h3>
+                <h3>Achieved profit against target</h3>
                 <span className="sub">{year}, by month</span>
               </div>
               <div className="panel-b">
                 <ChartBarGroups
                   rows={months.map((m) => ({ label: m.label, full: m.full, net: m.net, target: m.target }))}
                   series={[
-                    { key: 'net', label: 'Net profit', c: 'var(--s1)' },
+                    { key: 'net', label: 'Achieved profit', c: 'var(--s1)' },
                     { key: 'target', label: 'Target', c: 'var(--s2)', hollow: true },
                   ]}
-                  label="Net profit against target by month"
+                  label="Achieved profit against target by month"
                   values
                   width={forPrint ? 540 : undefined}
                   low={forPrint}
@@ -227,13 +252,21 @@ export function MonthlyReport({
             </div>
             <div className="panel">
               <div className="panel-h">
-                <h3>Growth in what the business holds</h3>
-                <span className="sub">net worth gained in the month, owner capital left out</span>
+                <h3>Net worth growth</h3>
+                <span className="sub">net worth at each month end · % grown on the month before, owner capital left out</span>
               </div>
               <div className="panel-b">
                 <ChartBars
-                  signed
-                  rows={months.map((m) => ({ label: m.label, full: m.full, v: m.growth }))}
+                  // Each bar is the net worth at the month end, green when it grew and red when it fell.
+                  rows={months.map((m) => ({
+                    label: m.label,
+                    full: m.full,
+                    v: m.holdings.net,
+                    c: m.growth >= 0 ? 'var(--good)' : 'var(--bad)',
+                    tag: isFinite(m.growthPct) ? `${m.growthPct > 0 ? '+' : ''}${m.growthPct.toFixed(1)}%` : undefined,
+                    tone: m.growth >= 0 ? ('up' as const) : ('down' as const),
+                    sub: `${m.growth >= 0 ? 'Grew' : 'Fell'} ${money(Math.abs(m.growth))}${isFinite(m.growthPct) ? ` (${pct(m.growthPct)})` : ''} on the month before`,
+                  }))}
                   // On paper every bar is black: a fall shows by going below the line.
                   legend={
                     forPrint
@@ -243,7 +276,7 @@ export function MonthlyReport({
                           { k: 'Fell', c: 'var(--bad)' },
                         ]
                   }
-                  label="Growth by month"
+                  label="Net worth at each month end"
                   width={forPrint ? 540 : undefined}
                   low={forPrint}
                 />
@@ -302,12 +335,11 @@ export function MonthlyReport({
           </div>
           {!forPrint && (
           <p className="muted mr-note">
-            Profit follows the P&amp;L: each plot counts whole in the month it is sold, as on its cost sheet. Holdings are
-            what the business has at each month end — unsold plots at landed cost, assets at what was paid for them, bank
-            and cash (an opening balance from the start, whatever day it was entered), and what buyers still owe. Less what
-            the business still owes — sellers, agents, expenses, tax, bills and salaries — that is its net worth. Growth is
-            the net worth gained on the month before, leaving out money the owner put in: buying a plot on credit or paying
-            off a seller is not growth or a fall.
+            Profit follows the P&amp;L: each plot counts whole in the month it is sold, as on its cost sheet. Net worth is
+            what the business has at each month end — inventory (unsold plots at landed cost), assets at what was paid for
+            them, and bank and cash (an opening balance from the start, whatever day it was entered). What buyers still owe
+            and what the business still owes are shown below it, not counted in it. Growth is the net worth gained on the
+            month before, leaving out money the owner put in.
           </p>
           )}
           </>

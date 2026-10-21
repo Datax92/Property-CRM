@@ -11,6 +11,8 @@ import * as M from '../lib/re-data';
    such as gold, shares and deposits — against what each is worth today. The dashboard and the
    investment tracking page both draw from here, so they never disagree. */
 
+/** Bank and cash, beside the holdings on My portfolio. */
+const CASH_COLOUR = 'var(--brand)';
 /** Each kind of investment keeps one colour everywhere, in the order of the kinds. */
 export const kindColour = (type: string) => SC[Math.max(0, M.INVESTMENT_TYPES.indexOf(type)) % SC.length];
 
@@ -29,10 +31,16 @@ export function Kind({ type }: { type: string }) {
   );
 }
 
+/** A gain as a percentage of what went in, with its sign. */
+const signedPct = (n: number) => (isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(2)}%` : '');
+
 export function InvestmentKpis({ rows }: { rows: any[] }) {
+  const { range: r, effectiveFilters: f, numbers } = useApp();
   const invested = rows.reduce((a, x) => a + x.invested, 0);
   const worth = rows.reduce((a, x) => a + x.worth, 0);
   const gain = worth - invested;
+  // How much the net worth (inventory, assets, bank and cash) grew over the period picked.
+  const nw = M.netWorthGrowth(r, f);
   return (
     <div className="kpis">
       <KpiCard k="Total invested" v={invested} f={`${M.fmtNum(rows.length)} ${rows.length === 1 ? 'holding' : 'holdings'}`} go="finance/investments" />
@@ -45,10 +53,15 @@ export function InvestmentKpis({ rows }: { rows: any[] }) {
         go="finance/investments"
       />
       <KpiCard
-        k="Gaining / losing"
-        raw={`${M.fmtNum(rows.filter((x) => x.gain > 0).length)} / ${M.fmtNum(rows.filter((x) => x.gain < 0).length)}`}
-        f="holdings up / down in value"
-        go="finance/investments"
+        k="Net worth increase"
+        raw={signedPct(nw.pct) || '—'}
+        tone={nw.growth > 0 ? 'pos' : nw.growth < 0 ? 'neg' : ''}
+        f={
+          isFinite(nw.pct)
+            ? `${nw.growth >= 0 ? '+' : '−'}${M.fmt(Math.abs(nw.growth), numbers)} in ${r.label}, owner capital left out`
+            : 'no net worth at the start of the period to compare with'
+        }
+        go="dashboard/overview"
       />
     </div>
   );
@@ -63,12 +76,10 @@ export const INVESTMENT_CHARTS = [
 ] as const;
 export type InvestmentChart = (typeof INVESTMENT_CHARTS)[number][0];
 
-/** A gain as a percentage of what went in, with its sign. */
-const signedPct = (n: number) => (isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(2)}%` : '');
-
 /** The investment graphs: each holding, invested against worth by kind, gain or loss by kind,
-    and where the gains are. Panels side by side are the same height, their charts on one line. */
-export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: InvestmentChart[]; width?: number }) {
+    and where the gains are. Panels side by side are the same height, their charts on one line.
+    Given `cash`, My portfolio has one more bar: what is in the bank and in hand. */
+export function InvestmentCharts({ rows, show, width, cash }: { rows: any[]; show?: InvestmentChart[]; width?: number; cash?: number }) {
   const on = (key: InvestmentChart) => !show || show.indexOf(key) >= 0;
   const { numbers } = useApp();
   const byType = M.investmentsByType(rows);
@@ -95,21 +106,23 @@ export function InvestmentCharts({ rows, show, width }: { rows: any[]; show?: In
         <div className="panel">
           <div className="panel-h">
             <h3>My portfolio</h3>
-            <span className="sub">what went into each holding</span>
+            <span className="sub">{cash != null ? 'what went into each holding, and bank & cash' : 'what went into each holding'}</span>
           </div>
           <div className="panel-b">
             <ChartBars
-              label="Amount invested in each holding"
+              label={cash != null ? 'Amount invested in each holding, and bank and cash' : 'Amount invested in each holding'}
               width={width}
               low={!!width}
-              legend={width ? undefined : kinds}
-              rows={rows.map((x) => ({
-                label: x.name,
-                v: x.invested,
-                c: kindColour(x.type),
-                full: `${x.name} · ${x.type}`,
-                sub: `Worth today ${M.fmt(x.worth, numbers)} · ${signedPct(x.gainPct)}`,
-              }))}
+              legend={width ? undefined : cash != null ? [...kinds, { k: 'Bank & cash', c: CASH_COLOUR }] : kinds}
+              rows={rows
+                .map((x) => ({
+                  label: x.name,
+                  v: x.invested,
+                  c: kindColour(x.type),
+                  full: `${x.name} · ${x.type}`,
+                  sub: `Worth today ${M.fmt(x.worth, numbers)} · ${signedPct(x.gainPct)}`,
+                }))
+                .concat(cash != null ? [{ label: 'Bank & cash', v: cash, c: CASH_COLOUR, full: 'Bank & cash', sub: 'in every bank and cash account' }] : [])}
             />
           </div>
         </div>

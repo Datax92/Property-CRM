@@ -467,7 +467,7 @@ export function SalesPage() {
       }
     >
       <SummaryKpis pairs={summaryPairs} />
-      <DataTable cols={cols} rows={rows} totals={true} attach="sales" />
+      <DataTable cols={cols} rows={rows} totals={true} attach="sales" reorder="sales-register" />
       <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
     </PageShell>
   );

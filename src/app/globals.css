@@ -345,6 +345,12 @@ table.tbl th.r, table.tbl td.r { text-align: right; white-space: nowrap; }
 table.tbl td.r { font-variant-numeric: tabular-nums; }
 table.tbl th button { font: inherit; color: inherit; display: inline-flex; gap: 4px; transition: color .12s; }
 table.tbl th button:hover { color: var(--brand-2); }
+/* Columns that can be dragged into another order: where the column picked up would land. */
+table.tbl th.th-drag { cursor: grab; user-select: none; }
+table.tbl th.th-drag.dragging { opacity: .45; cursor: grabbing; }
+table.tbl th.drop-before { box-shadow: inset 3px 0 0 var(--brand); }
+table.tbl th.drop-after { box-shadow: inset -3px 0 0 var(--brand); }
+.pager .pager-hint { margin-right: auto; font-size: 12.5px; }
 table.tbl td {
   padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; color: var(--ink);
   white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis;

@@ -35,17 +35,26 @@ export function FinancePage() {
     // Tracked by financial year (July to June): a year's months, or year against year.
     const years: number[] = M.fiscalYears();
     const fy = years.indexOf(fyYear as number) >= 0 ? (fyYear as number) : years[0];
+    // Gross profit here is revenue over what the plots sold were bought for, before any expense;
+    // net profit is after the agents' commission and every other expense. So the columns add up:
+    // revenue − buy price = gross profit, and gross profit − commission − expenses = net profit.
     const line = (label: string, full: string, k: any) => {
       const bv = M.basisView(k, grossBasis);
+      // The price paid for the plots sold (on the document basis, for the plots bought in the period).
+      const buy = bv.cost - (k.costOfSales - k.deal.buyPrice);
+      const gross = k.totalRevenue - buy;
       return {
         label,
         full,
         purchase: k.purchaseCost,
         sales: k.totalRevenue,
-        gross: bv.gross,
+        buy,
+        gross,
         commission: k.commission,
-        expenses: k.totalExpenses,
+        expenses: gross - k.commission - bv.net,
+        costs: gross - bv.net,
         net: bv.net,
+        grossMargin: M.pctOf(gross, k.totalRevenue),
         margin: M.pctOf(bv.net, k.totalRevenue),
       };
     };
@@ -65,6 +74,7 @@ export function FinancePage() {
       { key: 'full', label: 'Period' },
       { key: 'purchase', label: 'Purchase cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.purchase, numbers) },
       { key: 'sales', label: 'Revenue', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.sales, numbers) },
+      { key: 'buy', label: 'Buy price of plots sold', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.buy, numbers) },
       {
         key: 'gross',
         label: 'Gross profit',
@@ -74,7 +84,7 @@ export function FinancePage() {
         render: (p: any) => <span className={p.gross > 0 ? 'pos' : p.gross < 0 ? 'neg' : ''}>{M.fmt(p.gross, numbers)}</span>,
       },
       { key: 'commission', label: 'Commission', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.commission, numbers) },
-      { key: 'expenses', label: 'Expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
+      { key: 'expenses', label: 'Other expenses', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.expenses, numbers) },
       {
         key: 'net',
         label: 'Net profit',
@@ -128,14 +138,20 @@ export function FinancePage() {
 
         <div className="kpis">
           <KpiCard k={`Revenue · ${fyLine.label}`} v={fyLine.sales} />
-          <KpiCard k="Gross profit" v={fyLine.gross} tone={fyLine.gross >= 0 ? 'pos' : 'neg'} />
-          <KpiCard k="Expenses" v={fyLine.expenses} />
-          <KpiCard k="Net profit" v={fyLine.net} tone={fyLine.net >= 0 ? 'pos' : 'neg'} cls="lead" />
+          <KpiCard
+            k="Gross profit"
+            v={fyLine.gross}
+            tone={fyLine.gross >= 0 ? 'pos' : 'neg'}
+            f={isFinite(fyLine.grossMargin) ? `${fyLine.grossMargin.toFixed(1)}% · revenue less buy price` : 'revenue less buy price'}
+          />
+          <KpiCard k="Commission" v={fyLine.commission} f="agents, buy and sell side" />
+          <KpiCard k="Other expenses" v={fyLine.expenses} f="transfer, tax, handling, selling, company costs, Zakat" />
+          <KpiCard k="Net profit" v={fyLine.net} tone={fyLine.net >= 0 ? 'pos' : 'neg'} cls="lead" f="after commission and every expense" />
           <KpiCard k="Net margin %" raw={pctCell(fyLine.margin)} tone={fyLine.margin >= 0 ? 'pos' : 'neg'} f="net profit as a share of revenue" />
         </div>
         <div className="panel" style={{ marginBottom: '14px' }}>
           <div className="panel-h">
-            <h3>Revenue, expenses and net profit</h3>
+            <h3>Revenue, gross profit, expenses and net profit</h3>
             <span className="sub">
               {period === 'yearly' ? 'each financial year' : period === 'weekly' ? 'the last 12 weeks' : `${M.fyLabel(fy)}, month by month`}
             </span>
@@ -146,11 +162,12 @@ export function FinancePage() {
               // Grid lines every 5 Lakh, and each bar's amount on it, so the small months can be read.
               step={500000}
               values
-              label="Revenue, expenses and net profit by period"
+              label="Revenue, gross profit, expenses and net profit by period"
               rows={rows}
               series={[
                 { key: 'sales', label: 'Revenue', c: 'var(--s1)' },
-                { key: 'expenses', label: 'Expenses', c: 'var(--s2)' },
+                { key: 'gross', label: 'Gross profit', c: 'var(--s4)' },
+                { key: 'costs', label: 'Commission & expenses', c: 'var(--s2)' },
                 { key: 'net', label: 'Net profit', c: 'var(--s3)' },
               ]}
             />

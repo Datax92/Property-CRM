@@ -564,8 +564,9 @@ export function monthlySeries(year, f) {
 export const DEFAULT_MONTHLY_TARGET = { capital: 0, inflation: 0.83, growth: 0.3, profit: 0.5, zakat: 0.2083 };
 export const monthlyTargetPct = (t) => (+t.inflation || 0) + (+t.growth || 0) + (+t.profit || 0) + (+t.zakat || 0);
 
-/** What the business holds at the end of a day: unsold plots at landed cost, assets at cost,
-    bank and cash, and what buyers still owe; less what it still owes, which leaves its net worth.
+/** What the business holds at the end of a day: unsold plots at landed cost, assets at cost, and
+    bank and cash, which together are its net worth. What buyers still owe and what the business
+    still owes are worked out beside it but not counted in it.
     What an account held to begin with counts from the start, whatever date it was entered on. */
 export function holdingsAt(asOf, f) {
   const sold = (p) => DATA.sales.some((s) => s.propertyId === p.id && s.date <= asOf);
@@ -605,8 +606,22 @@ export function holdingsAt(asOf, f) {
     // §236C typed on a sale with no tax entry of its own: a cost of the deal that no payment shows.
     + DATA.sales.filter((s) => on(s.date)).reduce((a, s) => a + saleTaxCounted(s), 0);
   const assets = Object.keys(byType).reduce((a, k) => a + byType[k], 0);
-  const total = property + assets + cash + receivable;
-  return { property, byType, assets, cash, receivable, total, payable, net: total - payable };
+  // Net worth as the owner counts it: plots in stock, assets, and bank and cash.
+  const total = property + assets + cash;
+  return { property, byType, assets, cash, receivable, total, payable, net: total };
+}
+
+/** The net worth at the end of a day, never later than today. */
+export const netWorthAt = (d, f) => holdingsAt(d > TODAY ? endOfDay(TODAY) : endOfDay(d), f).net;
+
+/** How the net worth moved over a period: from the day before it starts to its end, leaving out
+    money the owner put in, and as a share of where it started. */
+export function netWorthGrowth(r, f) {
+  const from = netWorthAt(addDays(r.start, -1), f);
+  const to = netWorthAt(r.end, f);
+  const capital = capitalIn(r, f);
+  const growth = to - from - capital;
+  return { from, to, capital, growth, pct: from > 0 ? pctOf(growth, from) : NaN };
 }
 
 /** Money the owner put into the business in a period (taken back out counts against it). */

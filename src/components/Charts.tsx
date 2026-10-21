@@ -431,7 +431,8 @@ export function ChartBars({
   step,
   low = false,
 }: {
-  rows: { label: string; v: number; c?: string; full?: string; sub?: string; tag?: string }[];
+  /** `tone`: whether the tag is a rise or a fall, when the bar's own sign does not say it. */
+  rows: { label: string; v: number; c?: string; full?: string; sub?: string; tag?: string; tone?: 'up' | 'down' }[];
   legend?: { k: string; c: string }[];
   signed?: boolean;
   label?: string;
@@ -495,7 +496,7 @@ export function ChartBars({
                 </text>
               )}
               {!upright && v !== 0 && r.tag && (
-                <text className={`dlab tag ${signed ? (v >= 0 ? 'up' : 'down') : ''}`} x={cx.toFixed(1)} y={(ly - 5).toFixed(1)} textAnchor="middle">
+                <text className={`dlab tag ${r.tone || (signed ? (v >= 0 ? 'up' : 'down') : '')}`} x={cx.toFixed(1)} y={(ly - 5).toFixed(1)} textAnchor="middle">
                   {r.tag}
                 </text>
               )}

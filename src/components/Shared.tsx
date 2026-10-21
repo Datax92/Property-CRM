@@ -295,23 +295,78 @@ export function Toolbar({
   );
 }
 
+/* The order someone has dragged a table's columns into, remembered in this browser. */
+const colOrderKey = (name: string) => 'col-order-v1:' + name;
+function loadColOrder(name: string): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(colOrderKey(name)) || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The columns in the order saved: a column not in it (added since) keeps its own place. */
+function inOrder<C extends { key: string }>(cols: C[], order: string[]): C[] {
+  if (!order.length) return cols;
+  const known = order.map((k) => cols.find((c) => c.key === k)).filter(Boolean) as C[];
+  const out = known.slice();
+  cols.forEach((c, i) => {
+    if (order.indexOf(c.key) < 0) out.splice(Math.min(i, out.length), 0, c);
+  });
+  return out;
+}
+
 export function DataTable<T extends { id?: string }>({
-  cols,
+  cols: baseCols,
   rows,
   totals = false,
   attach,
+  reorder,
 }: {
   cols: TableColumn<T>[];
   rows: T[];
   totals?: boolean;
   /** Ledger these rows belong to: adds a paperclip column for their attachments. */
   attach?: string;
+  /** A name to remember the column order under: the column headings can then be dragged into
+      another order. */
+  reorder?: string;
 }) {
   const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit, deleteRecord } = useApp();
   // Ledgers with an entry form can have their rows corrected, and most can have a row deleted.
   const editable = !!attach && !!editFormFor(attach);
   const deletable = !!attach && M.DELETABLE.indexOf(attach) >= 0;
   const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  // Columns dragged by their heading: the one picked up, and where it would land.
+  const [order, setOrderState] = useState<string[]>([]);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ key: string; after: boolean } | null>(null);
+  useEffect(() => {
+    if (reorder) setOrderState(loadColOrder(reorder));
+  }, [reorder]);
+  const setOrder = (o: string[]) => {
+    setOrderState(o);
+    try {
+      if (o.length) window.localStorage.setItem(colOrderKey(reorder as string), JSON.stringify(o));
+      else window.localStorage.removeItem(colOrderKey(reorder as string));
+    } catch {
+      /* not remembered */
+    }
+  };
+  const cols = reorder ? inOrder(baseCols, order) : baseCols;
+  const moved = reorder && cols.some((c, i) => c.key !== baseCols[i].key);
+  const dropOn = (key: string) => {
+    if (!dragKey || !drop || dragKey === key) return;
+    const keys = cols.map((c) => c.key).filter((k) => k !== dragKey);
+    keys.splice(keys.indexOf(key) + (drop.after ? 1 : 0), 0, dragKey);
+    setOrder(keys);
+  };
+  const endDrag = () => {
+    setDragKey(null);
+    setDrop(null);
+  };
 
   const q = query.trim().toLowerCase();
   let data = rows;
@@ -373,7 +428,49 @@ export function DataTable<T extends { id?: string }>({
             <thead>
               <tr>
                 {cols.map((c) => (
-                  <th key={c.key} className={c.a === 'r' ? 'r' : ''}>
+                  <th
+                    key={c.key}
+                    className={[
+                      c.a === 'r' ? 'r' : '',
+                      reorder ? 'th-drag' : '',
+                      dragKey === c.key ? 'dragging' : '',
+                      drop && drop.key === c.key && dragKey !== c.key ? (drop.after ? 'drop-after' : 'drop-before') : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    draggable={!!reorder}
+                    title={reorder ? 'Drag to move this column' : undefined}
+                    onDragStart={
+                      reorder
+                        ? (e) => {
+                            setDragKey(c.key);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', c.key);
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      reorder
+                        ? (e) => {
+                            if (!dragKey) return;
+                            e.preventDefault();
+                            const box = e.currentTarget.getBoundingClientRect();
+                            const after = e.clientX > box.left + box.width / 2;
+                            if (!drop || drop.key !== c.key || drop.after !== after) setDrop({ key: c.key, after });
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      reorder
+                        ? (e) => {
+                            e.preventDefault();
+                            dropOn(c.key);
+                            endDrag();
+                          }
+                        : undefined
+                    }
+                    onDragEnd={reorder ? endDrag : undefined}
+                  >
                     <button type="button" onClick={() => setSort(c.key)}>
                       {c.label}
                       {sort && sort.key === c.key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -449,7 +546,7 @@ export function DataTable<T extends { id?: string }>({
               <tfoot>
                 <tr>
                   {cols.map((c, i) => {
-                    if (i === 0) return <td key={c.key}>Total · {M.fmtNum(data.length)} rows</td>;
+                    if (i === Math.max(0, cols.findIndex((x) => !x.sum))) return <td key={c.key}>Total · {M.fmtNum(data.length)} rows</td>;
                     if (!c.sum) return <td key={c.key} />;
                     const sum = data.reduce((a, r) => a + ((r as any)[c.key] || 0), 0);
                     return (
@@ -467,6 +564,17 @@ export function DataTable<T extends { id?: string }>({
         </div>
       </div>
       <div className="pager" data-noprint="1">
+        {reorder && (
+          <span className="muted pager-hint">
+            {moved ? (
+              <button type="button" className="link" onClick={() => setOrder([])} title="Put the columns back in their first order">
+                Reset column order
+              </button>
+            ) : (
+              'Drag a column heading to move it'
+            )}
+          </span>
+        )}
         <span>
           1-{M.fmtNum(shown.length)} / {M.fmtNum(data.length)}
         </span>

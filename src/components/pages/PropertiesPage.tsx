@@ -155,7 +155,7 @@ export function PropertiesPage() {
         }
       >
         <SummaryKpis pairs={summaryPairs} />
-        <DataTable cols={cols} rows={rows} totals={true} attach="properties" />
+        <DataTable cols={cols} rows={rows} totals={true} attach="properties" reorder="purchase-register" />
         <InvoiceReceiptModal invoice={selectedInvoice} onClose={closeReceipt} />
       </PageShell>
     );
