@@ -220,8 +220,8 @@ export function MonthlyReport({
           {parts.cards && (
           <div className="kpis mr-kpis">
             {compare('Net worth', cur.holdings.net, prev && prev.holdings.net, {
-              // What it is made of, so it can be seen that cash is in it.
-              note: `Inventory ${money(cur.holdings.property)} + Assets ${money(cur.holdings.assets)} + Cash ${money(cur.holdings.cash)}`,
+              // What it is made of, so it can be seen that cash in hand and the banks are both in it.
+              note: `Inventory ${money(cur.holdings.property)} + Assets ${money(cur.holdings.assets)} + Cash in hand ${money(cur.holdings.cashInHand)} + Bank ${money(cur.holdings.bank)}`,
             })}
             {compare('Net profit', cur.net, prev && prev.net)}
             {compare('Gross profit', cur.gross, prev && prev.gross)}
