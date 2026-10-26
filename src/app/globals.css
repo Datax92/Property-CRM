@@ -2609,3 +2609,4 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mr-charts.print .dlab { font-size: 11px; }
 .mr-charts.print .dlab.sm, .mr-charts.print .dlab.tag { font-size: 10.5px; }
 .mr-charts.print .ax { font-size: 11px; }
+.dmore.print .ranked .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
