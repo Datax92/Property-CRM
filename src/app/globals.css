@@ -2541,7 +2541,7 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .ttable.tgrid td { vertical-align: top; }
 .ttable.tgrid td.tsubj { min-width: 260px; max-width: 420px; }
 .ttable.tgrid .tname { white-space: normal; max-width: none; overflow: visible; overflow-wrap: anywhere; line-height: 1.3; }
-.ttable.tgrid .tproj { white-space: normal; max-width: 200px; overflow-wrap: anywhere; }
+.ttable.tgrid .tproj { white-space: normal; min-width: 150px; max-width: 220px; overflow-wrap: break-word; }
 
 /* Invoices: a number not yet known is a line to write it on */
 .vr-meta b.vr-blank { display: inline-block; min-width: 150px; border-bottom: 1px solid #111; }
