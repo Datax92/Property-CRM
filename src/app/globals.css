@@ -2606,3 +2606,6 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .dmore.print.dense .ax { font-size: 13.5px; }
 .dmore.print.dense .dlab { font-size: 14.5px; }
 .dmore.print.dense .dlab.sm, .dmore.print.dense .dlab.tag { font-size: 13.5px; }
+.mr-charts.print .dlab { font-size: 11px; }
+.mr-charts.print .dlab.sm, .mr-charts.print .dlab.tag { font-size: 10.5px; }
+.mr-charts.print .ax { font-size: 11px; }
