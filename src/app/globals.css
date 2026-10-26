@@ -2518,3 +2518,87 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mr-print .dp-fig i { font-size: 8.5pt; }
 .mrp-page .mr-tbl { font-size: 10pt; }
 .mrp-page.solo .mr-tbl { font-size: 11pt; }
+
+/* ------------------------------ client revision 23.10.2026 ------------------------------ */
+/* A scroll bar above a wide table, moving with the one under it */
+.topscroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin: 0 0 4px; }
+.topscroll > div { height: 1px; }
+.ttable th.th-drag { cursor: grab; user-select: none; }
+.ttable th.th-drag.dragging { opacity: .45; cursor: grabbing; }
+.ttable th.drop-before { box-shadow: inset 3px 0 0 var(--brand); }
+.ttable th.drop-after { box-shadow: inset -3px 0 0 var(--brand); }
+.tmoved { margin: 0 0 6px; text-align: right; font-size: 12.5px; }
+
+/* Tasks: every cell boxed in, as in a spreadsheet, and the subject written out in full */
+.ttable.tgrid th, .ttable.tgrid td { border: 1px solid #DCE0E6; }
+.ttable.tgrid tr > :first-child { border-left: 0; }
+.ttable.tgrid tr > :last-child { border-right: 0; }
+.ttable.tgrid thead th { border-top: 0; border-bottom: 1.5px solid #C9CED6; border-radius: 0; }
+.ttable.tgrid tbody tr:last-child td { border-bottom: 0; }
+.ttable.tgrid tbody tr:nth-child(even) td { background: #FAFBFC; }
+.ttable.tgrid tbody tr:hover td { background: #F3F6FB; }
+.ttable.tgrid tr.on td { background: #F2F5FC; }
+.ttable.tgrid td { vertical-align: top; }
+.ttable.tgrid td.tsubj { min-width: 260px; max-width: 420px; }
+.ttable.tgrid .tname { white-space: normal; max-width: none; overflow: visible; overflow-wrap: anywhere; line-height: 1.3; }
+.ttable.tgrid .tproj { white-space: normal; max-width: 200px; overflow-wrap: anywhere; }
+
+/* Invoices: a number not yet known is a line to write it on */
+.vr-meta b.vr-blank { display: inline-block; min-width: 150px; border-bottom: 1px solid #111; }
+
+/* Cost sheet: each side's paperwork, and room to sign above each line */
+.cs-doc-pay { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; padding: 7px 0 8px; border-bottom: 1px solid #9CA3AF; }
+.cs-doc-pay b { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-ink); margin-bottom: 2px; }
+.cs-doc-pay p { display: flex; align-items: flex-end; gap: 8px; margin: 3px 0 0; }
+.cs-doc-pay span { flex: 0 0 170px; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #4B5563; }
+.cs-doc-pay i { flex: 1 1 auto; min-height: 15px; font-style: normal; font-size: 11px; font-weight: 600; color: #111827; border-bottom: 1px solid #6B7280; overflow-wrap: anywhere; }
+.cs-doc-signs { margin: 70px 0 6px; break-inside: avoid; page-break-inside: avoid; }
+.cs-doc-signs i { margin-bottom: 5px; }
+
+/* Printed dashboard: the cards keep only their figure and the change on the month before, so the
+   graphs get the room; graph text a size smaller */
+.mr-print .mr-kpis .kpi .f .muted, .mr-print .mr-kpis .mr-sum { display: none; }
+.mr-print .mr-charts.print .panel-h .sub { display: none; }
+:is(.dmore.print, .mr-charts.print) .ax { font-size: 11.5px; }
+:is(.dmore.print, .mr-charts.print) .dlab { font-size: 12.5px; }
+:is(.dmore.print, .mr-charts.print) .dlab.sm { font-size: 11.5px; }
+:is(.dmore.print, .mr-charts.print) .dlab.tag { font-size: 11.5px; }
+/* Printed more details and investments: the investment cards show only their figures; cash & bank
+   and where the gains are read larger, with a larger donut */
+.dmore.print .kpis .kpi .f { display: none; }
+.dmore.print .acctlist .r { font-size: 12pt; padding: 3px 0; }
+.dmore.print .acctlist .r.acct-sub { font-size: 11.5pt; }
+.dmore.print .acctlist .r.acct-total { font-size: 12.5pt; }
+.dmore.print .inv-donut { grid-template-columns: 160px minmax(0, 1fr); gap: 12px; }
+.dmore.print .inv-donut svg { max-width: 160px !important; }
+.dmore.print .ranked .r, .dmore.print .ranked .vv { font-size: 12pt; }
+.dmore.print .ranked .pc { font-size: 11pt; }
+
+/* Profit and loss on paper: the graph and the whole statement on as few sheets as can be */
+@media print {
+  body:not(.printing-now) .pnl-chart { margin-bottom: 8pt !important; }
+  body:not(.printing-now) .pnl-chart .panel-h { padding: 4pt 10pt; }
+  body:not(.printing-now) .pnl-chart .panel-b { padding: 2pt 10pt 4pt; }
+  body:not(.printing-now) .pnl-chart svg { max-height: 190px; width: 100%; }
+  body:not(.printing-now) .pnl-table { break-inside: auto !important; }
+  body:not(.printing-now) .pnl-table table.tbl { font-size: 9.5pt; }
+  body:not(.printing-now) .pnl-table table.tbl td, body:not(.printing-now) .pnl-table table.tbl th { padding: 2.5pt 8pt !important; line-height: 1.25; }
+  body:not(.printing-now) .pnl-table table.tbl td[colspan] { padding-top: 6pt !important; }
+  body:not(.printing-now) .pnl-table .kicker { font-size: 8.5pt; }
+  body:not(.printing-now) .pnl-table tr { break-inside: avoid; }
+}
+
+/* Vouchers on paper: set a little closer, so the address strip stays on the same sheet */
+@media print {
+  .printable-voucher .vr-letterhead { padding-top: 4px; }
+  .printable-voucher .vr-letterhead svg { max-height: 104px; }
+  .printable-voucher .vr-lines { padding-top: 8px; }
+  .printable-voucher .vr-lines p { margin-bottom: 6px; }
+  .printable-voucher .vr-amount-row { padding-bottom: 8px; }
+  .printable-voucher .voucher-grid-2 { margin-bottom: 8px; }
+  .printable-voucher .voucher-table-main td { padding: 5px 10px; }
+  .printable-voucher .voucher-notes { margin: 8px 28px 8px; }
+  .printable-voucher .sig-space { height: 46px; }
+  .printable-voucher .voucher-signatures { margin-bottom: 8px; }
+  .printable-voucher .vr-footstrip { margin: 6px 0 0; break-inside: avoid; page-break-inside: avoid; }
+}

@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, MirrorChanges } from '../Shared';
 import { ledgersReady, ledgerError } from '../../lib/firestore-service';
 import { Icon } from '../Icons';
-import { BrandBanner, BrandFooter } from '../Brand';
+import { BrandBanner } from '../Brand';
 import { PrintNow } from '../PrintNow';
 import * as M from '../../lib/re-data';
 import { AttachmentsField } from '../Attachments';
@@ -500,9 +500,46 @@ export function TradingPage() {
 // Browsers drop background colours when printing by default, so nothing here
 // relies on a filled background to be readable.
 // ---------------------------------------------------------------------------
+/** The paperwork of each side of a deal, as far as the records know it: the e-stamp and receipt
+    numbers, the cheque / pay order or transfer references, and whether it was paid in cash or
+    through the bank. What is not known prints as a line to fill in by hand. */
+function dealPaperwork(propertyId?: string | null) {
+  const p: any = propertyId ? M.DATA.properties.find((x: any) => x.id === propertyId) : null;
+  const sale: any = propertyId ? M.DATA.sales.find((x: any) => x.propertyId === propertyId) : null;
+  const invs = (type: string) => (propertyId ? M.DATA.invoices.filter((i: any) => i.propertyId === propertyId && i.type === type && !i.mirrorOf) : []);
+  const list = (xs: any[]) => Array.from(new Set(xs.map((x) => String(x || '').trim()).filter(Boolean))).join(', ');
+  const terms = (methods: any[]) => {
+    const ms = methods.filter(Boolean);
+    if (!ms.length) return '';
+    const cash = ms.some((m) => m === 'Cash');
+    const bank = ms.some((m) => m !== 'Cash');
+    return cash && bank ? 'Cash + bank' : cash ? 'Cash' : 'Bank';
+  };
+  const pi = invs('purchase'), si = invs('sale');
+  return {
+    buy: {
+      stamp: list([p && p.estampNo, ...pi.map((i: any) => i.estampNo), ...pi.map((i: any) => i.sellerReceiptNo)]),
+      ref: list(pi.flatMap((i: any) => [i.paymentRef, i.paymentRef2])),
+      terms: terms([p && p.paid > 0 ? p.method : '', p && p.method2, ...pi.flatMap((i: any) => [i.paymentMode, i.paymentMode2])]),
+    },
+    sell: {
+      stamp: list([sale && sale.estampNo, ...si.map((i: any) => i.estampNo)]),
+      ref: list(si.flatMap((i: any) => [i.paymentRef, i.paymentRef2])),
+      terms: terms([sale && sale.received > 0 ? sale.method : '', sale && sale.method2, ...si.flatMap((i: any) => [i.paymentMode, i.paymentMode2])]),
+    },
+  };
+}
+
 export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
   const full = (n: number) => M.fmt(n || 0, 'full');
   const date = (d: any) => (d ? M.fmtDate(d instanceof Date ? d : M.parseDate(d)) : '—');
+  const pw = dealPaperwork(sheet.propertyId);
+  const line = (label: string, value: string) => (
+    <p>
+      <span>{label}</span>
+      <i>{value}</i>
+    </p>
+  );
 
   return (
     <div className="cs-doc">
@@ -530,6 +567,22 @@ export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
         <div><span>Purchase date</span><b>{date(sheet.purchaseDate)}</b></div>
         <div><span>Sold to</span><b>{sheet.buyer || '—'}</b></div>
         <div><span>Sale date</span><b>{date(sheet.saleDate)}</b></div>
+      </div>
+
+      {/* Kept with the company's own copy only: the sheet is not given to the buyer or seller. */}
+      <div className="cs-doc-pay">
+        <div>
+          <b>Purchase</b>
+          {line('E-stamp / receipt #', pw.buy.stamp)}
+          {line('Cheque / pay order #', pw.buy.ref)}
+          {line('Payment terms (cash or bank)', pw.buy.terms)}
+        </div>
+        <div>
+          <b>Sale</b>
+          {line('E-stamp / receipt #', pw.sell.stamp)}
+          {line('Cheque / ref #', pw.sell.ref)}
+          {line('Payment terms (cash or bank)', pw.sell.terms)}
+        </div>
       </div>
 
       <div className="cs-doc-kpis">
@@ -573,13 +626,11 @@ export function PrintableCostSheetDoc({ sheet }: { sheet: CostSheet }) {
         </tbody>
       </table>
 
+      {/* Room to sign above each line. No address strip: the sheet is for the company's own record. */}
       <div className="cs-doc-signs">
         <div><i />Prepared by</div>
         <div><i />Checked by</div>
         <div><i />Approved by</div>
-      </div>
-      <div className="cs-doc-foot">
-        <BrandFooter />
       </div>
     </div>
   );

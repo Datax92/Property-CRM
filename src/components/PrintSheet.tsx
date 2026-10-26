@@ -5,7 +5,8 @@ import { BrandBanner } from './Brand';
 import * as M from '../lib/re-data';
 
 /**
- * One printed A4 landscape page: the letterhead, a title band, the content and the footer.
+ * One printed A4 landscape page: the letterhead, a title band and the content. The address line
+ * at the foot is left off unless asked for, to give the content the room.
  * Content that would run past the page is scaled down just enough to fit it, so a page never
  * spills onto a second sheet; content that fits prints at full size.
  */
@@ -14,7 +15,7 @@ export function PrintSheet({
   title,
   sub,
   pageNo,
-  footer = true,
+  footer = false,
   className = '',
   children,
 }: {

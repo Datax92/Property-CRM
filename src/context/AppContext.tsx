@@ -91,6 +91,7 @@ function invoiceFields(kind: 'sale' | 'purchase' | 'proforma') {
     { g: 'Invoice' },
     { k: 'receiptDate', l: 'Receipt date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
     { k: 'estampNo', l: 'e-Stamp no.', ph: 'Number on the e-Stamp paper' },
+    ...(sale ? [] : [{ k: 'sellerReceiptNo', l: 'Seller receipt no.', ph: 'Number on the receipt the seller gave' }]),
     {
       k: 'propertyId',
       l: 'Property',
@@ -751,6 +752,25 @@ export const FORMS_DEF: Record<string, any> = {
       return { id: t.id, msg: name + ' added', go: 'bank/accounts' };
     },
   },
+  renameAccount: {
+    title: 'Rename a bank or cash account',
+    sub: 'The new name is put on every payment, transfer, purchase and sale that names the account. Balances do not change.',
+    fields: [
+      { g: 'Account' },
+      { k: 'from', l: 'Account', type: 'select', opts: () => M.accountNames().filter((a: string) => a !== M.NO_ACCOUNT), req: true },
+      { k: 'to', l: 'New name', req: true, ph: 'e.g. BANK ISLAMI ISB – SAVING', hint: 'An account whose name says cash counts as cash in hand; any other is a bank account.' },
+    ],
+    validate: (v: any) => {
+      const from = String(v.from || '').trim(), to = String(v.to || '').trim();
+      if (to && from && to !== from && M.accountNames().some((a: string) => a !== from && a.toLowerCase() === to.toLowerCase()))
+        return { to: 'This name is already another account.' };
+      return {};
+    },
+    submit: (v: any) => {
+      const n = M.renameAccount(v.from, v.to);
+      return { id: '', msg: `${String(v.from).trim()} is now ${String(v.to).trim()} (${n} ${n === 1 ? 'entry' : 'entries'})`, go: 'bank/accounts' };
+    },
+  },
   saleInvoice: {
     title: 'Create sale invoice',
     editTitle: 'Edit sale invoice',
@@ -762,7 +782,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any) => {
       const inv = M.addInvoice({ ...v, type: 'sale' });
-      return { id: inv.id, msg: 'Sale invoice ' + inv.id + ' created', go: 'sales/saleInvoices' };
+      return { id: inv.id, msg: 'Sale invoice ' + M.invoiceNo(inv) + ' created', go: 'sales/saleInvoices' };
     },
   },
   proformaInvoice: {
@@ -776,7 +796,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any) => {
       const inv = M.addInvoice({ ...v, type: 'proforma' });
-      return { id: inv.id, msg: 'Proforma invoice ' + inv.id + ' created', go: 'sales/proformaInvoices' };
+      return { id: inv.id, msg: 'Proforma invoice ' + M.invoiceNo(inv) + ' created', go: 'sales/proformaInvoices' };
     },
   },
   purchaseInvoice: {
@@ -790,7 +810,7 @@ export const FORMS_DEF: Record<string, any> = {
     validate: invoiceValidate,
     submit: (v: any) => {
       const inv = M.addInvoice({ ...v, type: 'purchase' });
-      return { id: inv.id, msg: 'Purchase invoice ' + inv.id + ' created', go: 'sales/purchaseInvoices' };
+      return { id: inv.id, msg: 'Purchase invoice ' + M.invoiceNo(inv) + ' created', go: 'sales/purchaseInvoices' };
     },
   },
   task: {
@@ -1098,7 +1118,7 @@ export const FORMS_DEF: Record<string, any> = {
       },
       { k: 'ref', l: 'Challan / reference', ph: 'CPR or challan number' },
       { k: 'date', l: 'Tax date', type: 'date', def: () => dstr(M.TODAY), req: true, maxToday: true },
-      { k: 'dueDate', l: 'Due date', type: 'date', def: () => dstr(M.TODAY), req: true },
+      { k: 'dueDate', l: 'Paid date', type: 'date', def: () => dstr(M.TODAY), req: true },
       { k: 'office', l: 'Office / branch', type: 'select', opts: () => M.OFFICES, req: true },
       { g: 'Amount' },
       { k: 'amount', l: 'Tax amount (PKR)', type: 'money', req: true, min: 1 },

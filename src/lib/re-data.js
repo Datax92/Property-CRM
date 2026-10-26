@@ -1329,6 +1329,40 @@ export function changePaymentAccount(id, account, user) {
   return t;
 }
 
+/** Gives a bank or cash account a new name everywhere it is written: on every payment into or out of
+    it, on both sides of a transfer, and on the purchases, sales and income that name it. Nothing
+    else changes, so every balance stays as it was. */
+export function renameAccount(from, to, user) {
+  const old = String(from || '').trim(), name = String(to || '').trim();
+  if (!old) throw new Error('Pick the account to rename.');
+  if (!name) throw new Error('Type the new name.');
+  if (old === name) return 0;
+  if (accountNames().some((a) => a !== old && a.toLowerCase() === name.toLowerCase()))
+    throw new Error(name + ' is already an account. Pick another name.');
+  let changed = 0;
+  Object.keys(DATA).forEach((coll) => {
+    const rows = DATA[coll];
+    if (!Array.isArray(rows)) return;
+    rows.forEach((x) => {
+      if (!x || typeof x !== 'object') return;
+      let hit = false;
+      if (x.account === old) { x.account = name; hit = true; }
+      if (x.account2 === old) { x.account2 = name; hit = true; }
+      // A transfer names the other account as its party.
+      if (coll === 'payments' && isTransfer(x) && x.party === old) { x.party = name; hit = true; }
+      if (hit) { changed++; saveRecordToFirestore(coll, x.id, x); }
+    });
+  });
+  const au = {
+    id: nextId(DATA.audit, 'AU-', 4), date: TODAY, txnId: '—', action: 'Edited',
+    user: user || ACTOR, entity: 'Bank & Cash', prevAmount: 0, newAmount: 0,
+    note: 'Account renamed from ' + old + ' to ' + name + ' (' + changed + ' entries)', manual: true,
+  };
+  DATA.audit.unshift(au);
+  saveRecordToFirestore('audit', au.id, au);
+  return changed;
+}
+
 /* ====================================================================
    INVOICES — Sale Invoice (given to buyer) & Purchase Invoice (kept by company)
    ==================================================================== */
@@ -1341,6 +1375,8 @@ function invoiceBody(v) {
     receiptDate: parseDate(v.receiptDate || TODAY),
     propertyId: v.propertyId || null,
     estampNo: v.estampNo || '',
+    // The receipt number the seller gave for a purchase payment.
+    sellerReceiptNo: v.sellerReceiptNo || '',
 
     buyerName: v.buyerName || '',
     buyerCompany: v.buyerCompany || '',
@@ -1379,6 +1415,9 @@ function invoiceBody(v) {
 }
 
 export const INVOICE_LABEL = { sale: 'Sale Invoice', purchase: 'Purchase Invoice', proforma: 'Proforma Invoice' };
+/** The one number an invoice goes by, on paper and on screen: SI-0005, PI-0004, PF-0002. A mirror
+    carries its original's number. */
+export const invoiceNo = (i) => (i.type === 'proforma' ? 'PF' : i.type === 'purchase' ? 'PI' : 'SI') + '-' + String(i.srNo || 0).padStart(4, '0');
 
 export function addInvoice(v) {
   const prop = v.propertyId ? DATA.properties.find((p) => p.id === v.propertyId) : null;
@@ -1487,7 +1526,7 @@ export const sameValue = (a, b) => valueKey(a) === valueKey(b);
 export const INVOICE_MIRROR_KEYS = [
   'receiptDate', 'propertyId', 'buyerName', 'buyerCompany', 'buyerCnic', 'bankDetailsBuyer',
   'sellerName', 'sellerCompany', 'sellerCnic', 'bankDetailsSeller',
-  'paymentMode', 'paymentRef', 'paymentMode2', 'paymentAmount2', 'paymentRef2', 'paymentDate', 'paymentTerms', 'estampNo',
+  'paymentMode', 'paymentRef', 'paymentMode2', 'paymentAmount2', 'paymentRef2', 'paymentDate', 'paymentTerms', 'estampNo', 'sellerReceiptNo',
   'totalAmount', 'tokenAmount', 'tokenDate', 'transferDate',
   'receivedByName', 'receivedByCnic', 'receivedFromName', 'receivedFromCnic', 'approvedByName', 'notes',
 ];
@@ -1634,8 +1673,11 @@ export function dealTaxes() {
     const missing = DEAL_TAX_LINES.map(([k, label, type]) => ({
       key: k, label, type, amount: Math.round((cs[k] || 0) - rec(k)),
     })).filter((x) => x.amount > 0);
+    const prop = DATA.properties.find((p) => p.id === cs.propertyId);
+    const sale = DATA.sales.find((s) => s.propertyId === cs.propertyId);
     return {
       id: cs.propertyId, propertyId: cs.propertyId, property: cs.name, sheet: cs.fromRecords ? '' : cs.id, status: cs.status,
+      purchaseDate: prop ? prop.purchaseDate : null, saleDate: sale ? sale.date : null,
       stampCvt: line('stampDuty') + line('cvt'), tax236K: line('tax236K'), tax236C: line('tax236C'), cgt: line('cgtAmount'),
       due, recorded, paid, remaining: Math.max(0, due - paid), notRecorded: missing.reduce((a, x) => a + x.amount, 0), missing,
     };
@@ -2328,15 +2370,37 @@ export function normalizeLedger(name, rows) {
   return rows;
 }
 
-export function fiscalYearTaxSummary(f) {
-  // Get current fiscal year (Jul-Jun)
-  const m = TODAY.getMonth(), y = TODAY.getFullYear();
-  const fyStart = m >= 6 ? new Date(y, 6, 1) : new Date(y - 1, 6, 1);
-  const fyEnd = m >= 6 ? new Date(y + 1, 5, 30) : new Date(y, 5, 30);
+/** A tax entry under the filters: its office and, when a filter narrows to plots, the plot it is
+    for (an entry for no plot then drops out). */
+export function taxMatch(t, f) {
+  if (f.office !== 'all' && t.office !== f.office) return false;
+  if (!scopedToProperty(f) && f.status === 'all' && f.payStatus === 'all') return true;
+  const p = t.propertyId ? DATA.properties.find((x) => x.id === t.propertyId) : null;
+  if (!p || !propMatch(p, f)) return false;
+  return f.agent === 'all' || DATA.sales.some((s) => s.propertyId === p.id && s.agentId === f.agent);
+}
+
+/** The sales under the filters, as the sales register picks them. */
+export const salesUnder = (f) => {
+  const propIds = new Set(DATA.properties.filter((p) => propMatch(p, f)).map((p) => p.id));
+  return DATA.sales.filter((s) => saleMatch(s, f, propIds));
+};
+
+/** The financial year (July to June) a date falls in. */
+export function fiscalYearOf(d) {
+  const m = d.getMonth(), y = d.getFullYear();
+  const start = m >= 6 ? new Date(y, 6, 1) : new Date(y - 1, 6, 1);
+  return { start, end: new Date(start.getFullYear() + 1, 5, 30), label: 'FY ' + start.getFullYear() + '–' + (start.getFullYear() + 1) };
+}
+
+/** Tax in the financial year the period ends in (the current one by default), under the filters. */
+export function fiscalYearTaxSummary(f, r) {
+  const fy = fiscalYearOf(r ? (r.end > TODAY ? TODAY : r.end) : TODAY);
+  const fyStart = fy.start, fyEnd = fy.end;
   const fyRange = { start: fyStart, end: endOfDay(fyEnd > TODAY ? TODAY : fyEnd), label: 'FY', key: 'custom' };
 
-  const taxes = DATA.taxes.filter((t) => inR(t.date, fyRange) && (f.office === 'all' || t.office === f.office));
-  const sales = DATA.sales.filter((s) => inR(s.date, fyRange));
+  const taxes = DATA.taxes.filter((t) => inR(t.date, fyRange) && taxMatch(t, f));
+  const sales = salesUnder(f).filter((s) => inR(s.date, fyRange));
 
   const of = (...types) => taxes.filter((t) => types.indexOf(t.type) >= 0).reduce((a, t) => a + t.amount, 0);
   const advanceTax236K = of('Advance Tax §236K');
@@ -2352,7 +2416,7 @@ export function fiscalYearTaxSummary(f) {
   const totalPending = taxes.reduce((a, t) => a + t.outstanding, 0);
 
   return {
-    fyLabel: 'FY ' + fyStart.getFullYear() + '–' + fyEnd.getFullYear(),
+    fyLabel: fy.label,
     fyStart, fyEnd,
     advanceTax236K, advanceTax236C, cgt, withholdingTax, stampCvt, otherTax,
     totalTax, totalPaid, totalPending,

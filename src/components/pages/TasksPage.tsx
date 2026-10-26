@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PageShell, DataTable, KpiCard, Tag } from '../Shared';
+import { PageShell, DataTable, KpiCard, Tag, TopScroll, useColumnOrder } from '../Shared';
 import { DateField } from '../DateField';
 import { ChartBarGroups } from '../Charts';
 import { PAGE_META } from '../../lib/constants';
@@ -719,6 +719,79 @@ function PlansView() {
 }
 
 /** Tasks: a list of tasks, the projects they belong to, and a summary of both. */
+/** The columns of the task list, each of which can be dragged to another place. */
+type TaskCol = { key: string; th: React.ReactNode; thCls?: string; thTitle?: string; td: (t: any, st: string) => React.ReactNode };
+const TASK_COLS: TaskCol[] = [
+  { key: 'ref', th: 'Task ref', td: (t) => <td key="ref" className="mono muted nowrap">{t.id}</td> },
+  { key: 'subject', th: 'Subject', thCls: 'wide', td: () => null },
+  { key: 'start', th: 'Start date', td: (t) => <td key="start" className="mono muted nowrap">{t.startDate ? M.fmtDate(t.startDate) : ''}</td> },
+  {
+    key: 'deadline',
+    th: 'Deadline',
+    td: (t, st) => (
+      <td key="deadline" className={`mono nowrap ${st === 'Overdue' ? 'neg' : 'muted'}`}>
+        {t.date ? M.fmtDate(t.date) : ''}
+        {t.date && st !== 'Completed' && st !== 'Cancelled' && <span className={`tdue ${st === 'Overdue' ? 'late' : ''}`}>{M.dueIn(t.date)}</span>}
+      </td>
+    ),
+  },
+  { key: 'done', th: 'Completed on', td: (t, st) => <td key="done" className="mono nowrap">{st === 'Completed' && t.doneAt ? M.fmtDate(t.doneAt) : ''}</td> },
+  {
+    key: 'days',
+    th: 'Days',
+    thCls: 'r',
+    thTitle: 'Days from the start date to the day it was completed, or to today while it is still open',
+    td: (t, st) => {
+      const days = M.taskDays(t);
+      return (
+        <td
+          key="days"
+          className={`r mono nowrap ${st === 'Completed' ? '' : 'muted'}`}
+          title={days == null ? '' : st === 'Completed' ? `Took ${days} ${days === 1 ? 'day' : 'days'}` : `${days} ${days === 1 ? 'day' : 'days'} so far`}
+        >
+          {days == null ? '' : M.fmtNum(days)}
+        </td>
+      );
+    },
+  },
+  { key: 'project', th: 'Project', td: (t) => <td key="project" className="tproj">{t.project || ''}</td> },
+  {
+    key: 'projectStatus',
+    th: 'Project status',
+    td: (t) => {
+      const proj = t.projectId ? M.DATA.taskProjects.find((p: any) => p.id === t.projectId) : null;
+      return (
+        <td key="projectStatus">
+          {proj ? <span className={`tpill ${proj.status === 'Completed' ? 'st-done' : proj.status === 'Cancelled' ? 'st-cancel' : 'st-open'}`}>{proj.status || 'Open'}</span> : ''}
+        </td>
+      );
+    },
+  },
+  { key: 'status', th: 'Status', td: (t, st) => <td key="status"><StatusPill status={st} /></td> },
+  { key: 'priority', th: 'Priority', td: (t) => <td key="priority"><PriorityPill p={t.priority} /></td> },
+  { key: 'assignee', th: 'Assigned to', td: (t) => <td key="assignee" className="tproj">{t.assignee || ''}</td> },
+  { key: 'planned', th: 'Planned work', thCls: 'r', td: (t) => <td key="planned" className="r mono">{hrs(t.plannedHours || 0)}</td> },
+  { key: 'worth', th: 'Plan worth', thCls: 'r', td: (t) => <td key="worth" className="r mono">{t.planWorth ? M.fmt(t.planWorth, 'full') : '—'}</td> },
+  { key: 'cost', th: 'Plan cost', thCls: 'r', td: (t) => <td key="cost" className="r mono">{t.planCost ? M.fmt(t.planCost, 'full') : '—'}</td> },
+  { key: 'spent', th: 'Time spent', thCls: 'r', td: (t) => <td key="spent" className="r mono">{hrs(t.timeSpent || 0)}</td> },
+  {
+    key: 'progress',
+    th: 'Task progress',
+    thCls: 'wide',
+    td: (t) => {
+      const prog = M.taskProgress(t);
+      return (
+        <td key="progress">
+          <div className="pbar" title={`${prog}% done`}>
+            <div className="tbar"><i style={{ width: `${prog}%` }} /></div>
+            <span>{prog}%</span>
+          </div>
+        </td>
+      );
+    },
+  },
+];
+
 export function TasksPage() {
   const { tab, toast, refreshData, openModal, openEdit, goto, exportCsv, exportXls, print } = useApp();
 
@@ -740,6 +813,8 @@ export function TasksPage() {
   const [fYear, setFYear] = useState(String(M.TODAY.getFullYear()));
   const [fFrom, setFFrom] = useState(() => M.TODAY.getFullYear() + '-01-01');
   const [fTo, setFTo] = useState(() => M.dateInput(M.TODAY));
+  // The task list's columns, in the order they have been dragged into.
+  const { cols: taskCols, moved, headProps, reset: resetCols } = useColumnOrder('tasks/list', TASK_COLS);
 
   // Every change is refused while the database is unreachable, so nothing vanishes on reload.
   const run = (fn: () => void, done?: string) => {
@@ -995,8 +1070,15 @@ export function TasksPage() {
         </div>
       )}
 
-      <div className="tlist">
-        <table className="ttable" data-export="1">
+      {moved && (
+        <div className="tmoved" data-noprint="1">
+          <button type="button" className="link" onClick={resetCols} title="Put the columns back in their first order">
+            Reset column order
+          </button>
+        </div>
+      )}
+      <TopScroll className="tlist">
+        <table className="ttable tgrid" data-export="1">
           <thead>
             <tr>
               <th className="chk" data-noexport="1">
@@ -1007,22 +1089,11 @@ export function TasksPage() {
                   aria-label="Select all"
                 />
               </th>
-              <th>Task ref</th>
-              <th>Subject</th>
-              <th>Start date</th>
-              <th>Deadline</th>
-              <th>Completed on</th>
-              <th className="r" title="Days from the start date to the day it was completed, or to today while it is still open">Days</th>
-              <th>Project</th>
-              <th>Project status</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Assigned to</th>
-              <th className="r">Planned work</th>
-              <th className="r">Plan worth</th>
-              <th className="r">Plan cost</th>
-              <th className="r">Time spent</th>
-              <th className="wide">Task progress</th>
+              {taskCols.map((c) => (
+                <th key={c.key} {...headProps(c.key, c.thCls)} title={c.thTitle || 'Drag to move this column'}>
+                  {c.th}
+                </th>
+              ))}
               <th className="r" data-noexport="1">
                 {rows.length ? `${Math.min(shown, rows.length)} of ${rows.length}` : ''}
               </th>
@@ -1039,47 +1110,22 @@ export function TasksPage() {
             ) : (
               visible.map((t: any) => {
                 const st = M.taskStatus(t);
-                const proj = t.projectId ? M.DATA.taskProjects.find((p: any) => p.id === t.projectId) : null;
-                const prog = M.taskProgress(t);
-                const days = M.taskDays(t);
                 return (
                   <tr key={t.id} className={picked.includes(t.id) ? 'on' : ''}>
                     <td className="chk" data-noexport="1">
                       <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={`Select ${t.text}`} />
                     </td>
-                    <td className="mono muted nowrap">{t.id}</td>
-                    <td>
-                      <button type="button" className={`tname ${st === 'Completed' ? 'done' : ''}`} onClick={() => openEdit('tasks', t.id)} title="Open to edit">
-                        {t.text}
-                      </button>
-                    </td>
-                    <td className="mono muted nowrap">{t.startDate ? M.fmtDate(t.startDate) : ''}</td>
-                    <td className={`mono nowrap ${st === 'Overdue' ? 'neg' : 'muted'}`}>
-                      {t.date ? M.fmtDate(t.date) : ''}
-                      {t.date && st !== 'Completed' && st !== 'Cancelled' && <span className={`tdue ${st === 'Overdue' ? 'late' : ''}`}>{M.dueIn(t.date)}</span>}
-                    </td>
-                    <td className="mono nowrap">{st === 'Completed' && t.doneAt ? M.fmtDate(t.doneAt) : ''}</td>
-                    <td
-                      className={`r mono nowrap ${st === 'Completed' ? '' : 'muted'}`}
-                      title={days == null ? '' : st === 'Completed' ? `Took ${days} ${days === 1 ? 'day' : 'days'}` : `${days} ${days === 1 ? 'day' : 'days'} so far`}
-                    >
-                      {days == null ? '' : M.fmtNum(days)}
-                    </td>
-                    <td className="tproj">{t.project || ''}</td>
-                    <td>{proj ? <span className={`tpill ${proj.status === 'Completed' ? 'st-done' : proj.status === 'Cancelled' ? 'st-cancel' : 'st-open'}`}>{proj.status || 'Open'}</span> : ''}</td>
-                    <td><StatusPill status={st} /></td>
-                    <td><PriorityPill p={t.priority} /></td>
-                    <td className="tproj">{t.assignee || ''}</td>
-                    <td className="r mono">{hrs(t.plannedHours || 0)}</td>
-                    <td className="r mono">{t.planWorth ? M.fmt(t.planWorth, 'full') : '—'}</td>
-                    <td className="r mono">{t.planCost ? M.fmt(t.planCost, 'full') : '—'}</td>
-                    <td className="r mono">{hrs(t.timeSpent || 0)}</td>
-                    <td>
-                      <div className="pbar" title={`${prog}% done`}>
-                        <div className="tbar"><i style={{ width: `${prog}%` }} /></div>
-                        <span>{prog}%</span>
-                      </div>
-                    </td>
+                    {taskCols.map((c) =>
+                      c.key === 'subject' ? (
+                        <td key="subject" className="tsubj">
+                          <button type="button" className={`tname ${st === 'Completed' ? 'done' : ''}`} onClick={() => openEdit('tasks', t.id)} title="Open to edit">
+                            {t.text}
+                          </button>
+                        </td>
+                      ) : (
+                        c.td(t, st)
+                      )
+                    )}
                     <td className="r muted" data-noexport="1" title={t.createdAt ? 'Created ' + M.fmtDate(t.createdAt) : ''}>{ago(t.createdAt)}</td>
                     <td className="r nowrap" data-noexport="1">
                       {confirm === t.id ? (
@@ -1125,7 +1171,7 @@ export function TasksPage() {
             </button>
           )}
         </div>
-      </div>
+      </TopScroll>
     </PageShell>
   );
 }

@@ -200,6 +200,7 @@ export interface Invoice {
   paymentTerms?: string;
   /** Number of the e-Stamp paper the deal is written on. */
   estampNo?: string;
+  sellerReceiptNo?: string;
   bankDetailsBuyer?: string;
   bankDetailsSeller?: string;
 

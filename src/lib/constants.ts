@@ -159,7 +159,7 @@ export const PAGE_META: Record<string, { t: string; u?: string; p?: string }> = 
   'dashboard/more': { t: 'More details', u: 'مزید تفصیل' },
   'dashboard/alerts': { t: 'Alerts & notifications', u: 'اطلاعات', p: 'Everything that needs a decision, most urgent first.' },
   'properties/inventory': { t: 'Property inventory', u: 'اسٹاک و مالیت', p: 'Unsold stock: what it cost all in (landed cost), what it is worth today, and the difference.' },
-  'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought: net buy cost, §236K, the expenses and agent fee on top, landed cost, how long it has been held, and what is still owed to the seller.' },
+  'properties/purchases': { t: 'Purchase register', u: 'خرید رجسٹر', p: 'Every property bought: net buy cost, §236K, the expenses and the purchase agent’s commission on top, landed cost, how long it has been held, and what is still owed to the seller.' },
   'properties/performance': { t: 'Property performance', u: 'جائیداد کارکردگی', p: 'Profit on each property sold, taken from its cost sheet: the same figures as the cost sheet register.' },
   'properties/projects': { t: 'Projects', u: 'منصوبے', p: 'Every project / society: stock held, what it cost, what it is worth, and what has been sold.' },
   'trading/sheets': { t: 'Cost sheet register', u: 'لاگت رجسٹر', p: 'Complete trading ledger: acquisition cost basis, sale realization, brokerage, statutory taxes, and net margins.' },

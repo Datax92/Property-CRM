@@ -164,7 +164,8 @@ export function SalesPage() {
     // Every invoice gets its mirror automatically; listed in the same order as the invoices.
     const mirrors = M.DATA.invoices
       .filter((i: any) => i.mirrorOf && i.type === type && M.inRange(i.receiptDate, r))
-      .sort((a: any, b: any) => (a.srNo || 0) - (b.srNo || 0));
+      .sort((a: any, b: any) => (a.srNo || 0) - (b.srNo || 0))
+      .map((i: any) => ({ ...i, invoiceNo: M.invoiceNo(i) }));
     const formFields: any[] = FORMS_DEF[type + 'Invoice'].fields;
     const fieldLabel = (k: string) => String((formFields.find((fd) => fd.k === k) || { l: k }).l).replace(/ \(PKR\)$/, '');
     const resetMirror = (i: any) => {
@@ -174,7 +175,7 @@ export function SalesPage() {
       }
       M.resetInvoiceMirror(i.id);
       refreshData();
-      toast(`${i.id} now matches ${i.mirrorOf} again`);
+      toast(`The copy of ${i.invoiceNo} matches it again`);
     };
 
     const summaryPairs: [string, string][] = [
@@ -186,11 +187,10 @@ export function SalesPage() {
 
     const cols = [
       ...voucherCols,
-      { key: 'id', label: 'Mirror #' },
       {
-        key: 'mirrorOf',
-        label: 'Copy of',
-        render: (i: any) => <span className="tag mute" title={`Created as a copy of ${i.mirrorOf}`}>{i.mirrorOf}</span>,
+        key: 'invoiceNo',
+        label: 'Copy of invoice',
+        render: (i: any) => <span className="tag mute" title={`A copy of invoice ${i.invoiceNo}`}>{i.invoiceNo}</span>,
       },
       {
         key: 'mirrorEdits',
@@ -248,9 +248,9 @@ export function SalesPage() {
     const invoiceType = tab === 'saleInvoices' ? 'sale' : tab === 'proformaInvoices' ? 'proforma' : 'purchase';
     const kindWord = invoiceType === 'sale' ? 'sale' : invoiceType === 'proforma' ? 'proforma' : 'purchase';
     // Mirrors are kept on their own tab.
-    const invRows = M.DATA.invoices.filter(
-      (i: any) => i.type === invoiceType && !i.mirrorOf && M.inRange(i.receiptDate, r)
-    );
+    const invRows = M.DATA.invoices
+      .filter((i: any) => i.type === invoiceType && !i.mirrorOf && M.inRange(i.receiptDate, r))
+      .map((i: any) => ({ ...i, invoiceNo: M.invoiceNo(i) }));
 
     const summaryPairs: [string, string][] = [
       ['Invoices', M.fmtNum(invRows.length)],
@@ -261,8 +261,9 @@ export function SalesPage() {
 
     const invCols = [
       ...voucherCols,
-      { key: 'id', label: 'Invoice #' },
-      { key: 'srNo', label: 'Sr No.' },
+      // One invoice number, the one printed on the invoice.
+      { key: 'invoiceNo', label: 'Invoice no.', cls: 'mono' },
+      ...(invoiceType === 'purchase' ? [{ key: 'sellerReceiptNo', label: 'Seller receipt no.', render: (i: any) => i.sellerReceiptNo || '—' }] : []),
       { key: 'receiptDate', label: 'Receipt date', cls: 'mono', render: (i: any) => M.fmtDate(i.receiptDate) },
       { key: 'buyerName', label: 'Buyer name' },
       { key: 'buyerCnic', label: 'Buyer CNIC' },

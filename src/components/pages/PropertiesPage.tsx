@@ -26,12 +26,18 @@ export function PropertiesPage() {
         const sale = M.DATA.sales.find((s: any) => s.propertyId === p.id);
         // Held until it was sold, or until today while it is still held.
         const until = sale ? sale.date : M.TODAY;
+        // Commission to the agent or dealer on the purchase, from the commission ledger.
+        const comm = M.DATA.commissions.filter((c: any) => c.propertyId === p.id && c.txnType === 'Purchase');
+        const recorded = comm.reduce((a: number, c: any) => a + (c.amount || 0), 0);
         return {
           ...p,
           landed: d.landed || 0,
           tax236K: d.tax236K || 0,
           expenses: d.buyExpenses || 0,
-          buyAgent: d.buyAgent || 0,
+          buyAgent: d.buyAgent || recorded,
+          buyAgentName: Array.from(new Set(comm.map((c: any) => c.agent).filter(Boolean))).join(', '),
+          buyAgentPaid: comm.reduce((a: number, c: any) => a + (c.paid || 0), 0),
+          buyAgentOwed: comm.reduce((a: number, c: any) => a + (c.outstanding || 0), 0),
           heldDays: p.purchaseDate instanceof Date ? Math.max(0, Math.round((until - p.purchaseDate) / 864e5)) : null,
           heldTo: sale ? 'sold ' + M.fmtDate(sale.date) : 'still held',
         };
@@ -43,6 +49,7 @@ export function PropertiesPage() {
       ['Net buy cost', M.fmt(sum('price'), numbers)],
       ['§236K tax', M.fmt(sum('tax236K'), numbers)],
       ['Expenses', M.fmt(sum('expenses'), numbers)],
+      ['Agent commission', M.fmt(sum('buyAgent'), numbers)],
       ['Landed cost', M.fmt(sum('landed'), numbers)],
       ['Still payable to sellers', M.fmt(sum('remaining'), numbers)],
     ];
@@ -56,7 +63,7 @@ export function PropertiesPage() {
         }
         inv = M.generateInvoiceFromPurchase(p.id);
         refreshData();
-        toast(`Purchase invoice ${inv.id} made for ${p.name}`);
+        toast(`Purchase invoice ${M.invoiceNo(inv)} made for ${p.name}`);
       }
       setSelectedInvoice(inv);
     };
@@ -86,7 +93,20 @@ export function PropertiesPage() {
         cls: 'mono',
         render: (p: any) => <span title="Transfer, stamp duty, CVT and fees, and the expenses picked for this plot, as on its cost sheet">{M.fmt(p.expenses, numbers)}</span>,
       },
-      { key: 'buyAgent', label: 'Agent fee', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.buyAgent, numbers) },
+      { key: 'buyAgentName', label: 'Purchase agent', render: (p: any) => p.buyAgentName || '—' },
+      {
+        key: 'buyAgent',
+        label: 'Agent commission',
+        a: 'r' as const,
+        sum: true,
+        cls: 'mono',
+        render: (p: any) => (
+          <span title={p.buyAgentPaid || p.buyAgentOwed ? `Paid ${M.fmt(p.buyAgentPaid, 'full')} · still owed ${M.fmt(p.buyAgentOwed, 'full')}` : 'Buy-side agent commission, as on the cost sheet'}>
+            {M.fmt(p.buyAgent, numbers)}
+          </span>
+        ),
+      },
+      { key: 'buyAgentOwed', label: 'Commission owed', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.buyAgentOwed, numbers) },
       { key: 'landed', label: 'Landed cost', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => <b>{M.fmt(p.landed, numbers)}</b> },
       { key: 'paid', label: 'Paid to seller', a: 'r' as const, sum: true, cls: 'mono', render: (p: any) => M.fmt(p.paid, numbers) },
       { key: 'method', label: 'Paid by', render: (p: any) => <PaidBy x={p} total={p.paid} numbers={numbers} /> },
@@ -104,9 +124,9 @@ export function PropertiesPage() {
               className={`btn sm ${inv ? '' : 'pri'}`}
               style={{ padding: '2px 8px', fontSize: '11px', height: '24px' }}
               onClick={() => purchaseVoucher(p)}
-              title={inv ? `Open purchase invoice ${inv.id}` : 'Make the purchase invoice from this purchase, as a sale invoice is made from a sale'}
+              title={inv ? `Open purchase invoice ${M.invoiceNo(inv)}` : 'Make the purchase invoice from this purchase, as a sale invoice is made from a sale'}
             >
-              <Icon name="print" size={12} /> {inv ? inv.id : 'Make invoice'}
+              <Icon name="print" size={12} /> {inv ? M.invoiceNo(inv) : 'Make invoice'}
             </button>
           );
         },

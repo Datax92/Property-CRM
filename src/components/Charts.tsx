@@ -375,7 +375,7 @@ const clip = (s: string, n = 24) => (s.length > n ? s.slice(0, n - 1) + '…' : 
     zero line and the same room for the labels under it. A chart with more grid lines is taller. */
 function frame(width: number, rows: { label: string }[], ticks: number, low = false, PL0 = 54) {
   const PR = 12,
-    PT = 26;
+    PT = 32;
   const tilted = tilt(rows, (width - PL0 - PR) / (rows.length || 1));
   // A slanted name runs left of its bar: the first one gets room enough not to be cut off.
   const first = rows.length ? clip(String(rows[0].label)).length * LABEL_PX * 0.82 : 0;
@@ -383,7 +383,7 @@ function frame(width: number, rows: { label: string }[], ticks: number, low = fa
   const slot = (width - PL - PR) / (rows.length || 1);
   const PB = tilted ? 92 : 30;
   // A low chart (on a printed page) keeps the same top and bottom, with less between.
-  const ih = Math.max(low ? 96 : 196, (ticks - 1) * (low ? 15 : 26));
+  const ih = Math.max(low ? 112 : 196, (ticks - 1) * (low ? 17 : 26));
   return { W: width, H: PT + ih + PB, PL, PR, PT, PB, iw: width - PL - PR, ih, slot, tilted };
 }
 
@@ -491,7 +491,8 @@ export function ChartBars({
               {v !== 0 && <rect x={(cx - barW / 2).toFixed(1)} y={top.toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)} rx="3" fill={colour(r)} />}
               {upright && v !== 0 && upLabel(cx, top, h, v, barValue(v, numbers))}
               {!upright && v !== 0 && (
-                <text className="dlab" x={cx.toFixed(1)} y={(ly - (r.tag ? 17 : 5)).toFixed(1)} textAnchor="middle">
+                // The amount sits well clear of the percentage written under it.
+                <text className="dlab" x={cx.toFixed(1)} y={(ly - (r.tag ? 22 : 5)).toFixed(1)} textAnchor="middle">
                   {barValue(v, numbers)}
                 </text>
               )}

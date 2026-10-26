@@ -567,7 +567,7 @@ export function FinancePage() {
 
   return (
     <PageShell title={meta.t} u={meta.u} p={meta.p} toolProps={{ search: false }}>
-      <div className="panel" style={{ marginBottom: '14px' }}>
+      <div className="panel pnl-chart" style={{ marginBottom: '14px' }}>
         <div className="panel-h">
           <h3>From revenue to net profit</h3>
           <span className="sub">{r.label}</span>
@@ -594,7 +594,7 @@ export function FinancePage() {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel pnl-table">
         <div className="tblwrap">
           <table className="tbl">
             <thead>
@@ -634,7 +634,7 @@ export function FinancePage() {
       </div>
 
       {sheetRows.length > 0 && (
-        <div className={`note ${unmatched.length ? 'bad' : 'calm'}`} style={{ marginTop: '14px' }}>
+        <div className={`note ${unmatched.length ? 'bad' : 'calm'}`} style={{ marginTop: '14px' }} data-noprint="1">
           <span className="ic">
             <Icon name={unmatched.length ? 'warn' : 'ok'} />
           </span>
@@ -661,7 +661,7 @@ export function FinancePage() {
         </div>
       )}
 
-      <div className="note calm" style={{ marginTop: '14px' }}>
+      <div className="note calm" style={{ marginTop: '14px' }} data-noprint="1">
         <span className="ic">
           <Icon name="info" />
         </span>

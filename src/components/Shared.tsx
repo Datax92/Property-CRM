@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import { useApp, editFormFor } from '../context/AppContext';
 import { Icon } from './Icons';
 import * as M from '../lib/re-data';
@@ -8,6 +8,7 @@ import type { TableColumn } from '../lib/types';
 import { AttachButton } from './Attachments';
 import { BrandMark } from './Brand';
 import { DateField } from './DateField';
+import { PrintingContext } from './PrintNow';
 
 const Pencil = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -15,12 +16,14 @@ const Pencil = () => (
   </svg>
 );
 
-/** Runs a figure up to its value over a moment, so a changed number is noticed. */
+/** Runs a figure up to its value over a moment, so a changed number is noticed. On paper it is
+    the value at once: the page is printed as soon as it is put up, and must not catch it part-way. */
 function useCountUp(target: number) {
+  const still = useContext(PrintingContext);
   const [val, setVal] = useState(target);
-  const from = useRef(0);
+  const from = useRef(still ? target : 0);
   useEffect(() => {
-    if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !isFinite(target)) {
+    if (still || typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !isFinite(target)) {
       from.current = target;
       setVal(target);
       return;
@@ -40,8 +43,8 @@ function useCountUp(target: number) {
       cancelAnimationFrame(raf);
       from.current = target;
     };
-  }, [target]);
-  return val;
+  }, [target, still]);
+  return still ? target : val;
 }
 
 function CountFig({ n }: { n: number }) {
@@ -317,6 +320,103 @@ function inOrder<C extends { key: string }>(cols: C[], order: string[]): C[] {
   return out;
 }
 
+/** Columns that can be dragged by their heading into another order, remembered under `name` in
+    this browser. */
+export function useColumnOrder<C extends { key: string }>(name: string, baseCols: C[]) {
+  // The column picked up, and where it would land.
+  const [order, setOrderState] = useState<string[]>([]);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ key: string; after: boolean } | null>(null);
+  useEffect(() => {
+    setOrderState(loadColOrder(name));
+  }, [name]);
+  const setOrder = (o: string[]) => {
+    setOrderState(o);
+    try {
+      if (o.length) window.localStorage.setItem(colOrderKey(name), JSON.stringify(o));
+      else window.localStorage.removeItem(colOrderKey(name));
+    } catch {
+      /* not remembered */
+    }
+  };
+  const cols = inOrder(baseCols, order);
+  const moved = cols.some((c, i) => c.key !== baseCols[i].key);
+  const endDrag = () => {
+    setDragKey(null);
+    setDrop(null);
+  };
+  /** What a heading needs to be dragged, and to show where a dragged one would land. */
+  const headProps = (key: string, cls = '') => ({
+    className: [
+      cls,
+      'th-drag',
+      dragKey === key ? 'dragging' : '',
+      drop && drop.key === key && dragKey !== key ? (drop.after ? 'drop-after' : 'drop-before') : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    draggable: true,
+    title: 'Drag to move this column',
+    onDragStart: (e: React.DragEvent<HTMLTableCellElement>) => {
+      setDragKey(key);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', key);
+    },
+    onDragOver: (e: React.DragEvent<HTMLTableCellElement>) => {
+      if (!dragKey) return;
+      e.preventDefault();
+      const box = e.currentTarget.getBoundingClientRect();
+      const after = e.clientX > box.left + box.width / 2;
+      if (!drop || drop.key !== key || drop.after !== after) setDrop({ key, after });
+    },
+    onDrop: (e: React.DragEvent<HTMLTableCellElement>) => {
+      e.preventDefault();
+      if (dragKey && drop && dragKey !== key) {
+        const keys = cols.map((c) => c.key).filter((k) => k !== dragKey);
+        keys.splice(keys.indexOf(key) + (drop.after ? 1 : 0), 0, dragKey);
+        setOrder(keys);
+      }
+      endDrag();
+    },
+    onDragEnd: endDrag,
+  });
+  return { cols, moved, headProps, reset: () => setOrder([]) };
+}
+
+/** A box that scrolls sideways with a second scroll bar above it, so a wide table can be moved
+    along without first going down to its last row. The upper bar shows only when it is needed. */
+export function TopScroll({ className, children }: { className?: string; children: React.ReactNode }) {
+  const top = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [wide, setWide] = useState(0);
+  useEffect(() => {
+    const b = box.current;
+    if (!b || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setWide(b.scrollWidth > b.clientWidth + 1 ? b.scrollWidth : 0);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(b);
+    const t = b.querySelector('table');
+    if (t) ro.observe(t);
+    return () => ro.disconnect();
+  }, []);
+  const follow = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+    if (from && to && to.scrollLeft !== from.scrollLeft) to.scrollLeft = from.scrollLeft;
+  };
+  return (
+    <>
+      {wide > 0 && (
+        <div className="topscroll" ref={top} data-noprint="1" aria-hidden="true" onScroll={() => follow(top.current, box.current)}>
+          <div style={{ width: wide }} />
+        </div>
+      )}
+      <div className={className} ref={box} onScroll={() => follow(box.current, top.current)}>
+        {children}
+      </div>
+    </>
+  );
+}
+
 export function DataTable<T extends { id?: string }>({
   cols: baseCols,
   rows,
@@ -333,40 +433,18 @@ export function DataTable<T extends { id?: string }>({
       another order. */
   reorder?: string;
 }) {
-  const { query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit, deleteRecord } = useApp();
+  const { page, tab, query, sort, setSort, fresh, showAll, toggleShowAll, numbers, openEdit, deleteRecord } = useApp();
   // Ledgers with an entry form can have their rows corrected, and most can have a row deleted.
   const editable = !!attach && !!editFormFor(attach);
   const deletable = !!attach && M.DELETABLE.indexOf(attach) >= 0;
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  // Columns dragged by their heading: the one picked up, and where it would land.
-  const [order, setOrderState] = useState<string[]>([]);
-  const [dragKey, setDragKey] = useState<string | null>(null);
-  const [drop, setDrop] = useState<{ key: string; after: boolean } | null>(null);
-  useEffect(() => {
-    if (reorder) setOrderState(loadColOrder(reorder));
-  }, [reorder]);
-  const setOrder = (o: string[]) => {
-    setOrderState(o);
-    try {
-      if (o.length) window.localStorage.setItem(colOrderKey(reorder as string), JSON.stringify(o));
-      else window.localStorage.removeItem(colOrderKey(reorder as string));
-    } catch {
-      /* not remembered */
-    }
-  };
-  const cols = reorder ? inOrder(baseCols, order) : baseCols;
-  const moved = reorder && cols.some((c, i) => c.key !== baseCols[i].key);
-  const dropOn = (key: string) => {
-    if (!dragKey || !drop || dragKey === key) return;
-    const keys = cols.map((c) => c.key).filter((k) => k !== dragKey);
-    keys.splice(keys.indexOf(key) + (drop.after ? 1 : 0), 0, dragKey);
-    setOrder(keys);
-  };
-  const endDrag = () => {
-    setDragKey(null);
-    setDrop(null);
-  };
+  // Every table's columns can be dragged into another order. A table not given a name is
+  // remembered by its page and its first columns, which tell two tables on one page apart.
+  const { cols, moved, headProps, reset } = useColumnOrder(
+    reorder || `${page}/${tab}:${baseCols.slice(0, 3).map((c) => c.key).join(',')}`,
+    baseCols
+  );
 
   const q = query.trim().toLowerCase();
   let data = rows;
@@ -423,54 +501,12 @@ export function DataTable<T extends { id?: string }>({
   return (
     <>
       <div className="panel">
-        <div className="tblwrap">
+        <TopScroll className="tblwrap">
           <table className="tbl">
             <thead>
               <tr>
                 {cols.map((c) => (
-                  <th
-                    key={c.key}
-                    className={[
-                      c.a === 'r' ? 'r' : '',
-                      reorder ? 'th-drag' : '',
-                      dragKey === c.key ? 'dragging' : '',
-                      drop && drop.key === c.key && dragKey !== c.key ? (drop.after ? 'drop-after' : 'drop-before') : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    draggable={!!reorder}
-                    title={reorder ? 'Drag to move this column' : undefined}
-                    onDragStart={
-                      reorder
-                        ? (e) => {
-                            setDragKey(c.key);
-                            e.dataTransfer.effectAllowed = 'move';
-                            e.dataTransfer.setData('text/plain', c.key);
-                          }
-                        : undefined
-                    }
-                    onDragOver={
-                      reorder
-                        ? (e) => {
-                            if (!dragKey) return;
-                            e.preventDefault();
-                            const box = e.currentTarget.getBoundingClientRect();
-                            const after = e.clientX > box.left + box.width / 2;
-                            if (!drop || drop.key !== c.key || drop.after !== after) setDrop({ key: c.key, after });
-                          }
-                        : undefined
-                    }
-                    onDrop={
-                      reorder
-                        ? (e) => {
-                            e.preventDefault();
-                            dropOn(c.key);
-                            endDrag();
-                          }
-                        : undefined
-                    }
-                    onDragEnd={reorder ? endDrag : undefined}
-                  >
+                  <th key={c.key} {...headProps(c.key, c.a === 'r' ? 'r' : '')}>
                     <button type="button" onClick={() => setSort(c.key)}>
                       {c.label}
                       {sort && sort.key === c.key ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -561,13 +597,13 @@ export function DataTable<T extends { id?: string }>({
               </tfoot>
             )}
           </table>
-        </div>
+        </TopScroll>
       </div>
       <div className="pager" data-noprint="1">
-        {reorder && (
+        {(moved || reorder) && (
           <span className="muted pager-hint">
             {moved ? (
-              <button type="button" className="link" onClick={() => setOrder([])} title="Put the columns back in their first order">
+              <button type="button" className="link" onClick={reset} title="Put the columns back in their first order">
                 Reset column order
               </button>
             ) : (

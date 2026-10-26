@@ -136,18 +136,35 @@ export function CostsPage() {
 
   if (tab === 'tax') {
     const k = M.computeKPIs(r, f);
-    const rows = M.DATA.taxes.filter((t: any) => M.inRange(t.date, r) && (f.office === 'all' || t.office === f.office));
-    const fySummary = M.fiscalYearTaxSummary(f);
+    // The plot's sale date beside each entry, when the plot has been sold.
+    const saleDateOf = (propertyId: string | null) => {
+      const s = propertyId ? M.DATA.sales.find((x: any) => x.propertyId === propertyId) : null;
+      return s ? s.date : null;
+    };
+    // Every list and card follows the filters and the period.
+    const rows = M.DATA.taxes
+      .filter((t: any) => M.inRange(t.date, r) && M.taxMatch(t, f))
+      .map((t: any) => ({ ...t, saleDate: saleDateOf(t.propertyId) }));
+    const fySummary = M.fiscalYearTaxSummary(f, r);
     // Withholding tax taken on the period's sales that is not also a tax entry: part of the tax total.
-    const saleTax = M.DATA.sales
-      .filter((s: any) => M.inRange(s.date, r) && (f.office === 'all' || s.office === f.office))
+    const saleTax = M.salesUnder(f)
+      .filter((s: any) => M.inRange(s.date, r))
       .reduce((a: number, s: any) => a + M.saleTaxCounted(s), 0);
-    // Tax deal by deal: due on the cost sheet against what has actually been paid.
-    const deals = M.dealTaxes();
+    // Tax deal by deal: due on the cost sheet against what has actually been paid, for the plots
+    // under the filters that were bought or sold in the period.
+    const plots = new Set(M.DATA.properties.filter((p: any) => M.propMatch(p, f)).map((p: any) => p.id));
+    const deals = M.dealTaxes().filter(
+      (x: any) =>
+        plots.has(x.propertyId) &&
+        (f.agent === 'all' || M.DATA.sales.some((s: any) => s.propertyId === x.propertyId && s.agentId === f.agent)) &&
+        (M.inRange(x.purchaseDate, r) || M.inRange(x.saleDate, r))
+    );
     const dsum = (key: string) => deals.reduce((a: number, x: any) => a + (x[key] || 0), 0);
     const dealCols = [
       { key: 'property', label: 'Property' },
       { key: 'status', label: 'Deal', render: (x: any) => <Tag text={x.status === 'Sold' ? 'Sold' : 'Held'} /> },
+      { key: 'purchaseDate', label: 'Purchase date', cls: 'mono', render: (x: any) => (x.purchaseDate ? M.fmtDate(x.purchaseDate) : '—') },
+      { key: 'saleDate', label: 'Sale date', cls: 'mono', render: (x: any) => (x.saleDate ? M.fmtDate(x.saleDate) : '—') },
       { key: 'stampCvt', label: 'Stamp duty & CVT', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.stampCvt, numbers) },
       { key: 'tax236K', label: '§236K', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.tax236K, numbers) },
       { key: 'tax236C', label: '§236C', a: 'r' as const, sum: true, cls: 'mono', render: (x: any) => M.fmt(x.tax236C, numbers) },
@@ -202,11 +219,12 @@ export function CostsPage() {
       { key: 'type', label: 'Tax type' },
       { key: 'ref', label: 'Reference' },
       { key: 'property', label: 'Property' },
+      { key: 'saleDate', label: 'Sale date', cls: 'mono', render: (t: any) => (t.saleDate ? M.fmtDate(t.saleDate) : '—') },
       { key: 'authority', label: 'Authority' },
       { key: 'amount', label: 'Amount', a: 'r' as const, sum: true, cls: 'mono', render: (t: any) => M.fmt(t.amount, numbers) },
       { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (t: any) => M.fmt(t.paid, numbers) },
       { key: 'outstanding', label: 'Outstanding', a: 'r' as const, sum: true, cls: 'mono', render: (t: any) => M.fmt(t.outstanding, numbers) },
-      { key: 'dueDate', label: 'Due', cls: 'mono', render: (t: any) => M.fmtDate(t.dueDate) },
+      { key: 'dueDate', label: 'Paid date', cls: 'mono', render: (t: any) => M.fmtDate(t.dueDate) },
       { key: 'status', label: 'Status', render: (t: any) => <Tag text={t.status} /> },
       {
         key: 'pay',
@@ -237,7 +255,7 @@ export function CostsPage() {
           <div className="panel" style={{ marginBottom: '14px' }}>
             <div className="panel-h">
               <h3>Tax on each deal</h3>
-              <span className="sub">due on its cost sheet, against what has been paid · every deal, any date</span>
+              <span className="sub">due on its cost sheet, against what has been paid · deals bought or sold in {r.label}</span>
             </div>
             <div className="panel-b tight">
               <div className="kpis">
@@ -271,7 +289,9 @@ export function CostsPage() {
         <div className="panel" style={{ marginBottom: '14px' }}>
           <div className="panel-h">
             <h3>{fySummary.fyLabel} — Tax summary</h3>
-            <span className="sub">Pakistan fiscal year runs July to June. Closing month is June.</span>
+            <span className="sub">
+              {M.fmtDate(fySummary.fyStart)} – {M.fmtDate(fySummary.fyEnd)} · the financial year {r.label} falls in. Pakistan&apos;s financial year runs July to June.
+            </span>
           </div>
           <div className="panel-b">
             <div className="kpis">
@@ -323,8 +343,9 @@ export function CostsPage() {
           <div>
             <b>Each tax is counted once.</b> Total tax adds up every tax entry below, plus the withholding tax taken
             on a sale whose plot has no §236C entry of its own (that tax is paid at the sale). Once a plot has its own
-            §236C entry, the entry is counted instead of the figure on the sale. The fiscal year closes in <b>June</b> —
-            the summary above follows July→June.
+            §236C entry, the entry is counted instead of the figure on the sale. The financial year closes in <b>June</b> —
+            the summary above is the July→June year the selected period falls in; pick <b>This fiscal year</b> or{' '}
+            <b>Last fiscal year</b> as the period to see a whole year. Every list and card follows the filters.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} attach="taxes" />

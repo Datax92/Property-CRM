@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { createContext, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+
+/** True inside a document being printed: figures there show their value at once, never
+    part-way through counting up to it. */
+export const PrintingContext = createContext(false);
 
 /**
  * One-click printing: mounts the document off-screen, opens the print dialog straight away,
@@ -54,5 +58,10 @@ export function PrintNow({
   }, []);
 
   if (typeof document === 'undefined') return null;
-  return createPortal(<div className="print-now">{children}</div>, document.body);
+  return createPortal(
+    <PrintingContext.Provider value={true}>
+      <div className="print-now">{children}</div>
+    </PrintingContext.Provider>,
+    document.body
+  );
 }

@@ -21,6 +21,9 @@ export function BankPage() {
       <button type="button" className="btn" onClick={() => openModal('account')}>
         <Icon name="plus" /> New account
       </button>
+      <button type="button" className="btn" onClick={() => openModal('renameAccount')}>
+        <Icon name="edit" /> Rename account
+      </button>
       <button type="button" className="btn" onClick={() => openModal('payment', { dir: 'in', category: 'Opening Balance' })}>
         <Icon name="plus" /> Opening balance
       </button>
@@ -145,9 +148,16 @@ export function BankPage() {
       key: 'act',
       label: '',
       render: (a: any) => (
-        <button type="button" className="btn sm" onClick={() => { setPicked(a.account); goto('bank/statement'); }}>
-          Statement
-        </button>
+        <span className="rowacts">
+          <button type="button" className="btn sm" onClick={() => { setPicked(a.account); goto('bank/statement'); }}>
+            Statement
+          </button>
+          {a.account !== M.NO_ACCOUNT && (
+            <button type="button" className="btn sm" onClick={() => openModal('renameAccount', { from: a.account, to: a.account })} title={`Give ${a.account} a new name`}>
+              Rename
+            </button>
+          )}
+        </span>
       ),
     },
   ];

@@ -67,9 +67,8 @@ function voucherInfo(invoice: Invoice) {
     title: proforma ? 'Proforma Invoice' : isSale ? 'Sale Receipt Voucher' : 'Purchase Payment Voucher',
     heading: proforma ? 'Proforma Invoice' : isSale ? 'Receipt' : 'Payment Voucher',
     copy: proforma ? 'Quotation · not a receipt' : isSale ? 'Customer copy' : 'Company record copy',
-    // A mirror prints exactly as its original would: same serial, same invoice number, no mirror marks.
-    serial: `${proforma ? 'PF' : isSale ? 'SI' : 'PI'}-${String(invoice.srNo).padStart(4, '0')}`,
-    ref: invoice.mirrorOf || invoice.id,
+    // One number on paper. A mirror prints exactly as its original would: same number, no mirror marks.
+    serial: M.invoiceNo(invoice),
     modes,
     // The other party to the payment: the buyer who paid us, or the seller we paid.
     partyName: isSale ? invoice.receivedFromName || invoice.buyerName : sellerName,
@@ -131,13 +130,15 @@ export function VoucherA4({ invoice }: { invoice: Invoice }) {
       {/* Serial number & date */}
       <div className="vr-meta">
         <div className="vr-no">
-          <span>No.</span>
+          <span>Invoice no.</span>
           <b>{v.serial}</b>
         </div>
-        <div>
-          <span>Invoice ref.</span>
-          <b>{v.ref}</b>
-        </div>
+        {!isSale && (
+          <div>
+            <span>Seller receipt no.</span>
+            <b className={invoice.sellerReceiptNo ? '' : 'vr-blank'}>{invoice.sellerReceiptNo || ' '}</b>
+          </div>
+        )}
         {invoice.estampNo && (
           <div>
             <span>e-Stamp no.</span>
@@ -362,7 +363,7 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
           <div className="receipt-modal-id">
             <span className={`tag ${isSale ? 'ok' : 'mute'}`}>{M.INVOICE_LABEL[invoice.type] || 'Invoice'}</span>
             <span>
-              {invoice.id} · Serial {v.serial}
+              {v.serial}
             </span>
           </div>
           <div className="receipt-modal-btns">
@@ -396,8 +397,8 @@ export function InvoiceReceiptModal({ invoice, onClose }: Props) {
                 <b className="ts-title">{v.title}</b>
               </div>
               <div className="ts-rule" />
-              <div className="ts-row"><span>Serial No.</span><b>{v.serial}</b></div>
-              <div className="ts-row"><span>Invoice</span><b>{v.ref}</b></div>
+              <div className="ts-row"><span>Invoice no.</span><b>{v.serial}</b></div>
+              {!isSale && <div className="ts-row"><span>Seller receipt</span><b>{invoice.sellerReceiptNo || '__________'}</b></div>}
               {invoice.estampNo && <div className="ts-row"><span>e-Stamp</span><b>{invoice.estampNo}</b></div>}
               <div className="ts-row"><span>Date</span><b>{dateOr(invoice.receiptDate)}</b></div>
               <div className="ts-rule" />
