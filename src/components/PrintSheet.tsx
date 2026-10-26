@@ -43,7 +43,8 @@ export function PrintSheet({
       st.zoom = String(z);
       // Scaled-down content is widened back to the page, so it still fills the width.
       st.width = z < 1 ? `${wide / z}px` : '';
-      return el.getBoundingClientRect().height <= room + 0.5;
+      // A few pixels to spare, so the last panel's border is never cut off at the foot.
+      return el.getBoundingClientRect().height <= room - 6;
     };
     if (fits(1)) return;
     // Charts grow with the width they are given, so the height does not shrink in step with the
