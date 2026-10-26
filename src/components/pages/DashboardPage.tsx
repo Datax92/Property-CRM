@@ -211,6 +211,9 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
   );
 
   const charts = INVESTMENT_CHARTS.map((x) => x[0]).filter((x) => on(x)) as InvestmentChart[];
+  // On paper a chart keeps its height while the rest of the page is scaled to fit, so with the
+  // money, attention and cash panels on the same page the charts are drawn wider and so lower.
+  const dense = forPrint && !!(money || attention || cash);
   const side = attention || cash ? (
     <div className="dmore-side">
       {attention}
@@ -227,7 +230,7 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
       attention || cash || null
     );
   return (
-    <div className={`dmore ${forPrint ? 'print' : ''}`}>
+    <div className={`dmore ${forPrint ? 'print' : ''} ${dense ? 'dense' : ''}`}>
       {/* On paper the three sit in one row, to leave room for the investments. */}
       {/* On paper the page keeps to one grid: the money panel takes half, attention and cash a
           quarter each, the same lines as the investment cards and charts below. */}
@@ -254,7 +257,7 @@ function MoreDetails({ k, al, cb, inv, r, show, forPrint = false }: { k: any; al
             </button>
           </div>
           {on('invKpis') && <InvestmentKpis rows={inv} cash={cb.total} />}
-          {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? 560 : undefined} cash={cb.total} />}
+          {charts.length > 0 && <InvestmentCharts rows={inv} show={charts} width={forPrint ? (dense ? 780 : 560) : undefined} cash={cb.total} />}
         </>
       )}
     </div>

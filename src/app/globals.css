@@ -2602,3 +2602,7 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
   .printable-voucher .voucher-signatures { margin-bottom: 8px; }
   .printable-voucher .vr-footstrip { margin: 6px 0 0; break-inside: avoid; page-break-inside: avoid; }
 }
+/* More details on one sheet: its charts are drawn wider, so their text is set a little larger */
+.dmore.print.dense .ax { font-size: 13.5px; }
+.dmore.print.dense .dlab { font-size: 14.5px; }
+.dmore.print.dense .dlab.sm, .dmore.print.dense .dlab.tag { font-size: 13.5px; }
