@@ -119,7 +119,7 @@ export function HomePage() {
     pnl: {
       icon: 'pnl',
       label: 'P/L Tracking Calendar Year',
-      value: M.rangeFor('thisYear').label.replace('FY ', '') + ' (Jan–Dec)',
+      value: M.TODAY.getFullYear() + ' (Jan–Dec)',
       go: 'finance/pnl',
       need: 'pnl',
       before: () => setRangeKey('thisYear'),

@@ -13,6 +13,8 @@ export function CostsPage() {
   const meta = PAGE_META[`costs/${tab}`] || { t: 'Costs' };
   // Expenses: the company's own, or the costs picked for a plot (part of that plot's cost sheet).
   const [expView, setExpView] = React.useState<'company' | 'plots'>('company');
+  // Tax: the financial year the summary shows, when one is picked; else the one the period ends in.
+  const [fyYear, setFyYear] = React.useState<number | null>(null);
 
   if (tab === 'salaries') {
     const rows = M.DATA.salaries.filter((s: any) => M.inRange(s.date, r) && (f.office === 'all' || s.office === f.office));
@@ -145,7 +147,7 @@ export function CostsPage() {
     const rows = M.DATA.taxes
       .filter((t: any) => M.inRange(t.date, r) && M.taxMatch(t, f))
       .map((t: any) => ({ ...t, saleDate: saleDateOf(t.propertyId) }));
-    const fySummary = M.fiscalYearTaxSummary(f, r);
+    const fySummary = M.fiscalYearTaxSummary(f, r, fyYear);
     // Withholding tax taken on the period's sales that is not also a tax entry: part of the tax total.
     const saleTax = M.salesUnder(f)
       .filter((s: any) => M.inRange(s.date, r))
@@ -288,9 +290,22 @@ export function CostsPage() {
         {/* Fiscal Year Tax Summary Panel */}
         <div className="panel" style={{ marginBottom: '14px' }}>
           <div className="panel-h">
-            <h3>{fySummary.fyLabel} — Tax summary</h3>
+            <h3>Tax summary</h3>
+            <select
+              className="fldsel"
+              value={fySummary.fyStart.getFullYear()}
+              onChange={(e) => setFyYear(+e.target.value)}
+              aria-label="Financial year"
+              data-noprint="1"
+            >
+              {Array.from(new Set<number>([fySummary.fyStart.getFullYear(), ...M.taxFiscalYears()])).sort((a, b) => b - a).map((y) => (
+                <option key={y} value={y}>
+                  {M.fiscalYearOf(new Date(y, 6, 1)).label}
+                </option>
+              ))}
+            </select>
             <span className="sub">
-              {M.fmtDate(fySummary.fyStart)} – {M.fmtDate(fySummary.fyEnd)} · the financial year {r.label} falls in. Pakistan&apos;s financial year runs July to June.
+              {fySummary.fyLabel} · {M.fmtDate(fySummary.fyStart)} – {M.fmtDate(fySummary.fyEnd)} · July to June
             </span>
           </div>
           <div className="panel-b">
@@ -344,8 +359,7 @@ export function CostsPage() {
             <b>Each tax is counted once.</b> Total tax adds up every tax entry below, plus the withholding tax taken
             on a sale whose plot has no §236C entry of its own (that tax is paid at the sale). Once a plot has its own
             §236C entry, the entry is counted instead of the figure on the sale. The financial year closes in <b>June</b> —
-            the summary above is the July→June year the selected period falls in; pick <b>This fiscal year</b> or{' '}
-            <b>Last fiscal year</b> as the period to see a whole year. Every list and card follows the filters.
+            pick the financial year for the summary above beside its heading. Every list and card follows the filters.
           </div>
         </div>
         <DataTable cols={cols} rows={rows} totals={true} attach="taxes" />

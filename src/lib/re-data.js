@@ -251,14 +251,15 @@ export function rangeFor(key, custom) {
     case 'last30': return wrap(addDays(t, -29), t, 'Last 30 days');
     case 'last90': return wrap(addDays(t, -89), t, 'Last 90 days');
     case 'thisQuarter': { const q = Math.floor(m / 3); return wrap(new Date(y, q * 3, 1), t, 'Q' + (q + 1) + ' ' + y); }
-    case 'thisYear': return wrap(new Date(y, 0, 1), t, 'FY ' + y);
-    case 'lastYear': return wrap(new Date(y - 1, 0, 1), new Date(y - 1, 11, 31), 'FY ' + (y - 1));
+    // A calendar year is named as one, never as a financial year.
+    case 'thisYear': return wrap(new Date(y, 0, 1), t, 'Year ' + y);
+    case 'lastYear': return wrap(new Date(y - 1, 0, 1), new Date(y - 1, 11, 31), 'Year ' + (y - 1));
     case 'custom': {
       const s = custom && custom.start ? parseDate(custom.start) : new Date(y, 0, 1);
       const e = custom && custom.end ? parseDate(custom.end) : t;
       return wrap(s, e, fmtDate(s) + ' → ' + fmtDate(e));
     }
-    default: return wrap(new Date(y, 0, 1), t, 'FY ' + y);
+    default: return wrap(new Date(y, 0, 1), t, 'Year ' + y);
   }
 }
 
@@ -2393,9 +2394,18 @@ export function fiscalYearOf(d) {
   return { start, end: new Date(start.getFullYear() + 1, 5, 30), label: 'FY ' + start.getFullYear() + '–' + (start.getFullYear() + 1) };
 }
 
-/** Tax in the financial year the period ends in (the current one by default), under the filters. */
-export function fiscalYearTaxSummary(f, r) {
-  const fy = fiscalYearOf(r ? (r.end > TODAY ? TODAY : r.end) : TODAY);
+/** The financial years (by the year each starts in) that have a tax entry or a sale, newest first,
+    always including the current one. */
+export function taxFiscalYears() {
+  const ys = new Set([fiscalYearOf(TODAY).start.getFullYear()]);
+  DATA.taxes.concat(DATA.sales).forEach((x) => { if (x.date instanceof Date) ys.add(fiscalYearOf(x.date).start.getFullYear()); });
+  return Array.from(ys).sort((a, b) => b - a);
+}
+
+/** Tax in one financial year (July to June) under the filters: the year starting in `startYear`,
+    or else the one the period ends in. */
+export function fiscalYearTaxSummary(f, r, startYear) {
+  const fy = startYear ? fiscalYearOf(new Date(startYear, 6, 1)) : fiscalYearOf(r ? (r.end > TODAY ? TODAY : r.end) : TODAY);
   const fyStart = fy.start, fyEnd = fy.end;
   const fyRange = { start: fyStart, end: endOfDay(fyEnd > TODAY ? TODAY : fyEnd), label: 'FY', key: 'custom' };
 
