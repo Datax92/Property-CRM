@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { SuiteSwitcher } from './SuiteSwitcher';
 import { useApp } from '../context/AppContext';
 import { Icon } from './Icons';
 import { BrandMark } from './Brand';
@@ -49,9 +50,7 @@ export function Navbar() {
         <span className="o-nav-brand-t">{brand}</span>
       </button>
 
-      <a className="o-nav-item erp-trading-link" href="https://erp-cac37.web.app/" title="Open ERP Trading">
-        ERP Trading
-      </a>
+      <SuiteSwitcher active="property" />
 
       {!isHome && sec && (
         <>

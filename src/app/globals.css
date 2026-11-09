@@ -111,8 +111,6 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--display); font-weight: 600; lette
 }
 .o-nav-item.on { background: rgba(0,0,0,.16); color: #fff; font-weight: 500; }
 .o-nav-item.on::after { transform: scaleX(1); }
-.erp-trading-link { flex-shrink: 0; border-left: 1px solid rgba(255,255,255,.2); }
-@media (max-width: 640px) { .erp-trading-link { padding: 0 8px; font-size: 12px; } }
 .o-nav-ic { position: relative; width: 38px; flex: 0 0 38px; }
 .o-nav-ic svg { width: 16px; height: 16px; }
 .o-nav-ic.burger { display: none; }
@@ -2613,3 +2611,20 @@ button.dfig:hover { border-color: var(--brand-edge); box-shadow: 0 6px 18px -14p
 .mr-charts.print .ax { font-size: 11px; }
 .dmore.print .ranked .nm { white-space: nowrap; overflow: visible; text-overflow: clip; }
 .dmore.print:not(.dense) .ranked .r, .dmore.print:not(.dense) .ranked .vv { font-size: 11pt; }
+
+/* Shared navigation between Property CRM and ERP Trading. */
+.suite-switcher { display:flex; align-self:center; flex-shrink:0; gap:2px; padding:3px; margin:0 10px; border:1px solid rgba(255,255,255,.18); border-radius:7px; background:rgba(0,0,0,.16); }
+.suite-switcher a { display:flex; align-items:center; justify-content:center; min-height:29px; padding:0 10px; border-radius:4px; color:rgba(255,255,255,.75); text-decoration:none; font-size:12px; font-weight:600; white-space:nowrap; transition:background .15s,color .15s; }
+.suite-switcher a:hover { background:rgba(255,255,255,.12); color:#fff; }
+.suite-switcher a[aria-current] { background:rgba(255,255,255,.2); color:#fff; box-shadow:0 1px 3px rgba(0,0,0,.15); }
+.suite-switcher a:focus-visible { outline:2px solid white; outline-offset:2px; }
+@media(prefers-reduced-motion:no-preference) {
+  main { animation:suite-enter .18s ease-out; transition:opacity .12s,transform .12s; }
+  .suite-leaving main { opacity:.45; transform:translateY(3px); }
+  @keyframes suite-enter { from { opacity:.5; transform:translateY(4px); } to { opacity:1; transform:none; } }
+}
+@media(max-width:800px) {
+  .o-nav { flex-wrap:wrap; height:auto; min-height:46px; flex:0 0 auto; }
+  .suite-switcher { order:20; flex-basis:calc(100% - 20px); margin:0 10px 7px; }
+  .suite-switcher a { flex:1; }
+}
