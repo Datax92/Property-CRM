@@ -111,6 +111,8 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--display); font-weight: 600; lette
 }
 .o-nav-item.on { background: rgba(0,0,0,.16); color: #fff; font-weight: 500; }
 .o-nav-item.on::after { transform: scaleX(1); }
+.erp-trading-link { flex-shrink: 0; border-left: 1px solid rgba(255,255,255,.2); }
+@media (max-width: 640px) { .erp-trading-link { padding: 0 8px; font-size: 12px; } }
 .o-nav-ic { position: relative; width: 38px; flex: 0 0 38px; }
 .o-nav-ic svg { width: 16px; height: 16px; }
 .o-nav-ic.burger { display: none; }

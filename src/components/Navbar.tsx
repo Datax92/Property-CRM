@@ -49,6 +49,10 @@ export function Navbar() {
         <span className="o-nav-brand-t">{brand}</span>
       </button>
 
+      <a className="o-nav-item erp-trading-link" href="https://erp-cac37.web.app/" title="Open ERP Trading">
+        ERP Trading
+      </a>
+
       {!isHome && sec && (
         <>
           <nav className="o-nav-menu" aria-label="Section menu">
