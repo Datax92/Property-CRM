@@ -5,7 +5,7 @@ import { preconnect, prefetchDNS } from 'react-dom';
 
 const apps = [
   { id: 'property', label: 'Property CRM', href: 'https://meridian-estates-rms-two.vercel.app/' },
-  { id: 'erp', label: 'ERP Trading', href: 'https://erp-cac37.web.app/' },
+  { id: 'erp', label: 'ERP Trading', href: 'https://erp-crm-eta-seven.vercel.app/' },
 ] as const;
 
 export function SuiteSwitcher({ active }: { active: 'property' | 'erp' }) {
