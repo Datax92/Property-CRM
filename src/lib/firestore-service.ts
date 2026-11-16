@@ -1,4 +1,5 @@
 import {
+  runTransaction,
   collection,
   doc,
   setDoc,
@@ -10,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseFirestore } from './firebase';
 import * as M from './re-data';
+import { assetSaleValues } from './asset-sale';
 
 const COLLECTIONS = [
   'projects',
@@ -231,4 +233,34 @@ export function syncFirestoreData(onUpdate: () => void): () => void {
     loaded.clear();
     setReadError(null);
   };
+}
+
+
+/** A deterministic receipt and a transaction prevent double credit on retries or concurrent sales. */
+export async function sellAssetToAccount(id: string, account: string, expectedValue: number, actor: string) {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Connect to the database before selling an asset.');
+  if (M.accountKind(account) !== 'Bank' || !M.accountNames().includes(account)) throw new Error('Choose an existing bank account.');
+  const assetRef = doc(db, 'expenses', id);
+  const paymentRef = doc(db, 'payments', `ASSET-SALE-${id}`);
+  return runTransaction(db, async tx => {
+    const assetDoc = await tx.get(assetRef);
+    const receipt = await tx.get(paymentRef);
+    if (!assetDoc.exists()) throw new Error('Asset no longer exists.');
+    if (receipt.exists()) throw new Error('This asset sale has already been recorded.');
+    const asset = assetDoc.data();
+    const { amount, gain } = assetSaleValues(asset, account, expectedValue);
+    const date = new Date();
+    const sale = { soldAt: date, saleAmount: amount, saleGain: gain, saleAccount: account, salePaymentId: paymentRef.id };
+    const payment = { id: paymentRef.id, date, dir: 'in', category: 'Asset Sale', amount, method: 'Bank Transfer', account,
+      party: asset.vendor || 'Asset sale', propertyId: null, office: asset.office || M.OFFICES[0], ref: id,
+      note: `Asset sale — ${asset.note || asset.category || id}`, assetId: id, settleKey: null,
+      status: 'Posted', manual: false, attachments: [], createdBy: actor, approvedBy: actor };
+    tx.update(assetRef, serializeForFirestore(sale));
+    tx.set(paymentRef, serializeForFirestore(payment));
+    tx.set(doc(db, 'audit', paymentRef.id), serializeForFirestore({ id: paymentRef.id, date, txnId: paymentRef.id,
+      action: 'Asset sold', user: actor, entity: 'Asset', prevAmount: Number(asset.amount), newAmount: amount,
+      note: `${id} sold into ${account}; gain/loss ${gain}`, manual: false }));
+    return { ...sale, payment };
+  });
 }

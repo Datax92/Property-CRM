@@ -582,7 +582,7 @@ export function holdingsAt(asOf, f) {
     .filter((p) => (!f || propMatch(p, f)) && p.purchaseDate <= asOf && !sold(p))
     .reduce((a, p) => a + costBy(p), 0);
   const byType = {};
-  DATA.expenses.filter((e) => e.group === 'Assets' && e.date <= asOf && (!f || overheadMatch(e, f))).forEach((e) => {
+  DATA.expenses.filter((e) => e.group === 'Assets' && (!e.soldAt || e.soldAt > asOf) && e.date <= asOf && (!f || overheadMatch(e, f))).forEach((e) => {
     const t = investmentType(e);
     byType[t] = (byType[t] || 0) + e.amount;
   });
@@ -952,7 +952,7 @@ export function investments(f) {
     const invested = landedCost(p.id);
     out.push({ id: p.id, coll: 'properties', name: p.name, type: 'Real Estate', detail: p.project, started: p.purchaseDate, invested, worth: plotWorth(p) });
   });
-  DATA.expenses.filter((e) => e.group === 'Assets' && (!f || overheadMatch(e, f))).forEach((e) => {
+  DATA.expenses.filter((e) => e.group === 'Assets' && !e.soldAt && (!f || overheadMatch(e, f))).forEach((e) => {
     out.push({
       id: e.id, coll: 'expenses', name: e.note && e.note !== e.category ? e.note : e.category, type: investmentType(e), detail: e.category,
       started: e.date, invested: e.amount, worth: assetWorth(e), valuedOn: e.valueDate || null,
@@ -1293,6 +1293,7 @@ export function addPayment(v) {
 export function voidPayment(id, user) {
   const t = DATA.payments.find((p) => p.id === id);
   if (!t || t.status === 'Voided') return null;
+  if (t.assetId) throw new Error('This receipt belongs to an asset sale and cannot be voided separately.');
   t.status = 'Voided';
   saveRecordToFirestore('payments', t.id, t);
   // Put the balance back on whatever this payment had settled.
@@ -1314,6 +1315,7 @@ export function changePaymentAccount(id, account, user) {
   const t = DATA.payments.find((p) => p.id === id);
   const to = String(account || '').trim();
   if (!t) throw new Error(id + ' was not found.');
+  if (t.assetId) throw new Error('An asset sale receipt must stay linked to its recorded receiving bank.');
   if (!to) throw new Error('Pick the account to move it to.');
   if (t.status === 'Voided') throw new Error(id + ' is voided — it no longer moves money.');
   const from = t.account || NO_ACCOUNT;
@@ -2084,7 +2086,9 @@ export function incomeEntries(r, f, propIds) {
   const ledger = (DATA.income || []).filter((x) => inR(x.date, r) && inScope(x)).map((x) => ({ ...x, source: 'income' }));
   const direct = livePayments().filter((p) => p.dir === 'in' && INCOME_CATEGORIES.indexOf(p.category) >= 0 && !isIncomeReceipt(p) && inR(p.date, r) && inScope(p))
     .map((p) => ({ ...p, source: 'payment', received: p.amount, outstanding: 0, status: 'Received', dueDate: p.date }));
-  return ledger.concat(direct).sort((a, b) => b.date - a.date);
+  const disposals = DATA.expenses.filter(e => e.group === 'Assets' && e.soldAt && inR(e.soldAt, r) && inScope(e))
+    .map(e => ({ id: e.salePaymentId, date: e.soldAt, amount: e.saleGain || 0, received: 0, outstanding: 0, category: 'Asset sale gain / loss', note: e.note, office: e.office, source: 'asset-sale' }));
+  return ledger.concat(direct, disposals).sort((a, b) => b.date - a.date);
 }
 
 /* ====================================================================
@@ -2207,6 +2211,7 @@ export function updateSale(id, v) {
 
 export function updateExpense(id, v) {
   const e = mustFind(DATA.expenses, id, 'Expense');
+  if (e.soldAt) throw new Error('Sold asset history cannot be edited.');
   const amount = +v.amount;
   if (e.paid > amount) throw alreadyPaid(e.paid, 'the amount');
   const prev = e.amount;
@@ -2234,6 +2239,7 @@ export function addAsset(v) {
 }
 
 export function updateAsset(id, v) {
+  if (mustFind(DATA.expenses, id, 'Asset').soldAt) throw new Error('Sold assets are kept as sale history and cannot be edited.');
   const e = updateExpense(id, { ...v, group: 'Assets', propertyId: '' });
   Object.assign(e, assetValue(v));
   saveRecordToFirestore('expenses', e.id, e);
@@ -3290,6 +3296,7 @@ export const DELETABLE = ['properties', 'sales', 'expenses', 'taxes', 'zakat', '
 export function deleteRecord(coll, id) {
   const rec = (DATA[coll] || []).find((x) => x.id === id);
   if (!rec) throw new Error(id + ' was not found.');
+  if (coll === 'expenses' && rec.soldAt) throw new Error('Sold asset history cannot be deleted.');
   if (coll === 'properties') {
     const sale = DATA.sales.find((s) => s.propertyId === id);
     if (sale) throw new Error(rec.name + ' has sale ' + sale.id + ' — delete the sale first.');

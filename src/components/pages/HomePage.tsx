@@ -108,7 +108,7 @@ export function HomePage() {
   const projects = M.projectSummary(r, f).filter((p: any) => p.total > 0).length;
   const alerts = M.alerts().filter((a: any) => !denied(a.view));
   const openTasks = M.DATA.tasks.filter((t: any) => ['Completed', 'Cancelled'].indexOf(M.taskStatus(t)) < 0).length;
-  const assetsHeld = M.DATA.expenses.filter((e: any) => e.group === 'Assets').reduce((a: number, e: any) => a + e.amount, 0);
+  const assetsHeld = M.DATA.expenses.filter((e: any) => e.group === 'Assets' && !e.soldAt).reduce((a: number, e: any) => a + e.amount, 0);
 
   const money = (n: number) => M.fmt(n, numbers);
   const pct = (n: number) => `${n.toFixed(1)}%`;

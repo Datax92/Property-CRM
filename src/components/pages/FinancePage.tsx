@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, SummaryKpis, DataTable, KpiCard } from '../Shared';
 import { ChartWaterfall, ChartBarGroups, RankedList } from '../Charts';
@@ -8,9 +8,12 @@ import { InvestmentKpis, InvestmentCharts, Kind, GainPill } from '../Investments
 import { Icon } from '../Icons';
 import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
+import { sellAssetToAccount } from '../../lib/firestore-service';
 
 export function FinancePage() {
   // The financial year picked on net margin tracking (its first year, e.g. 2025 for FY 2025-26).
+  const [sellingAsset, setSellingAsset] = useState<any>(null);
+  const [assetView, setAssetView] = useState("held");
   const [fyYear, setFyYear] = useState<number | null>(null);
   const {
     tab,
@@ -412,22 +415,24 @@ export function FinancePage() {
   if (tab === 'assets') {
     // An asset stays an asset however long ago it was bought, so the register is not limited to the period.
     const rows = M.DATA.expenses
-      .filter((e: any) => e.group === 'Assets' && (f.office === 'all' || e.office === f.office))
+      .filter((e: any) => e.group === 'Assets' && (assetView === 'sold' ? !!e.soldAt : !e.soldAt) && (f.office === 'all' || e.office === f.office))
       .map((e: any) => {
-        const worth = M.assetWorth(e);
+        const worth = e.soldAt ? e.saleAmount : M.assetWorth(e);
         return { ...e, worth, gain: worth - e.amount, gainPct: M.pctOf(worth - e.amount, e.amount) };
       });
     const inPeriod = rows.filter((e: any) => M.inRange(e.date, r));
     const summaryPairs: [string, string][] = [
-      ['Assets held', M.fmtNum(rows.length)],
+      [assetView === 'sold' ? 'Assets sold' : 'Assets held', M.fmtNum(rows.length)],
       ['At cost', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
-      ['Worth today', M.fmt(rows.reduce((a: number, e: any) => a + e.worth, 0), numbers)],
-      ['Profit / loss', M.fmt(rows.reduce((a: number, e: any) => a + e.gain, 0), numbers)],
+      [assetView === 'sold' ? 'Sale proceeds' : 'Worth today', M.fmt(rows.reduce((a: number, e: any) => a + e.worth, 0), numbers)],
+      [assetView === 'sold' ? 'Realized profit / loss' : 'Profit / loss', M.fmt(rows.reduce((a: number, e: any) => a + e.gain, 0), numbers)],
       [`Bought in ${r.label}`, M.fmt(inPeriod.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
       ['Still owed to vendors', M.fmt(rows.reduce((a: number, e: any) => a + e.outstanding, 0), numbers)],
     ];
     const cols = [
       { key: 'id', label: 'ID' },
+      { key: 'soldAt', label: 'Date sold', render: (e: any) => e.soldAt ? M.fmtDate(e.soldAt) : '—' },
+      { key: 'sale', label: 'Sale', render: (e: any) => e.soldAt ? <span className="pos">Sold · {M.fmt(e.saleAmount, numbers)} → {e.saleAccount}</span> : <button type="button" className="btn" onClick={(event) => { event.stopPropagation(); setSellingAsset(e); }}>Sell asset</button> },
       { key: 'category', label: 'Asset type' },
       { key: 'note', label: 'Description' },
       { key: 'vendor', label: 'Bought from' },
@@ -436,7 +441,7 @@ export function FinancePage() {
       { key: 'amount', label: 'Cost', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.amount, numbers) },
       {
         key: 'worth',
-        label: 'Worth today',
+        label: assetView === 'sold' ? 'Sale value' : 'Worth today',
         a: 'r' as const,
         sum: true,
         cls: 'mono',
@@ -481,7 +486,9 @@ export function FinancePage() {
             loss shows here, in investment tracking and on the dashboard.
           </div>
         </div>
+        <div className="seg" role="tablist" aria-label="Asset register"><button role="tab" aria-selected={assetView === 'held'} onClick={() => setAssetView('held')}>Assets held</button><button role="tab" aria-selected={assetView === 'sold'} onClick={() => setAssetView('sold')}>Sold assets</button></div>
         <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
+        {sellingAsset && <AssetSaleDialog asset={sellingAsset} onClose={() => setSellingAsset(null)} />}
       </PageShell>
     );
   }
@@ -676,4 +683,34 @@ export function FinancePage() {
       </div>
     </PageShell>
   );
+}
+
+
+function AssetSaleDialog({ asset, onClose }: { asset: any; onClose: () => void }) {
+  const { user, toast, refreshData, numbers } = useApp();
+  const [account, setAccount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  const value = Math.round(M.assetWorth(asset));
+  return <dialog ref={dialog} className="modal asset-sale-dialog" aria-label="Sell asset" onCancel={e => { if (busy) e.preventDefault(); else onClose(); }}>
+    <form onSubmit={async e => {
+      e.preventDefault(); if (busy) return; setBusy(true); setError('');
+      try {
+        const result = await sellAssetToAccount(asset.id, account, value, user.name);
+        const { payment, ...sale } = result; Object.assign(asset, sale); const original = M.DATA.expenses.find((x: any) => x.id === asset.id); if (original) Object.assign(original, sale);
+        if (!M.DATA.payments.some((x: any) => x.id === result.payment.id)) M.DATA.payments.push(payment);
+        refreshData(); toast('Asset sold — ' + M.fmt(value, numbers) + ' credited to ' + account); onClose();
+      } catch (err) { setError(err instanceof Error ? err.message : 'Sale could not be saved.'); setBusy(false); }
+    }}>
+      <div className="modal-h"><h2>Sell asset</h2></div>
+      <div className="modal-b"><p>{asset.note || asset.category} · {asset.id}</p><p>Worth today: <b>{M.fmt(value, numbers)}</b></p>
+        <p>This records an internal bank receipt and moves the asset to sold history.</p>
+        <label>Receiving bank account<select required autoFocus value={account} disabled={busy} onChange={e => setAccount(e.target.value)}><option value="">Choose bank account</option>{M.accountNames().filter((name: string) => M.accountKind(name) === 'Bank').map((name: string) => <option key={name}>{name}</option>)}</select></label>
+        {error && <p role="alert" className="neg">{error}</p>}
+      </div>
+      <div className="modal-f"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className="btn pri" disabled={busy || !account || value <= 0}>{busy ? 'Saving…' : 'Record sale'}</button></div>
+    </form>
+  </dialog>;
 }
