@@ -8,11 +8,12 @@ import { InvestmentKpis, InvestmentCharts, Kind, GainPill } from '../Investments
 import { Icon } from '../Icons';
 import { PAGE_META, SC } from '../../lib/constants';
 import * as M from '../../lib/re-data';
-import { sellAssetToAccount } from '../../lib/firestore-service';
+import { moveAssetMoney, sellAssetToAccount } from '../../lib/firestore-service';
 
 export function FinancePage() {
   // The financial year picked on net margin tracking (its first year, e.g. 2025 for FY 2025-26).
   const [sellingAsset, setSellingAsset] = useState<any>(null);
+  const [movingAsset, setMovingAsset] = useState<any>(null);
   const [assetView, setAssetView] = useState("held");
   const [fyYear, setFyYear] = useState<number | null>(null);
   const {
@@ -417,13 +418,15 @@ export function FinancePage() {
     const rows = M.DATA.expenses
       .filter((e: any) => e.group === 'Assets' && (assetView === 'sold' ? !!e.soldAt : !e.soldAt) && (f.office === 'all' || e.office === f.office))
       .map((e: any) => {
+        // Cost is what is still invested: purchase cost plus top-ups, less what partial withdrawals took out.
+        const cost = M.assetCost(e);
         const worth = e.soldAt ? e.saleAmount : M.assetWorth(e);
-        return { ...e, worth, gain: worth - e.amount, gainPct: M.pctOf(worth - e.amount, e.amount) };
+        return { ...e, cost, worth, gain: worth - cost, gainPct: M.pctOf(worth - cost, cost) };
       });
     const inPeriod = rows.filter((e: any) => M.inRange(e.date, r));
     const summaryPairs: [string, string][] = [
       [assetView === 'sold' ? 'Assets sold' : 'Assets held', M.fmtNum(rows.length)],
-      ['At cost', M.fmt(rows.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
+      ['At cost', M.fmt(rows.reduce((a: number, e: any) => a + e.cost, 0), numbers)],
       [assetView === 'sold' ? 'Sale proceeds' : 'Worth today', M.fmt(rows.reduce((a: number, e: any) => a + e.worth, 0), numbers)],
       [assetView === 'sold' ? 'Realized profit / loss' : 'Profit / loss', M.fmt(rows.reduce((a: number, e: any) => a + e.gain, 0), numbers)],
       [`Bought in ${r.label}`, M.fmt(inPeriod.reduce((a: number, e: any) => a + e.amount, 0), numbers)],
@@ -432,13 +435,13 @@ export function FinancePage() {
     const cols = [
       { key: 'id', label: 'ID' },
       { key: 'soldAt', label: 'Date sold', render: (e: any) => e.soldAt ? M.fmtDate(e.soldAt) : '—' },
-      { key: 'sale', label: 'Sale', render: (e: any) => e.soldAt ? <span className="pos">Sold · {M.fmt(e.saleAmount, numbers)} → {e.saleAccount}</span> : <button type="button" className="btn" onClick={(event) => { event.stopPropagation(); setSellingAsset(e); }}>Sell asset</button> },
+      { key: 'sale', label: 'Sale', render: (e: any) => e.soldAt ? <span className="pos">Sold · {M.fmt(e.saleAmount, numbers)} → {e.saleAccount}</span> : <span className="asset-acts"><button type="button" className="btn" onClick={(event) => { event.stopPropagation(); setSellingAsset(e); }}>Sell asset</button><button type="button" className="btn" title="Take part of this asset out, or put more money in" onClick={(event) => { event.stopPropagation(); setMovingAsset(e); }}>Withdraw / Deposit</button></span> },
       { key: 'category', label: 'Asset type' },
       { key: 'note', label: 'Description' },
       { key: 'vendor', label: 'Bought from' },
       { key: 'office', label: 'Office' },
       { key: 'date', label: 'Date bought', cls: 'mono', render: (e: any) => M.fmtDate(e.date) },
-      { key: 'amount', label: 'Cost', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.amount, numbers) },
+      { key: 'cost', label: 'Cost', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => <span title={e.moves?.length ? `Bought for ${M.fmt(e.amount, numbers)}; ${e.moves.length} withdrawal/deposit entr${e.moves.length === 1 ? 'y' : 'ies'} since` : undefined}>{M.fmt(e.cost, numbers)}</span> },
       {
         key: 'worth',
         label: assetView === 'sold' ? 'Sale value' : 'Worth today',
@@ -459,7 +462,14 @@ export function FinancePage() {
         cls: 'mono',
         render: (e: any) => <span className={e.gain > 0 ? 'pos' : e.gain < 0 ? 'neg' : ''}>{M.fmt(e.gain, numbers)}</span>,
       },
-      { key: 'gainPct', label: '%', a: 'r' as const, render: (e: any) => <GainPill pct={e.gainPct} /> },
+      {
+        key: 'gainPct',
+        label: '%',
+        a: 'r' as const,
+        render: (e: any) => <GainPill pct={e.gainPct} />,
+        // Overall return: total profit / loss against total cost (not an average of the row percentages).
+        total: (list: any[]) => <GainPill pct={M.pctOf(list.reduce((a: number, e: any) => a + e.gain, 0), list.reduce((a: number, e: any) => a + e.amount, 0))} />,
+      },
       { key: 'paid', label: 'Paid', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.paid, numbers) },
       { key: 'outstanding', label: 'Owed', a: 'r' as const, sum: true, cls: 'mono', render: (e: any) => M.fmt(e.outstanding, numbers) },
     ];
@@ -489,6 +499,7 @@ export function FinancePage() {
         <div className="seg" role="tablist" aria-label="Asset register"><button role="tab" aria-selected={assetView === 'held'} onClick={() => setAssetView('held')}>Assets held</button><button role="tab" aria-selected={assetView === 'sold'} onClick={() => setAssetView('sold')}>Sold assets</button></div>
         <DataTable cols={cols} rows={rows} totals={true} attach="expenses" />
         {sellingAsset && <AssetSaleDialog asset={sellingAsset} onClose={() => setSellingAsset(null)} />}
+        {movingAsset && <AssetMoveDialog asset={movingAsset} onClose={() => setMovingAsset(null)} />}
       </PageShell>
     );
   }
@@ -711,6 +722,57 @@ function AssetSaleDialog({ asset, onClose }: { asset: any; onClose: () => void }
         {error && <p role="alert" className="neg">{error}</p>}
       </div>
       <div className="modal-f"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className="btn pri" disabled={busy || !account || value <= 0}>{busy ? 'Saving…' : 'Record sale'}</button></div>
+    </form>
+  </dialog>;
+}
+
+/** Part of an asset out into a bank (e.g. 25 lakh of a 75 lakh mutual fund), or more money in. */
+function AssetMoveDialog({ asset, onClose }: { asset: any; onClose: () => void }) {
+  const { user, toast, refreshData, numbers } = useApp();
+  const [kind, setKind] = useState<'withdraw' | 'deposit'>('withdraw');
+  const [amount, setAmount] = useState('');
+  const [account, setAccount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  const worth = Math.round(M.assetWorth(asset));
+  const cost = Math.round(M.assetCost(asset));
+  const n = Math.round(Number(amount) || 0);
+  const tooMuch = kind === 'withdraw' && n >= worth;
+  const costOut = kind === 'withdraw' && worth > 0 ? Math.round((cost * n) / worth) : 0;
+  const after = kind === 'withdraw' ? worth - n : worth + n;
+  return <dialog ref={dialog} className="modal asset-sale-dialog" aria-label="Withdraw or deposit" onCancel={e => { if (busy) e.preventDefault(); else onClose(); }}>
+    <form onSubmit={async e => {
+      e.preventDefault(); if (busy) return; setBusy(true); setError('');
+      try {
+        const { patch, payment } = await moveAssetMoney(asset.id, kind, n, account, worth, user.name);
+        const original = M.DATA.expenses.find((x: any) => x.id === asset.id);
+        if (original) Object.assign(original, patch);
+        if (!M.DATA.payments.some((x: any) => x.id === payment.id)) M.DATA.payments.push(payment);
+        refreshData();
+        toast(kind === 'withdraw' ? `${M.fmt(n, numbers)} withdrawn into ${account}` : `${M.fmt(n, numbers)} deposited from ${account}`);
+        onClose();
+      } catch (err) { setError(err instanceof Error ? err.message : 'Could not be saved.'); setBusy(false); }
+    }}>
+      <div className="modal-h"><h2>Withdraw / Deposit</h2></div>
+      <div className="modal-b">
+        <p>{asset.note || asset.category} · {asset.id}</p>
+        <p>Worth today: <b>{M.fmt(worth, numbers)}</b> · Invested: <b>{M.fmt(cost, numbers)}</b></p>
+        <div className="seg" role="radiogroup" aria-label="Withdraw or deposit">
+          <button type="button" role="radio" aria-checked={kind === 'withdraw'} aria-selected={kind === 'withdraw'} disabled={busy} onClick={() => setKind('withdraw')}>Withdraw</button>
+          <button type="button" role="radio" aria-checked={kind === 'deposit'} aria-selected={kind === 'deposit'} disabled={busy} onClick={() => setKind('deposit')}>Deposit</button>
+        </div>
+        <label>Amount (PKR)<input type="number" min="1" step="1" required autoFocus value={amount} disabled={busy} onChange={e => setAmount(e.target.value)} placeholder={kind === 'withdraw' ? 'e.g. 2500000' : 'e.g. 1000000'} /></label>
+        <label>{kind === 'withdraw' ? 'Receiving bank account' : 'Paid from bank account'}<select required value={account} disabled={busy} onChange={e => setAccount(e.target.value)}><option value="">Choose bank account</option>{M.accountNames().filter((name: string) => M.accountKind(name) === 'Bank').map((name: string) => <option key={name}>{name}</option>)}</select></label>
+        {n > 0 && !tooMuch && <p className="muted">
+          After this, worth today becomes <b>{M.fmt(after, numbers)}</b> and invested becomes <b>{M.fmt(kind === 'withdraw' ? cost - costOut : cost + n, numbers)}</b>.
+          {kind === 'withdraw' && <> Profit / loss realized: <b className={n - costOut > 0 ? 'pos' : n - costOut < 0 ? 'neg' : ''}>{M.fmt(n - costOut, numbers)}</b>.</>}
+        </p>}
+        {tooMuch && <p className="neg">To take out the whole amount, use Sell asset instead.</p>}
+        {error && <p role="alert" className="neg">{error}</p>}
+      </div>
+      <div className="modal-f"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button><button type="submit" className="btn pri" disabled={busy || !account || n <= 0 || tooMuch}>{busy ? 'Saving…' : kind === 'withdraw' ? 'Record withdrawal' : 'Record deposit'}</button></div>
     </form>
   </dialog>;
 }

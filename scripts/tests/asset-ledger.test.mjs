@@ -44,3 +44,12 @@ test('failed commit and stale values leave asset and bank untouched',async()=>{
  const failed=harness(true);await assert.rejects(failed.sell('A1','Test Bank',140,'Tester'),/Offline/);assert.equal(failed.records.size,1);assert.equal(failed.records.get('expenses/A1').soldAt,undefined);
  const stale=harness();await assert.rejects(stale.sell('A1','Test Bank',150,'Tester'),/changed/);assert.equal(stale.records.size,1);
 });
+test('partial withdrawal realizes its gain in P&L and lowers the holding cost from its date',()=>{
+ const wd=new Date(2026,2,10);
+ M.DATA.expenses.push({id:'A2',group:'Assets',amount:800,currentValue:600,date:bought,office:'Main',paid:800,moves:[{id:'ASSET-WD-A2-1',date:wd,kind:'withdraw',amount:300,cost:240,gain:60,account:'Test Bank',paymentId:'ASSET-WD-A2-1'}]});
+ assert.equal(M.assetCost(M.DATA.expenses.at(-1)),560);
+ assert.equal(M.holdingsAt(new Date(2026,2,1)).assets,800);assert.equal(M.holdingsAt(new Date(2026,2,20)).assets,560);
+ assert.equal(M.incomeEntries({start:new Date(2026,2,1),end:new Date(2026,2,31)}).reduce((n,r)=>n+r.amount,0),60);
+ assert.equal(M.investments().find(x=>x.id==='A2').invested,560);
+ M.DATA.expenses.pop();
+});

@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseFirestore } from './firebase';
 import * as M from './re-data';
-import { assetSaleValues } from './asset-sale';
+import { assetMoveValues, assetSaleValues, type AssetMove } from './asset-sale';
 
 const COLLECTIONS = [
   'projects',
@@ -262,5 +262,36 @@ export async function sellAssetToAccount(id: string, account: string, expectedVa
       action: 'Asset sold', user: actor, entity: 'Asset', prevAmount: Number(asset.amount), newAmount: amount,
       note: `${id} sold into ${account}; gain/loss ${gain}`, manual: false }));
     return { ...sale, payment };
+  });
+}
+
+/** Take part of a held asset out into a bank account, or put more money into it, in one transaction. */
+export async function moveAssetMoney(id: string, kind: 'withdraw' | 'deposit', amountIn: number, account: string, expectedWorth: number, actor: string) {
+  const db = getFirebaseFirestore();
+  if (!db) throw new Error('Connect to the database before changing an asset.');
+  if (M.accountKind(account) !== 'Bank' || !M.accountNames().includes(account)) throw new Error('Choose an existing bank account.');
+  const assetRef = doc(db, 'expenses', id);
+  return runTransaction(db, async tx => {
+    const assetDoc = await tx.get(assetRef);
+    if (!assetDoc.exists()) throw new Error('Asset no longer exists.');
+    const asset = deserializeFromFirestore(assetDoc.data());
+    const moves: AssetMove[] = Array.isArray(asset.moves) ? asset.moves : [];
+    const v = assetMoveValues(asset, kind, amountIn, account, expectedWorth);
+    const paymentRef = doc(db, 'payments', `ASSET-${kind === 'withdraw' ? 'WD' : 'DEP'}-${id}-${moves.length + 1}`);
+    if ((await tx.get(paymentRef)).exists()) throw new Error('This entry has already been recorded. Reopen and try again.');
+    const date = new Date();
+    const move: AssetMove = { id: paymentRef.id, date, kind, amount: v.amount, cost: v.cost, gain: v.gain, account, paymentId: paymentRef.id, by: actor };
+    const patch = { moves: [...moves, move], currentValue: v.newWorth, valueDate: date };
+    const label = asset.note || asset.category || id;
+    const payment = { id: paymentRef.id, date, dir: kind === 'withdraw' ? 'in' : 'out', category: kind === 'withdraw' ? 'Asset Withdrawal' : 'Assets',
+      amount: v.amount, method: 'Bank Transfer', account, party: asset.vendor || label, propertyId: null, office: asset.office || M.OFFICES[0], ref: id,
+      note: `${kind === 'withdraw' ? 'Withdrawal from' : 'Deposit into'} asset — ${label}`, assetId: id, settleKey: null,
+      status: 'Posted', manual: false, attachments: [], createdBy: actor, approvedBy: actor };
+    tx.update(assetRef, serializeForFirestore(patch));
+    tx.set(paymentRef, serializeForFirestore(payment));
+    tx.set(doc(db, 'audit', paymentRef.id), serializeForFirestore({ id: paymentRef.id, date, txnId: paymentRef.id,
+      action: kind === 'withdraw' ? 'Asset withdrawal' : 'Asset deposit', user: actor, entity: 'Asset', prevAmount: expectedWorth, newAmount: v.newWorth,
+      note: `${id}: ${kind} ${v.amount} ${kind === 'withdraw' ? 'into' : 'from'} ${account}${kind === 'withdraw' ? `; gain/loss ${v.gain}` : ''}`, manual: false }));
+    return { patch, payment };
   });
 }

@@ -46,6 +46,8 @@ export interface TableColumn<T = any> {
   a?: 'r';
   cls?: string;
   sum?: boolean;
+  /** Custom content for the totals row, e.g. an overall percentage that cannot be summed. */
+  total?: (rows: T[]) => React.ReactNode;
   render?: (row: T) => React.ReactNode;
 }
 

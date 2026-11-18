@@ -582,7 +582,8 @@ export function DataTable<T extends { id?: string }>({
               <tfoot>
                 <tr>
                   {cols.map((c, i) => {
-                    if (i === Math.max(0, cols.findIndex((x) => !x.sum))) return <td key={c.key}>Total · {M.fmtNum(data.length)} rows</td>;
+                    if (i === Math.max(0, cols.findIndex((x) => !x.sum && !x.total))) return <td key={c.key}>Total · {M.fmtNum(data.length)} rows</td>;
+                    if (c.total) return <td key={c.key} className={c.a === 'r' ? 'r' : undefined}>{c.total(data)}</td>;
                     if (!c.sum) return <td key={c.key} />;
                     const sum = data.reduce((a, r) => a + ((r as any)[c.key] || 0), 0);
                     return (

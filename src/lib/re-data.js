@@ -584,7 +584,7 @@ export function holdingsAt(asOf, f) {
   const byType = {};
   DATA.expenses.filter((e) => e.group === 'Assets' && (!e.soldAt || e.soldAt > asOf) && e.date <= asOf && (!f || overheadMatch(e, f))).forEach((e) => {
     const t = investmentType(e);
-    byType[t] = (byType[t] || 0) + e.amount;
+    byType[t] = (byType[t] || 0) + assetCost(e, asOf);
   });
   const live = livePayments().filter((p) => !f || overheadMatch(p, f));
   const held = live.filter((p) => p.date <= asOf || isOpeningEntry(p));
@@ -943,7 +943,11 @@ export function investmentType(a) {
 export const plotWorth = (p) => (p.currentValue > 0 && p.currentValue !== p.price ? p.currentValue : landedCost(p.id));
 
 /** What an asset is worth today: the value last entered for it, else what it cost. */
-export const assetWorth = (a) => (a.currentValue == null || a.currentValue === '' ? a.amount : +a.currentValue);
+/** Still invested in an asset: purchase cost, plus top-ups, less the cost taken out by partial withdrawals
+    (kept in step with assetCost in asset-sale.ts). Pass a date for the cost as it stood then. */
+export const assetCost = (a, asOf) => (a.moves || []).filter((m) => !asOf || new Date(m.date) <= asOf)
+  .reduce((c, m) => c + (m.kind === 'deposit' ? m.amount : -m.cost), +a.amount || 0);
+export const assetWorth = (a) => (a.currentValue == null || a.currentValue === '' ? assetCost(a) : +a.currentValue);
 
 /** Every holding with what went in, what it is worth today and the gain or loss on it. */
 export function investments(f) {
@@ -955,7 +959,7 @@ export function investments(f) {
   DATA.expenses.filter((e) => e.group === 'Assets' && !e.soldAt && (!f || overheadMatch(e, f))).forEach((e) => {
     out.push({
       id: e.id, coll: 'expenses', name: e.note && e.note !== e.category ? e.note : e.category, type: investmentType(e), detail: e.category,
-      started: e.date, invested: e.amount, worth: assetWorth(e), valuedOn: e.valueDate || null,
+      started: e.date, invested: assetCost(e), worth: assetWorth(e), valuedOn: e.valueDate || null,
     });
   });
   return out.map((x) => ({ ...x, gain: x.worth - x.invested, gainPct: pctOf(x.worth - x.invested, x.invested) }));
@@ -1293,7 +1297,7 @@ export function addPayment(v) {
 export function voidPayment(id, user) {
   const t = DATA.payments.find((p) => p.id === id);
   if (!t || t.status === 'Voided') return null;
-  if (t.assetId) throw new Error('This receipt belongs to an asset sale and cannot be voided separately.');
+  if (t.assetId) throw new Error('This entry belongs to an asset sale, withdrawal or deposit and cannot be voided separately.');
   t.status = 'Voided';
   saveRecordToFirestore('payments', t.id, t);
   // Put the balance back on whatever this payment had settled.
@@ -1315,7 +1319,7 @@ export function changePaymentAccount(id, account, user) {
   const t = DATA.payments.find((p) => p.id === id);
   const to = String(account || '').trim();
   if (!t) throw new Error(id + ' was not found.');
-  if (t.assetId) throw new Error('An asset sale receipt must stay linked to its recorded receiving bank.');
+  if (t.assetId) throw new Error('An asset sale, withdrawal or deposit must stay linked to its recorded bank.');
   if (!to) throw new Error('Pick the account to move it to.');
   if (t.status === 'Voided') throw new Error(id + ' is voided — it no longer moves money.');
   const from = t.account || NO_ACCOUNT;
@@ -2088,7 +2092,11 @@ export function incomeEntries(r, f, propIds) {
     .map((p) => ({ ...p, source: 'payment', received: p.amount, outstanding: 0, status: 'Received', dueDate: p.date }));
   const disposals = DATA.expenses.filter(e => e.group === 'Assets' && e.soldAt && inR(e.soldAt, r) && inScope(e))
     .map(e => ({ id: e.salePaymentId, date: e.soldAt, amount: e.saleGain || 0, received: 0, outstanding: 0, category: 'Asset sale gain / loss', note: e.note, office: e.office, source: 'asset-sale' }));
-  return ledger.concat(direct, disposals).sort((a, b) => b.date - a.date);
+  // Partial withdrawals realize their share of the gain or loss on the day the money comes out.
+  const withdrawals = DATA.expenses.filter(e => e.group === 'Assets' && inScope(e)).flatMap(e => (e.moves || [])
+    .filter(m => m.kind === 'withdraw' && m.gain && inR(new Date(m.date), r))
+    .map(m => ({ id: m.paymentId, date: new Date(m.date), amount: m.gain, received: 0, outstanding: 0, category: 'Asset withdrawal gain / loss', note: e.note, office: e.office, source: 'asset-sale' })));
+  return ledger.concat(direct, disposals, withdrawals).sort((a, b) => b.date - a.date);
 }
 
 /* ====================================================================
