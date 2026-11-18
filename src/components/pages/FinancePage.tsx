@@ -759,9 +759,9 @@ function AssetMoveDialog({ asset, onClose }: { asset: any; onClose: () => void }
       <div className="modal-b">
         <p>{asset.note || asset.category} · {asset.id}</p>
         <p>Worth today: <b>{M.fmt(worth, numbers)}</b> · Invested: <b>{M.fmt(cost, numbers)}</b></p>
-        <div className="seg" role="radiogroup" aria-label="Withdraw or deposit">
-          <button type="button" role="radio" aria-checked={kind === 'withdraw'} aria-selected={kind === 'withdraw'} disabled={busy} onClick={() => setKind('withdraw')}>Withdraw</button>
-          <button type="button" role="radio" aria-checked={kind === 'deposit'} aria-selected={kind === 'deposit'} disabled={busy} onClick={() => setKind('deposit')}>Deposit</button>
+        <div className="seg asset-move-kind" role="group" aria-label="Withdraw or deposit">
+          <button type="button" aria-pressed={kind === 'withdraw'} disabled={busy} onClick={() => setKind('withdraw')}>Withdraw</button>
+          <button type="button" aria-pressed={kind === 'deposit'} disabled={busy} onClick={() => setKind('deposit')}>Deposit</button>
         </div>
         <label>Amount (PKR)<input type="number" min="1" step="1" required autoFocus value={amount} disabled={busy} onChange={e => setAmount(e.target.value)} placeholder={kind === 'withdraw' ? 'e.g. 2500000' : 'e.g. 1000000'} /></label>
         <label>{kind === 'withdraw' ? 'Receiving bank account' : 'Paid from bank account'}<select required value={account} disabled={busy} onChange={e => setAccount(e.target.value)}><option value="">Choose bank account</option>{M.accountNames().filter((name: string) => M.accountKind(name) === 'Bank').map((name: string) => <option key={name}>{name}</option>)}</select></label>

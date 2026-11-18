@@ -2635,3 +2635,5 @@ dialog.asset-sale-dialog::backdrop { background: rgb(15 23 42 / .45); }
 dialog.asset-sale-dialog .modal-b { display: grid; gap: 14px; }
 dialog.asset-sale-dialog label { display: grid; gap: 6px; }
 .asset-acts { display: inline-flex; gap: 6px; }
+.asset-move-kind { justify-self: start; }
+dialog.asset-sale-dialog input, dialog.asset-sale-dialog select { height: 34px; padding: 0 10px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card); font-size: 14px; color: var(--ink); }
