@@ -822,6 +822,7 @@ export const FORMS_DEF: Record<string, any> = {
     fields: [
       { g: 'Task' },
       { k: 'text', l: 'Subject', req: true, ph: 'Sell FHA 1122', full: true },
+      { k: 'business', l: 'Business', ph: 'e.g. A&Sons, Property', list: () => M.taskBusinesses(), hint: 'Which business this task is for.' },
       {
         k: 'projectId',
         l: 'Project',

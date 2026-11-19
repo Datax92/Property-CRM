@@ -2637,3 +2637,15 @@ dialog.asset-sale-dialog label { display: grid; gap: 6px; }
 .asset-acts { display: inline-flex; gap: 6px; }
 .asset-move-kind { justify-self: start; }
 dialog.asset-sale-dialog input, dialog.asset-sale-dialog select { height: 34px; padding: 0 10px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card); font-size: 14px; color: var(--ink); }
+
+/* Task folders: Open / Closed / High Priority, as folder tabs sitting on the task list. */
+.tfolders { position: relative; z-index: 1; display: flex; gap: 4px; align-items: flex-end; margin: 4px 0 0; padding: 0 0 0 0; }
+.tfolders button { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px; margin-bottom: -1px; border: 1px solid var(--rule-2); border-bottom-color: transparent; border-radius: 9px 9px 0 0; background: var(--paper-2); color: var(--ink-2); font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
+.tfolders button:hover { color: var(--ink); background: var(--card); }
+.tfolders button[aria-selected="true"] { background: var(--card); color: var(--brand); font-weight: 600; border-bottom-color: var(--card); box-shadow: inset 0 2px 0 var(--brand); }
+.tfolders button.hi[aria-selected="true"] { color: var(--bad, #C0392B); box-shadow: inset 0 2px 0 var(--bad, #C0392B); }
+.tfolders .n { min-width: 20px; padding: 1px 7px; border-radius: 10px; background: var(--rule); color: var(--ink-2); font-size: 11.5px; font-weight: 600; text-align: center; }
+.tfolders button[aria-selected="true"] .n { background: var(--brand-wash); color: var(--brand); }
+.tfolders button.hi[aria-selected="true"] .n { background: #FDECEA; color: var(--bad, #C0392B); }
+.tfolders ~ .tlist { border-top-left-radius: 0; }
+.tfolders ~ .tlist .ttable th:first-child { border-top-left-radius: 0; }

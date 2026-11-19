@@ -754,6 +754,7 @@ const TASK_COLS: TaskCol[] = [
       );
     },
   },
+  { key: 'business', th: 'Business', td: (t) => <td key="business" className="tproj">{t.business || ''}</td> },
   { key: 'project', th: 'Project', td: (t) => <td key="project" className="tproj">{t.project || ''}</td> },
   {
     key: 'projectStatus',
@@ -802,6 +803,9 @@ export function TasksPage() {
   const [fStatus, setFStatus] = useState('');
   const [fPriority, setFPriority] = useState('');
   const [fWho, setFWho] = useState('');
+  const [fBusiness, setFBusiness] = useState('');
+  // The folder the list is opened on: open tasks, closed tasks, or open High / Urgent ones.
+  const [folder, setFolder] = useState<'open' | 'closed' | 'high'>('open');
   const [newest, setNewest] = useState(true);
   const [pageSize, setPageSize] = useState(20);
   const [shown, setShown] = useState(20);
@@ -845,7 +849,7 @@ export function TasksPage() {
   // ========================================================================
   const q = fText.trim().toLowerCase();
   const pr = periodRange(fPeriod, fMonth, fYear, fFrom, fTo);
-  const rows = M.DATA.tasks
+  const matching = M.DATA.tasks
     .filter((t: any) => {
       const st = M.taskStatus(t);
       if (fId && !String(t.id).toLowerCase().includes(fId.trim().toLowerCase())) return false;
@@ -854,6 +858,7 @@ export function TasksPage() {
       if (fStatus && st !== fStatus) return false;
       if (fPriority && (t.priority || 'Low') !== fPriority) return false;
       if (fWho && (t.assignee || '') !== fWho) return false;
+      if (fBusiness && (t.business || '') !== fBusiness) return false;
       if (pr && !M.taskInRange(t, pr)) return false;
       return true;
     })
@@ -861,9 +866,13 @@ export function TasksPage() {
       const d = String(a.id).localeCompare(String(b.id));
       return newest ? -d : d;
     });
+  const folderCount = (f: string) => matching.filter((t: any) => M.taskFolder(t, f)).length;
+  const rows = matching.filter((t: any) => M.taskFolder(t, folder));
   const visible = rows.slice(0, shown);
-  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho || fPeriod);
-  const totals = M.taskTotals(rows);
+  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho || fBusiness || fPeriod);
+  // Totals and the success ratio count every matching task, whichever folder is open.
+  const totals = M.taskTotals(matching);
+  const folderStatuses = folder === 'closed' ? ['Completed', 'Cancelled'] : M.TASK_STATUSES.filter((x: string) => x !== 'Completed' && x !== 'Cancelled').concat('Overdue');
   const years: number[] = [];
   for (let y = M.TODAY.getFullYear() + 1; y >= M.TODAY.getFullYear() - 5; y--) years.push(y);
 
@@ -883,6 +892,7 @@ export function TasksPage() {
     setFStatus('');
     setFPriority('');
     setFWho('');
+    setFBusiness('');
     setFPeriod('');
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -960,6 +970,14 @@ export function TasksPage() {
       <div className="tfilters">
         <input className="f-id" value={fId} onChange={(e) => setFId(e.target.value)} placeholder="ID" aria-label="Filter by ID" />
         <input className="f-text" value={fText} onChange={(e) => setFText(e.target.value)} placeholder="Subject" aria-label="Filter by subject" />
+        {M.taskBusinesses().length > 0 && (
+          <select value={fBusiness} onChange={(e) => setFBusiness(e.target.value)} aria-label="Filter by business">
+            <option value="">Business</option>
+            {M.taskBusinesses().map((b: string) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        )}
         <select value={fProject} onChange={(e) => setFProject(e.target.value)} aria-label="Filter by project">
           <option value="">Project</option>
           {M.DATA.taskProjects.map((p: any) => (
@@ -969,7 +987,7 @@ export function TasksPage() {
         </select>
         <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} aria-label="Filter by status">
           <option value="">Status</option>
-          {[...M.TASK_STATUSES, 'Overdue'].map((s) => (
+          {folderStatuses.map((s: string) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
@@ -1070,6 +1088,32 @@ export function TasksPage() {
         </div>
       )}
 
+      <div className="tfolders" role="tablist" aria-label="Task folders" data-noprint="1">
+        {([
+          ['open', 'Open Tasks'],
+          ['closed', 'Closed Tasks'],
+          ['high', 'High Priority'],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={folder === k}
+            className={k === 'high' ? 'hi' : ''}
+            onClick={() => {
+              setFolder(k);
+              setFStatus('');
+              setPicked([]);
+              setShown(pageSize);
+            }}
+          >
+            <Icon name={k === 'closed' ? 'ok' : k === 'high' ? 'warn' : 'grid'} size={14} />
+            {label}
+            <span className="n">{folderCount(k)}</span>
+          </button>
+        ))}
+      </div>
+
       {moved && (
         <div className="tmoved" data-noprint="1">
           <button type="button" className="link" onClick={resetCols} title="Put the columns back in their first order">
@@ -1104,7 +1148,13 @@ export function TasksPage() {
             {visible.length === 0 ? (
               <tr>
                 <td colSpan={19} className="tnone">
-                  {filtered ? 'No task matches these filters.' : 'No tasks yet — write one above and press Enter.'}
+                  {filtered
+                    ? 'No task in this folder matches these filters.'
+                    : folder === 'closed'
+                      ? 'No completed or cancelled tasks yet.'
+                      : folder === 'high'
+                        ? 'No open task is marked High or Urgent.'
+                        : 'No open tasks — write one above and press Enter.'}
                 </td>
               </tr>
             ) : (

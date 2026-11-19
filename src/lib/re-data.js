@@ -3168,6 +3168,21 @@ export function taskAssignees() {
   return Array.from(new Set(names));
 }
 
+/** Businesses tasks have been filed under (A&Sons, Property ...), for picking one again. */
+export function taskBusinesses() {
+  return Array.from(new Set(DATA.tasks.map((t) => t.business).filter(Boolean))).sort();
+}
+
+/** The three task folders: open work, finished or cancelled work, and open work marked High or Urgent. */
+export const TASK_FOLDERS = ['open', 'closed', 'high'];
+export function taskFolder(t, folder) {
+  const st = taskStatus(t);
+  const closed = st === 'Completed' || st === 'Cancelled';
+  if (folder === 'closed') return closed;
+  if (folder === 'high') return !closed && (t.priority === 'High' || t.priority === 'Urgent');
+  return !closed;
+}
+
 /** How far a due date is: "today", "in 3 days" or "2 days late". */
 export function dueIn(d) {
   if (!(d instanceof Date)) return '';
@@ -3192,6 +3207,7 @@ function taskBody(v) {
     text, status, done: status === 'Completed',
     priority: TASK_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Low',
     projectId: proj ? proj.id : null, project: proj ? proj.name : '',
+    business: String(v.business || '').trim(),
     assignee: String(v.assignee || '').trim(),
     startDate: v.startDate ? parseDate(v.startDate) : null,
     date: v.date ? parseDate(v.date) : null,
