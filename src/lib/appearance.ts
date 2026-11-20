@@ -17,7 +17,20 @@ export interface Look {
   uniqueName?: string;
   /** IDs of the shortcuts on top of the home screen, in order. */
   shortcuts: string[];
+  /** The colour behind every page (not the home wallpaper). */
+  pageBg?: string;
 }
+
+/** Backgrounds for the working pages, drawn from the theme's colours so every theme matches. */
+export const PAGE_BACKGROUNDS = [
+  { id: 'aurora', name: 'Aurora', note: 'Soft washes of the theme colours', css: 'radial-gradient(1200px 600px at 0% 0%, color-mix(in srgb, var(--brand-2) 26%, transparent), transparent 60%), radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--hl) 24%, transparent), transparent 60%), radial-gradient(1000px 700px at 50% 100%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 60%), var(--paper)' },
+  { id: 'sunrise', name: 'Sunrise', note: 'Warm peach into sky blue', css: 'linear-gradient(160deg, #FFF1E6 0%, #FDE7EF 35%, #EAF2FF 75%, #E8F7F3 100%)' },
+  { id: 'meadow', name: 'Meadow', note: 'Mint, lemon and fresh green', css: 'linear-gradient(150deg, #EAFBF1 0%, #F4FBE3 45%, #FFF9E0 100%)' },
+  { id: 'ocean', name: 'Ocean', note: 'Calm aqua and lavender', css: 'linear-gradient(160deg, #E6F6FB 0%, #EEF0FE 55%, #F6EEFB 100%)' },
+  { id: 'tint', name: 'Soft tint', note: 'A light wash of the theme colour', css: 'linear-gradient(180deg, var(--brand-wash), var(--paper) 420px)' },
+  { id: 'plain', name: 'Plain', note: 'Light grey, no colour', css: 'var(--paper)' },
+];
+export const findPageBg = (id?: string) => PAGE_BACKGROUNDS.find((b) => b.id === id) || PAGE_BACKGROUNDS[0];
 
 export interface Theme {
   id: string;
@@ -142,6 +155,7 @@ export const DEFAULT_LOOK: Look = {
   wallpaper: 'dots',
   icons: 'classic',
   seed: 7,
+  pageBg: 'aurora',
   shortcuts: ['proforma', 'saleInvoice', 'purchaseInvoice'],
 };
 
@@ -256,6 +270,7 @@ export function loadLook(): Look {
       if (look.theme !== 'unique' && !findTheme(look.theme)) look.theme = DEFAULT_LOOK.theme;
       if (!WALLPAPERS.some((w) => w.id === look.wallpaper)) look.wallpaper = DEFAULT_LOOK.wallpaper;
       if (!ICON_PACKS.some((p) => p.id === look.icons)) look.icons = DEFAULT_LOOK.icons;
+      if (!PAGE_BACKGROUNDS.some((b) => b.id === look.pageBg)) look.pageBg = DEFAULT_LOOK.pageBg;
       if (!Array.isArray(look.shortcuts)) look.shortcuts = DEFAULT_LOOK.shortcuts.slice();
       look.shortcuts = look.shortcuts.filter((id) => SHORTCUTS.some((s) => s.id === id)).slice(0, MAX_SHORTCUTS);
       return look;
@@ -279,9 +294,10 @@ export function applyLook(look: Look) {
   const d = document.documentElement;
   d.dataset.theme = look.theme;
   d.dataset.icons = look.icons;
+  d.dataset.bg = look.pageBg || DEFAULT_LOOK.pageBg;
   THEME_VARS.forEach((k) => d.style.removeProperty(k));
   if (look.theme === 'unique' && look.vars) Object.keys(look.vars).forEach((k) => d.style.setProperty(k, look.vars![k]));
 }
 
 /** The same, run before the page is drawn so a reload never flashes the default colours. */
-export const EARLY_APPLY_SCRIPT = `try{var l=JSON.parse(localStorage.getItem('${LOOK_KEY}')||'null');if(l){var d=document.documentElement;if(l.theme)d.dataset.theme=l.theme;if(l.icons)d.dataset.icons=l.icons;if(l.theme==='unique'&&l.vars){for(var k in l.vars)d.style.setProperty(k,l.vars[k]);}}}catch(e){}`;
+export const EARLY_APPLY_SCRIPT = `try{var l=JSON.parse(localStorage.getItem('${LOOK_KEY}')||'null');if(l){var d=document.documentElement;if(l.theme)d.dataset.theme=l.theme;if(l.icons)d.dataset.icons=l.icons;d.dataset.bg=l.pageBg||'aurora';if(l.theme==='unique'&&l.vars){for(var k in l.vars)d.style.setProperty(k,l.vars[k]);}}}catch(e){}`;

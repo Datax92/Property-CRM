@@ -3161,6 +3161,8 @@ export function resetSheetMirror(id) {
 export const TASK_STATUSES = ['Open', 'Working', 'Pending Review', 'Completed', 'Cancelled'];
 export const TASK_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 export const PROJECT_TYPES = ['Internal', 'External', 'Personal', 'Other'];
+/** The stage a task has reached: first looked at, assessed, then carried out. */
+export const TASK_STAGES = ['Screening', 'Final Assessment', 'Final Implementation'];
 
 /** People tasks have been given to, then the agents and the signed-in user, for picking an assignee. */
 export function taskAssignees() {
@@ -3208,7 +3210,9 @@ function taskBody(v) {
     priority: TASK_PRIORITIES.indexOf(v.priority) >= 0 ? v.priority : 'Low',
     projectId: proj ? proj.id : null, project: proj ? proj.name : '',
     business: String(v.business || '').trim(),
+    stage: TASK_STAGES.indexOf(v.stage) >= 0 ? v.stage : '',
     assignee: String(v.assignee || '').trim(),
+    contactMobile: String(v.contactMobile || '').trim(),
     startDate: v.startDate ? parseDate(v.startDate) : null,
     date: v.date ? parseDate(v.date) : null,
     // The plan: hours of work and what it is worth or will cost; then the hours spent so far and
@@ -3234,6 +3238,24 @@ export function taskInRange(t, r) {
   if (!(from instanceof Date) && !(to instanceof Date)) return false;
   const a = from instanceof Date ? from : to, b = to instanceof Date ? to : from;
   return Math.min(a, b) <= r.end && Math.max(a, b) >= r.start;
+}
+
+/** Tasks per month by deadline (else start, else when made): total, achieved and overdue, for the summary graph. */
+export function taskMonthStats(list) {
+  const m = new Map();
+  list.forEach((t) => {
+    const st = taskStatus(t);
+    if (st === 'Cancelled') return;
+    const d = t.date || t.startDate || t.createdAt;
+    if (!(d instanceof Date)) return;
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const x = m.get(key) || { key, label: MONTHS[d.getMonth()].slice(0, 3) + ' ' + String(d.getFullYear()).slice(2), full: MONTHS[d.getMonth()] + ' ' + d.getFullYear(), total: 0, achieved: 0, overdue: 0 };
+    x.total++;
+    if (st === 'Completed') x.achieved++;
+    if (st === 'Overdue') x.overdue++;
+    m.set(key, x);
+  });
+  return Array.from(m.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 /** Total tasks, how many were achieved (completed), and the success ratio; cancelled ones count neither way. */

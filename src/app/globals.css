@@ -2649,3 +2649,56 @@ dialog.asset-sale-dialog input, dialog.asset-sale-dialog select { height: 34px; 
 .tfolders button.hi[aria-selected="true"] .n { background: #FDECEA; color: var(--bad, #C0392B); }
 .tfolders ~ .tlist { border-top-left-radius: 0; }
 .tfolders ~ .tlist .ttable th:first-child { border-top-left-radius: 0; }
+
+/* Page backgrounds (Appearance → Page background): colour behind every page, from the theme. */
+html[data-bg="aurora"] body { background: radial-gradient(1200px 600px at 0% 0%, color-mix(in srgb, var(--brand-2) 26%, transparent), transparent 60%), radial-gradient(900px 600px at 100% 10%, color-mix(in srgb, var(--hl) 24%, transparent), transparent 60%), radial-gradient(1000px 700px at 50% 100%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 60%), var(--paper); background-attachment: fixed; }
+html[data-bg="sunrise"] body { background: linear-gradient(160deg, #FFF1E6 0%, #FDE7EF 35%, #EAF2FF 75%, #E8F7F3 100%); background-attachment: fixed; }
+html[data-bg="meadow"] body { background: linear-gradient(150deg, #EAFBF1 0%, #F4FBE3 45%, #FFF9E0 100%); background-attachment: fixed; }
+html[data-bg="ocean"] body { background: linear-gradient(160deg, #E6F6FB 0%, #EEF0FE 55%, #F6EEFB 100%); background-attachment: fixed; }
+html[data-bg="tint"] body { background: linear-gradient(180deg, var(--brand-wash), var(--paper) 420px); background-attachment: fixed; }
+.ap-bg-art { position: relative; display: block; }
+.ap-bg-art i { position: absolute; left: 12%; right: 12%; height: 14%; border-radius: 4px; background: rgba(255,255,255,.92); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.ap-bg-art i:nth-child(1) { top: 16%; right: 40%; }
+.ap-bg-art i:nth-child(2) { top: 40%; }
+.ap-bg-art i:nth-child(3) { top: 64%; }
+@media print { html[data-bg] body { background: #fff !important; } }
+
+/* Task stages (Screening → Final Assessment → Final Implementation), as pills above the folders. */
+.tstages { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 8px; }
+.tstages > button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--rule-2); border-radius: 999px; background: var(--card); color: var(--ink-2); font-size: 12.5px; font-weight: 500; transition: background .15s, color .15s, border-color .15s; }
+.tstages > button:hover { color: var(--ink); border-color: var(--brand-2); }
+.tstages > button[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+.tstages > button.stg-0[aria-selected="true"] { background: #2F7DDB; border-color: #2F7DDB; }
+.tstages > button.stg-1[aria-selected="true"] { background: #C98A12; border-color: #C98A12; }
+.tstages > button.stg-2[aria-selected="true"] { background: #1A9A6C; border-color: #1A9A6C; }
+.tstages .n { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--rule); font-size: 11px; font-weight: 600; text-align: center; color: var(--ink-2); }
+.tstages > button[aria-selected="true"] .n { background: rgba(255,255,255,.25); color: #fff; }
+.tstages .spacer { flex: 1; }
+.tstage { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.tstage.stg-0 { background: #E8F1FC; color: #1F5FAE; }
+.tstage.stg-1 { background: #FDF3DC; color: #946200; }
+.tstage.stg-2 { background: #E3F6EE; color: #157553; }
+.tdetails { max-width: 340px; color: var(--ink-2); font-size: 12.5px; }
+.tdetails span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+.tlink { color: var(--brand-2); text-decoration: none; }
+.tlink:hover { text-decoration: underline; }
+
+/* Task columns: drag a heading's right edge to resize; the Columns menu hides and shows them. */
+.ttable th.th-drag { position: relative; }
+.tcol-resize { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 2; touch-action: none; }
+.tcol-resize:hover, .tcol-resize:active { background: color-mix(in srgb, var(--brand-2) 30%, transparent); }
+.ttable td.tsized { overflow: hidden; text-overflow: ellipsis; }
+.tcolmenu { position: relative; }
+.tcolmenu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 260px; max-height: 420px; overflow: auto; padding: 10px 12px; border: 1px solid var(--rule-2); border-radius: 8px; background: var(--card); box-shadow: 0 10px 30px rgba(0,0,0,.14); }
+.tcolmenu-pop p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.4; }
+.tcolmenu-pop label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; cursor: pointer; }
+.tcolmenu-pop .btn { margin-top: 6px; }
+
+/* Summary: total / achieved / overdue graph with its figures, made for printing too. */
+.tsum-graph { margin-top: 14px; }
+.tsum-table { margin-top: 12px; width: 100%; }
+.tsum-table tfoot th { border-top: 2px solid var(--rule-2); }
+@media print {
+  .tsum-graph, .tsum { break-inside: avoid; }
+  .tcol-resize, .tcolmenu { display: none !important; }
+}

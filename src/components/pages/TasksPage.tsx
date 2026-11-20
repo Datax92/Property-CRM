@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { PageShell, DataTable, KpiCard, Tag, TopScroll, useColumnOrder } from '../Shared';
 import { DateField } from '../DateField';
@@ -315,8 +315,9 @@ function ProjectsView({ run, openTasks }: { run: Run; openTasks: (id: string) =>
 // SUMMARY — completion, totals and a bar per project
 // ==========================================================================
 function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
-  const { showTip, hideTip } = useApp();
+  const { showTip, hideTip, print } = useApp();
   const [showFilters, setShowFilters] = useState(false);
+  const [graphBy, setGraphBy] = useState<'month' | 'project'>('month');
   const [fStatus, setFStatus] = useState('Open');
   const [fType, setFType] = useState('');
   const [fWho, setFWho] = useState('');
@@ -341,6 +342,15 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
   const top = Math.ceil(max / step) * step;
   const ticks = Array.from({ length: top / step + 1 }, (_, i) => i * step);
   const filtered = fStatus !== 'Open' || !!fType || !!fWho;
+  // The tasks behind the bars: those of the projects shown, and loose ones while "No project" is shown.
+  const shownIds = new Set(projects.map((p: any) => p.id));
+  const summaryTasks = M.DATA.tasks.filter(
+    (t: any) => (!fWho || (t.assignee || '') === fWho) && (t.projectId ? shownIds.has(t.projectId) : bars.some((b: any) => b.loose))
+  );
+  const monthRows = M.taskMonthStats(summaryTasks).slice(-12);
+  const projectRows = bars.map((p: any) => ({ label: p.name, full: p.name, total: p.total, achieved: p.completed, overdue: p.overdue }));
+  const graphRows = graphBy === 'month' ? monthRows : projectRows;
+  const graphMax = Math.max(1, ...graphRows.map((r: any) => r.total));
 
   const tip = (e: React.MouseEvent, p: any) =>
     showTip(
@@ -361,6 +371,9 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
             </span>
           )}
           <span className="spacer" />
+          <button type="button" className="btn sm" data-noprint="1" onClick={print} title="Print the summary with its graphs, or save it as PDF">
+            <Icon name="print" /> Print / PDF
+          </button>
           <button
             type="button"
             className={`iconbtn ${showFilters || filtered ? 'on' : ''}`}
@@ -472,6 +485,71 @@ function SummaryView({ openTasks }: { openTasks: (id: string) => void }) {
                 <span><i className="seg-total" /> Still open</span>
                 <span className="muted">The number on each bar is its total tasks.</span>
               </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Total, achieved and overdue tasks with the figure on every bar, so a printed page shows them too. */}
+      <div className="panel tsum-graph">
+        <div className="panel-h">
+          <h3>Total / Achieved / Overdue tasks</h3>
+          <span className="sub">{graphBy === 'month' ? 'by month of the deadline, last 12 months' : 'by project'}</span>
+          <span className="spacer" />
+          <span className="seg" data-noprint="1" role="group" aria-label="Show the graph">
+            <button type="button" aria-pressed={graphBy === 'month'} onClick={() => setGraphBy('month')}>By month</button>
+            <button type="button" aria-pressed={graphBy === 'project'} onClick={() => setGraphBy('project')}>By project</button>
+          </span>
+        </div>
+        <div className="panel-b">
+          {graphRows.length === 0 ? (
+            <p className="muted" style={{ textAlign: 'center' }}>No tasks to show yet.</p>
+          ) : (
+            <>
+              <ChartBarGroups
+                rows={graphRows}
+                values
+                step={graphMax <= 10 ? 1 : graphMax <= 50 ? 5 : undefined}
+                series={[
+                  { key: 'total', label: 'Total tasks', c: '#2F7DDB' },
+                  { key: 'achieved', label: 'Achieved tasks', c: '#1FAE7A' },
+                  { key: 'overdue', label: 'Overdue tasks', c: '#E8663D' },
+                ]}
+                label="Total, achieved and overdue tasks"
+                width={Math.max(1500, graphRows.length * 120)}
+                low
+              />
+              <table className="ttable tsum-table">
+                <thead>
+                  <tr>
+                    <th>{graphBy === 'month' ? 'Month' : 'Project'}</th>
+                    <th className="r">Total tasks</th>
+                    <th className="r">Achieved</th>
+                    <th className="r">Overdue</th>
+                    <th className="r">Success ratio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {graphRows.map((r: any) => (
+                    <tr key={r.full || r.label}>
+                      <td>{r.full || r.label}</td>
+                      <td className="r mono">{r.total}</td>
+                      <td className="r mono pos">{r.achieved}</td>
+                      <td className={`r mono ${r.overdue ? 'neg' : ''}`}>{r.overdue}</td>
+                      <td className="r mono">{r.total ? `${Math.round((r.achieved / r.total) * 100)}%` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th>Total</th>
+                    <th className="r mono">{graphRows.reduce((a: number, r: any) => a + r.total, 0)}</th>
+                    <th className="r mono">{graphRows.reduce((a: number, r: any) => a + r.achieved, 0)}</th>
+                    <th className="r mono">{graphRows.reduce((a: number, r: any) => a + r.overdue, 0)}</th>
+                    <th />
+                  </tr>
+                </tfoot>
+              </table>
             </>
           )}
         </div>
@@ -724,6 +802,16 @@ type TaskCol = { key: string; th: React.ReactNode; thCls?: string; thTitle?: str
 const TASK_COLS: TaskCol[] = [
   { key: 'ref', th: 'Task ref', td: (t) => <td key="ref" className="mono muted nowrap">{t.id}</td> },
   { key: 'subject', th: 'Subject', thCls: 'wide', td: () => null },
+  {
+    key: 'details',
+    th: 'Details / note',
+    thCls: 'wide',
+    td: (t) => (
+      <td key="details" className="tdetails" title={t.description || ''}>
+        {t.description ? <span>{t.description}</span> : <span className="muted">—</span>}
+      </td>
+    ),
+  },
   { key: 'start', th: 'Start date', td: (t) => <td key="start" className="mono muted nowrap">{t.startDate ? M.fmtDate(t.startDate) : ''}</td> },
   {
     key: 'deadline',
@@ -769,8 +857,18 @@ const TASK_COLS: TaskCol[] = [
     },
   },
   { key: 'status', th: 'Status', td: (t, st) => <td key="status"><StatusPill status={st} /></td> },
+  { key: 'stage', th: 'Stage', td: (t) => <td key="stage">{t.stage ? <span className={`tstage stg-${M.TASK_STAGES.indexOf(t.stage)}`}>{t.stage}</span> : ''}</td> },
   { key: 'priority', th: 'Priority', td: (t) => <td key="priority"><PriorityPill p={t.priority} /></td> },
   { key: 'assignee', th: 'Assigned to', td: (t) => <td key="assignee" className="tproj">{t.assignee || ''}</td> },
+  {
+    key: 'mobile',
+    th: 'Contact mobile',
+    td: (t) => (
+      <td key="mobile" className="mono nowrap">
+        {t.contactMobile ? <a href={`tel:${String(t.contactMobile).replace(/[^+\d]/g, '')}`} className="tlink">{t.contactMobile}</a> : ''}
+      </td>
+    ),
+  },
   { key: 'planned', th: 'Planned work', thCls: 'r', td: (t) => <td key="planned" className="r mono">{hrs(t.plannedHours || 0)}</td> },
   { key: 'worth', th: 'Plan worth', thCls: 'r', td: (t) => <td key="worth" className="r mono">{t.planWorth ? M.fmt(t.planWorth, 'full') : '—'}</td> },
   { key: 'cost', th: 'Plan cost', thCls: 'r', td: (t) => <td key="cost" className="r mono">{t.planCost ? M.fmt(t.planCost, 'full') : '—'}</td> },
@@ -792,6 +890,37 @@ const TASK_COLS: TaskCol[] = [
     },
   },
 ];
+
+/** Which task columns are hidden and how wide each has been dragged, remembered in this browser. */
+const PREFS_KEY = 'tasks/list/prefs';
+type ColPrefs = { hidden: string[]; widths: Record<string, number> };
+function useColumnPrefs() {
+  const [prefs, setPrefs] = useState<ColPrefs>({ hidden: [], widths: {} });
+  const ready = useRef(false);
+  useEffect(() => {
+    try {
+      const x = JSON.parse(window.localStorage.getItem(PREFS_KEY) || 'null');
+      if (x && Array.isArray(x.hidden)) setPrefs({ hidden: x.hidden, widths: x.widths || {} });
+    } catch {
+      /* not remembered */
+    }
+    ready.current = true;
+  }, []);
+  useEffect(() => {
+    if (!ready.current) return;
+    try {
+      window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      /* not remembered */
+    }
+  }, [prefs]);
+  return {
+    prefs,
+    toggle: (key: string) => setPrefs((p) => ({ ...p, hidden: p.hidden.includes(key) ? p.hidden.filter((k) => k !== key) : [...p.hidden, key] })),
+    resize: (key: string, w: number) => setPrefs((p) => ({ ...p, widths: { ...p.widths, [key]: Math.max(60, Math.min(640, Math.round(w))) } })),
+    reset: () => setPrefs({ hidden: [], widths: {} }),
+  };
+}
 
 export function TasksPage() {
   const { tab, toast, refreshData, openModal, openEdit, goto, exportCsv, exportXls, print } = useApp();
@@ -818,7 +947,41 @@ export function TasksPage() {
   const [fFrom, setFFrom] = useState(() => M.TODAY.getFullYear() + '-01-01');
   const [fTo, setFTo] = useState(() => M.dateInput(M.TODAY));
   // The task list's columns, in the order they have been dragged into.
-  const { cols: taskCols, moved, headProps, reset: resetCols } = useColumnOrder('tasks/list', TASK_COLS);
+  const { cols: orderedCols, moved, headProps, reset: resetCols } = useColumnOrder('tasks/list', TASK_COLS);
+  // Columns can be hidden and widened or narrowed by dragging the edge of their heading.
+  const colPrefs = useColumnPrefs();
+  const taskCols = orderedCols.filter((c) => c.key === 'subject' || !colPrefs.prefs.hidden.includes(c.key));
+  const [colMenu, setColMenu] = useState(false);
+  const [fStage, setFStage] = useState('');
+  const resizing = useRef(false);
+  const startResize = (key: string, e: React.PointerEvent<HTMLSpanElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.currentTarget.parentElement as HTMLElement;
+    const x0 = e.clientX;
+    const w0 = th.getBoundingClientRect().width;
+    resizing.current = true;
+    const move = (ev: PointerEvent) => colPrefs.resize(key, w0 + ev.clientX - x0);
+    const end = () => {
+      resizing.current = false;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+  };
+  const thProps = (c: TaskCol) => {
+    const hp = headProps(c.key, c.thCls);
+    const w = colPrefs.prefs.widths[c.key];
+    return {
+      ...hp,
+      style: w ? { width: w, minWidth: w, maxWidth: w } : undefined,
+      onDragStart: (e: React.DragEvent<HTMLTableCellElement>) => {
+        if (resizing.current) return e.preventDefault();
+        hp.onDragStart(e);
+      },
+    };
+  };
 
   // Every change is refused while the database is unreachable, so nothing vanishes on reload.
   const run = (fn: () => void, done?: string) => {
@@ -853,7 +1016,7 @@ export function TasksPage() {
     .filter((t: any) => {
       const st = M.taskStatus(t);
       if (fId && !String(t.id).toLowerCase().includes(fId.trim().toLowerCase())) return false;
-      if (q && !String(t.text).toLowerCase().includes(q)) return false;
+      if (q && !(String(t.text) + ' ' + String(t.description || '')).toLowerCase().includes(q)) return false;
       if (fProject === '-' ? !!t.projectId : fProject && t.projectId !== fProject) return false;
       if (fStatus && st !== fStatus) return false;
       if (fPriority && (t.priority || 'Low') !== fPriority) return false;
@@ -866,10 +1029,12 @@ export function TasksPage() {
       const d = String(a.id).localeCompare(String(b.id));
       return newest ? -d : d;
     });
-  const folderCount = (f: string) => matching.filter((t: any) => M.taskFolder(t, f)).length;
-  const rows = matching.filter((t: any) => M.taskFolder(t, folder));
+  const folderCount = (f: string) => matching.filter((t: any) => M.taskFolder(t, f) && (!fStage || t.stage === fStage)).length;
+  const inFolder = matching.filter((t: any) => M.taskFolder(t, folder));
+  const stageCount = (st: string) => inFolder.filter((t: any) => !st || t.stage === st).length;
+  const rows = inFolder.filter((t: any) => !fStage || t.stage === fStage);
   const visible = rows.slice(0, shown);
-  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho || fBusiness || fPeriod);
+  const filtered = !!(fId || fText || fProject || fStatus || fPriority || fWho || fBusiness || fPeriod || fStage);
   // Totals and the success ratio count every matching task, whichever folder is open.
   const totals = M.taskTotals(matching);
   const folderStatuses = folder === 'closed' ? ['Completed', 'Cancelled'] : M.TASK_STATUSES.filter((x: string) => x !== 'Completed' && x !== 'Cancelled').concat('Overdue');
@@ -894,6 +1059,7 @@ export function TasksPage() {
     setFWho('');
     setFBusiness('');
     setFPeriod('');
+    setFStage('');
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -1088,6 +1254,44 @@ export function TasksPage() {
         </div>
       )}
 
+      <div className="tstages" role="tablist" aria-label="Task stage" data-noprint="1">
+        {['', ...M.TASK_STAGES].map((st: string, i: number) => (
+          <button
+            key={st || 'all'}
+            type="button"
+            role="tab"
+            aria-selected={fStage === st}
+            className={st ? `stg-${i - 1}` : ''}
+            onClick={() => {
+              setFStage(st);
+              setPicked([]);
+              setShown(pageSize);
+            }}
+          >
+            {st || 'All stages'}
+            <span className="n">{stageCount(st)}</span>
+          </button>
+        ))}
+        <span className="spacer" />
+        <div className="tcolmenu">
+          <button type="button" className="btn sm" aria-expanded={colMenu} onClick={() => setColMenu(!colMenu)} title="Show or hide columns">
+            <Icon name="grid" size={13} /> Columns
+          </button>
+          {colMenu && (
+            <div className="tcolmenu-pop" role="menu">
+              <p className="muted">Tick the columns to show. Drag a heading to move it; drag its right edge to make it wider or narrower.</p>
+              {orderedCols.map((c) => (
+                <label key={c.key}>
+                  <input type="checkbox" checked={c.key === 'subject' || !colPrefs.prefs.hidden.includes(c.key)} disabled={c.key === 'subject'} onChange={() => colPrefs.toggle(c.key)} />
+                  {c.th}
+                </label>
+              ))}
+              <button type="button" className="btn sm" onClick={() => { colPrefs.reset(); setColMenu(false); }}>Show all, reset widths</button>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="tfolders" role="tablist" aria-label="Task folders" data-noprint="1">
         {([
           ['open', 'Open Tasks'],
@@ -1134,8 +1338,9 @@ export function TasksPage() {
                 />
               </th>
               {taskCols.map((c) => (
-                <th key={c.key} {...headProps(c.key, c.thCls)} title={c.thTitle || 'Drag to move this column'}>
+                <th key={c.key} {...thProps(c)} title={c.thTitle || 'Drag to move this column; drag its right edge to resize'}>
                   {c.th}
+                  <span className="tcol-resize" draggable={false} onPointerDown={(e) => startResize(c.key, e)} aria-hidden="true" />
                 </th>
               ))}
               <th className="r" data-noexport="1">
@@ -1147,7 +1352,7 @@ export function TasksPage() {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={19} className="tnone">
+                <td colSpan={taskCols.length + 3} className="tnone">
                   {filtered
                     ? 'No task in this folder matches these filters.'
                     : folder === 'closed'
@@ -1165,17 +1370,26 @@ export function TasksPage() {
                     <td className="chk" data-noexport="1">
                       <input type="checkbox" checked={picked.includes(t.id)} onChange={() => toggle(t.id)} aria-label={`Select ${t.text}`} />
                     </td>
-                    {taskCols.map((c) =>
-                      c.key === 'subject' ? (
-                        <td key="subject" className="tsubj">
-                          <button type="button" className={`tname ${st === 'Completed' ? 'done' : ''}`} onClick={() => openEdit('tasks', t.id)} title="Open to edit">
-                            {t.text}
-                          </button>
-                        </td>
-                      ) : (
-                        c.td(t, st)
-                      )
-                    )}
+                    {taskCols.map((c) => {
+                      const cell =
+                        c.key === 'subject' ? (
+                          <td key="subject" className="tsubj">
+                            <button type="button" className={`tname ${st === 'Completed' ? 'done' : ''}`} onClick={() => openEdit('tasks', t.id)} title="Open to edit">
+                              {t.text}
+                            </button>
+                          </td>
+                        ) : (
+                          c.td(t, st)
+                        );
+                      // A column dragged narrower clips its cells instead of pushing the table wider.
+                      const w = colPrefs.prefs.widths[c.key];
+                      return w && React.isValidElement(cell)
+                        ? React.cloneElement(cell as React.ReactElement<any>, {
+                            style: { width: w, maxWidth: w },
+                            className: `${(cell.props as any).className || ''} tsized`,
+                          })
+                        : cell;
+                    })}
                     <td className="r muted" data-noexport="1" title={t.createdAt ? 'Created ' + M.fmtDate(t.createdAt) : ''}>{ago(t.createdAt)}</td>
                     <td className="r nowrap" data-noexport="1">
                       {confirm === t.id ? (

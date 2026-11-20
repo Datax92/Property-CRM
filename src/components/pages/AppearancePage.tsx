@@ -9,8 +9,7 @@ import { BrandMark } from '../Brand';
 import { Wallpaper } from '../Wallpapers';
 import {
   THEMES, WALLPAPERS, ICON_PACKS, PRESETS, SHORTCUTS, MAX_SHORTCUTS,
-  findWallpaper, findPack, themeName, type ShortcutDef,
-} from '../../lib/appearance';
+  findWallpaper, findPack, themeName, type ShortcutDef, PAGE_BACKGROUNDS } from '../../lib/appearance';
 
 /** A few icons, enough to judge an icon pack or a look by. */
 const SAMPLE = ['sales', 'pnl', 'zakat', 'tasks', 'landed', 'charity'];
@@ -200,6 +199,31 @@ export function AppearancePage() {
               <span className="ap-card-t">
                 <b>{t.name}</b>
                 <small>{t.note}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* PAGE BACKGROUND */}
+      <section className="ap-sec">
+        <h3>Page background</h3>
+        <p className="ap-sub">The colour behind every page and list, so the screens are not plain grey.</p>
+        <div className="ap-grid walls">
+          {PAGE_BACKGROUNDS.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              className={`ap-card ap-wall ${(look.pageBg || 'aurora') === b.id ? 'on' : ''}`}
+              aria-pressed={(look.pageBg || 'aurora') === b.id}
+              onClick={() => update({ pageBg: b.id })}
+            >
+              <span className="ap-wall-art ap-bg-art" style={{ background: b.css }}>
+                <i /><i /><i />
+              </span>
+              <span className="ap-card-t">
+                <b>{b.name}</b>
+                <small>{b.note}</small>
               </span>
             </button>
           ))}
