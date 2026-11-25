@@ -2639,6 +2639,14 @@ dialog.asset-sale-dialog label { display: grid; gap: 6px; }
 dialog.asset-sale-dialog input, dialog.asset-sale-dialog select { height: 34px; padding: 0 10px; border: 1px solid var(--rule-2); border-radius: 4px; background: var(--card); font-size: 14px; color: var(--ink); }
 
 /* Task folders: Open / Closed / High Priority, as folder tabs sitting on the task list. */
+.task-projects { min-width: 0; margin: 10px 0 14px; padding: 12px 16px 14px; background: var(--card); color: var(--ink); border: 1px solid var(--rule-2); border-radius: 12px; }
+.task-projects-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 14px; }
+.task-project-choices, .task-project-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.task-project-choices button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 7px; border: 1px solid var(--rule-2); background: var(--card); color: var(--ink-2); overflow-wrap: anywhere; font: inherit; font-size: 13px; cursor: pointer; }
+.task-project-choices button:hover { background: var(--paper-2); color: var(--ink); }
+.task-project-choices button[aria-pressed="true"] { color: var(--brand); background: var(--brand-wash); border-color: var(--brand); font-weight: 600; }
+.task-project-choices button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.task-project-add button { border-style: dashed; padding-inline: 8px; min-width: 32px; }
 .tfolders { position: relative; z-index: 1; display: flex; gap: 4px; align-items: flex-end; margin: 4px 0 0; padding: 0 0 0 0; }
 .tfolders button { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px; margin-bottom: -1px; border: 1px solid var(--rule-2); border-bottom-color: transparent; border-radius: 9px 9px 0 0; background: var(--paper-2); color: var(--ink-2); font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
 .tfolders button:hover { color: var(--ink); background: var(--card); }

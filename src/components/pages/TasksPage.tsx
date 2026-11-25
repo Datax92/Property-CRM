@@ -859,6 +859,9 @@ const TASK_COLS: TaskCol[] = [
   { key: 'status', th: 'Status', td: (t, st) => <td key="status"><StatusPill status={st} /></td> },
   { key: 'stage', th: 'Stage', td: (t) => <td key="stage">{t.stage ? <span className={`tstage stg-${M.TASK_STAGES.indexOf(t.stage)}`}>{t.stage}</span> : ''}</td> },
   { key: 'priority', th: 'Priority', td: (t) => <td key="priority"><PriorityPill p={t.priority} /></td> },
+  { key: 'contactName', th: 'Contact name', td: (t) => <td key="contactName">{t.contactName || ''}</td> },
+  { key: 'platformName', th: 'Platform name', td: (t) => <td key="platformName">{t.platformName || ''}</td> },
+  { key: 'remarks', th: 'Remarks', td: (t) => <td key="remarks">{t.remarks || ''}</td> },
   { key: 'assignee', th: 'Assigned to', td: (t) => <td key="assignee" className="tproj">{t.assignee || ''}</td> },
   {
     key: 'mobile',
@@ -936,11 +939,11 @@ export function TasksPage() {
   // The folder the list is opened on: open tasks, closed tasks, or open High / Urgent ones.
   const [folder, setFolder] = useState<'open' | 'closed' | 'high'>('open');
   const [newest, setNewest] = useState(true);
-  const [pageSize, setPageSize] = useState(20);
-  const [shown, setShown] = useState(20);
+  const [pageSize, setPageSize] = useState(100);
+  const [shown, setShown] = useState(100);
   const [picked, setPicked] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<string | null>(null);
-  const [quick, setQuick] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
   const [fPeriod, setFPeriod] = useState('');
   const [fMonth, setFMonth] = useState(() => M.dateInput(M.TODAY).slice(0, 7));
   const [fYear, setFYear] = useState(String(M.TODAY.getFullYear()));
@@ -950,6 +953,7 @@ export function TasksPage() {
   const { cols: orderedCols, moved, headProps, reset: resetCols } = useColumnOrder('tasks/list', TASK_COLS);
   // Columns can be hidden and widened or narrowed by dragging the edge of their heading.
   const colPrefs = useColumnPrefs();
+  const visibleProjects = M.DATA.taskProjects.filter((p: any) => !colPrefs.prefs.hidden.includes('project:' + p.id));
   const taskCols = orderedCols.filter((c) => c.key === 'subject' || !colPrefs.prefs.hidden.includes(c.key));
   const [colMenu, setColMenu] = useState(false);
   const [fStage, setFStage] = useState('');
@@ -1046,7 +1050,6 @@ export function TasksPage() {
     .filter((t: any) => ['Completed', 'Cancelled'].indexOf(M.taskStatus(t)) < 0 && t.date instanceof Date)
     .sort((a: any, b: any) => a.date - b.date);
   const overdueTasks = pending.filter((t: any) => M.taskStatus(t) === 'Overdue');
-  const nextTask = pending.find((t: any) => M.taskStatus(t) !== 'Overdue');
   const whoText = (t: any) => [t.assignee, t.project].filter(Boolean).join(' · ');
   const allPicked = visible.length > 0 && visible.every((t: any) => picked.includes(t.id));
 
@@ -1062,15 +1065,6 @@ export function TasksPage() {
     setFStage('');
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-
-  const addQuick = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quick.trim()) return toast('Write the task first');
-    run(() => {
-      M.addTask({ text: quick, projectId: fProject && fProject !== '-' ? fProject : '', status: 'Open', priority: 'Low' });
-      setQuick('');
-    }, 'Task added');
-  };
 
   return (
     <PageShell
@@ -1112,28 +1106,29 @@ export function TasksPage() {
           </div>
         </div>
       )}
-      {nextTask && (
-        <div className="note calm tnext" data-noprint="1">
-          <span className="ic"><Icon name="info" /></span>
-          <div>
-            <b>Next activity:</b>{' '}
-            <button type="button" className="linkbtn" onClick={() => openEdit('tasks', nextTask.id)}>
-              {nextTask.text}
-            </button>{' '}
-            — due {M.fmtDate(nextTask.date)} ({M.dueIn(nextTask.date)})
-            {whoText(nextTask) ? ` · ${whoText(nextTask)}` : ''}
+      <section className="task-projects" aria-label="Projects">
+        <div className="task-projects-heading">
+          <strong>Projects</strong>
+          <button type="button" className="btn sm" aria-expanded={showFilters} aria-controls="task-list-filters" onClick={() => setShowFilters(!showFilters)}>
+            <Icon name="filter" size={14} /> {showFilters ? 'Hide filters' : 'Show filters'}
+          </button>
+        </div>
+        <div className="task-project-choices" role="group" aria-label="Project tabs">
+          <button type="button" aria-pressed={!fProject} onClick={() => { setFProject(''); setPicked([]); setShown(pageSize); }}>All projects</button>
+          {visibleProjects.map((project: any) => (
+            <button type="button" key={project.id} aria-pressed={fProject === project.id}
+              onClick={() => { setFProject(project.id); setPicked([]); setShown(pageSize); }}>{project.name}</button>
+          ))}
+          <div className="task-project-add" role="group" aria-label="Add projects">
+            {Array.from({ length: Math.max(1, Math.min(4, 10 - M.DATA.taskProjects.length)) }, (_, i) => (
+              <button type="button" key={i} aria-label={i ? `Add project in empty slot ${i + 1}` : 'Add project'} title="Add project" onClick={() => openModal('taskProject')}>
+                <Icon name="plus" size={14} />{i === 0 && 'Add project'}
+              </button>
+            ))}
           </div>
         </div>
-      )}
-
-      <form className="tquick" onSubmit={addQuick}>
-        <input value={quick} onChange={(e) => setQuick(e.target.value)} placeholder="Quick add: write a task and press Enter…" aria-label="Quick add a task" />
-        <button type="submit" className="btn pri">
-          <Icon name="plus" /> Add
-        </button>
-      </form>
-
-      <div className="tfilters">
+      </section>
+      <div className="tfilters" id="task-list-filters" style={showFilters ? undefined : { display: 'none' }}>
         <input className="f-id" value={fId} onChange={(e) => setFId(e.target.value)} placeholder="ID" aria-label="Filter by ID" />
         <input className="f-text" value={fText} onChange={(e) => setFText(e.target.value)} placeholder="Subject" aria-label="Filter by subject" />
         {M.taskBusinesses().length > 0 && (
@@ -1275,7 +1270,7 @@ export function TasksPage() {
         <span className="spacer" />
         <div className="tcolmenu">
           <button type="button" className="btn sm" aria-expanded={colMenu} onClick={() => setColMenu(!colMenu)} title="Show or hide columns">
-            <Icon name="grid" size={13} /> Columns
+            <Icon name="grid" size={13} /> Columns & project tabs
           </button>
           {colMenu && (
             <div className="tcolmenu-pop" role="menu">
@@ -1284,6 +1279,17 @@ export function TasksPage() {
                 <label key={c.key}>
                   <input type="checkbox" checked={c.key === 'subject' || !colPrefs.prefs.hidden.includes(c.key)} disabled={c.key === 'subject'} onChange={() => colPrefs.toggle(c.key)} />
                   {c.th}
+                </label>
+              ))}
+              <p className="muted">Visible project tabs</p>
+              {M.DATA.taskProjects.map((project: any) => (
+                <label key={project.id}>
+                  <input type="checkbox" checked={!colPrefs.prefs.hidden.includes('project:' + project.id)}
+                    onChange={() => {
+                      if (fProject === project.id) { setFProject(''); setPicked([]); setShown(pageSize); }
+                      colPrefs.toggle('project:' + project.id);
+                    }} />
+                  {project.name}
                 </label>
               ))}
               <button type="button" className="btn sm" onClick={() => { colPrefs.reset(); setColMenu(false); }}>Show all, reset widths</button>
@@ -1359,7 +1365,7 @@ export function TasksPage() {
                       ? 'No completed or cancelled tasks yet.'
                       : folder === 'high'
                         ? 'No open task is marked High or Urgent.'
-                        : 'No open tasks — write one above and press Enter.'}
+                        : 'No open tasks. Use Add Task to create one.'}
                 </td>
               </tr>
             ) : (
